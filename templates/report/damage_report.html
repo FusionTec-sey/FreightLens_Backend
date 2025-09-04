@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Damage Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1, h2 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #999; padding: 8px; text-align: left; }
+        img { max-width: 100px; height: auto; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Damage Report</h1>
+    <p><strong>Container:</strong> {{ container_number }}</p>
+    <p><strong>Date:</strong> {{ report_date }}</p>
+
+    <h2>Products</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Product Name</th>
+                <th>Quantity</th>
+                <th>Reason</th>
+                <th>Images</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ product.product_name }}</td>
+                <td>{{ product.qty }}</td>
+                <td>{{ product.note }}</td>
+                <td>
+                    {% for img in product.images %}
+                        <img src="{{ img }}" alt="Image">
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
