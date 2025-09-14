@@ -6,7 +6,7 @@ from auth.config import settings
 Base = declarative_base()
 
 
-DATABASE_URL = "mysql+mysqlconnector://mysql:APVKegtlmgswVmkWPT12b13p0cmVyzIdqPnHxokldgWb0motvP7HV5EQT8tIXVm0@r44ws8w88w4kgkk0gk4wsok8:3306"  # or your actual DB URL
+DATABASE_URL = settings.DATABASE_URL  # or your actual DB URL
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
