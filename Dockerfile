@@ -2,6 +2,10 @@
 FROM python:3.11-slim   
 # match your local version
 
+# Install system dependencies inside the container
+RUN apt-get update && \
+    apt-get install -y libgobject-2.0-0 libglib2.0-0 libcairo2 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
