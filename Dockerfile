@@ -3,8 +3,6 @@ FROM python:3.11-slim
 # match your local version
 
 
-RUN apt-get update && apt-get install -y libgobject-1.0-0 && rm -rf /var/lib/apt/lists/*
-
 # Set working directory
 WORKDIR /app
 
