@@ -25,7 +25,7 @@ class Settings:
 
     # Make DATABASE_URL mandatory, raise error if not set
     DATABASE_URL = os.getenv("DATABASE_URL")
-    # if not DATABASE_URL:
-    #     raise ValueError("DATABASE_URL environment variable is not set!")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable is not set!")
 
 settings = Settings()
