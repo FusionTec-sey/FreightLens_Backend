@@ -7,6 +7,7 @@ from fastapi import Query, HTTPException
 # from ShippingProvider.Mearsk import MaerskProvider
 from ShippingProvider.Mearsk.mearsk_api import MaerskAPI
 from ShippingProvider.CMACGM.camcgm_api import CMACGMTrackTrace
+from ShippingProvider import track_and_trace
 # from providers.uafl import UAFLProvider
 
 TrackingRouter = InferringRouter()
@@ -52,3 +53,7 @@ class TrackingAPI:
             except Exception:
                 continue
         raise HTTPException(status_code=404, detail="Container not found")
+
+    @TrackingRouter.get("/track_and_trace")
+    async def track_and_trace(self, bl: str = Query(...)):
+        return track_and_trace(bl)

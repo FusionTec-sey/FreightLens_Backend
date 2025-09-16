@@ -5,8 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
 scheduler = BackgroundScheduler()
 import uvicorn
-
-
+from auth.config import settings
 from Schema import *
 from Model import *
 
@@ -48,6 +47,7 @@ def startup_event():
 
 
 
+
 app.include_router(auth_router)
 app.include_router(Cinfo)
 app.include_router(ContainerRouter)
@@ -57,7 +57,7 @@ app.include_router(BillOfLandingRouter)
 
 # Add this block to run with `python main.py`
 if __name__ == "__main__":
-     uvicorn.run("containerMgmt:app", host="10.177.143.54", port=8000)
+     uvicorn.run("containerMgmt:app", host=settings.HOST_IP, port=settings.HOST_PORT, reload=True)
     # uvicorn.run("containerMgmt:app", host="172.16.32.6", port=8000)
 
          

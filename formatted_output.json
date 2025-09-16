@@ -1,0 +1,365 @@
+{
+  "transportDocumentReference": "254161218",
+  "carrierCodeListProvider": "NMFTA",
+  "issuingParty": {
+    "partyName": "Maersk India (New Delhi)",
+    "partyContactDetails": [
+      {
+        "name": "Company Contact"
+      }
+    ],
+    "identifyingCodes": [
+      {
+        "partyCode": "INNWDMSL1",
+        "codeListName": "maerskIssueAgentCode",
+        "DCSAResponsibleAgencyCode": "ZZZ"
+      }
+    ]
+  },
+  "shippingInstruction": {
+    "shippingInstructionReference": "254161218",
+    "documentStatus": "RECE",
+    "shippingInstructionCreatedDateTime": "2025-05-22T09:24:30Z",
+    "shippingInstructionUpdatedDateTime": "2025-07-03T12:25:40Z",
+    "isElectronic": false,
+    "isToOrder": false,
+    "isShippedOnBoardType": true,
+    "consignmentItems": [
+      {
+        "carrierBookingReference": "254161218",
+        "weight": 28200.0,
+        "weightUnit": "KGM",
+        "descriptionOfGoods": "01X40 FCL CONTAINER\r\nTOTAL 260 PVCPIPE /PCS\r\nTOTAL 36 PALLETS\r\nTOTAL TILES SQ.M:898.56\r\nINDUSTRIAL HV CABLE (85446090)\r\nFLEXIBLE COPPER CABLE,1.5X3 CORE\r\nFLEXIBLE COPPER CABLE,2.5X3 CORE\r\nFLEXIBLE COPPER CABLE,2.5X4 CORE\r\nFLEXIBLE COPPER CABLE,1.5X3 CORE\r\nFLEXIBLE COPPER CABLE,2.5X3 CORE\r\nFLEXIBLE COPPER CABLE,1.5X1 CORE\r\nFLEXIBLE COPPER CABLE,2.5X1 CORE\r\nFLEXIBLE COPPER CABLE,4X1 CORE\r\nFLEXIBLE COPPER CABLE,6X1 CORE\r\nFLEXIBLE COPPER CABLE,16X1 CORE\r\nFLEXIBLE COPPER CABLE,1.5X3 CORE\r\nFLEXIBLE COPPER CABLE,2.5X3 CORE\r\nFLEXIBLE COPPER CABLE,16X3 CORE\r\nFLEXIBLE COPPER CABLE,16X5 CORE\r\nFRP MANHOLE COVER( 39259090)\r\nSIZE 30X30\r\nSIZE 18X18\r\nSIZE 24X24\r\nBATHROOM FITTINGS (73269030)\r\nCOCKROCH TRAP DRAINER 6X6\r\nTILES DRAINER WITH FLIP BOWL 6X6\r\nFIX DRAINER 6X6\r\nHS CODE : 84818020\r\nWAY BIB COCK WITH WALL FLANGE\r\nBIB COCK EXTRA LONG WITH WALL FLANGE\r\nPAINT (Description of Goods)\r\nTARA MDF PRIMER WHITE 2PK\r\n6L(32089022)\r\nTARA EXT. MATT WHITE 2PK 35% 6L(32089022)\r\nN C THINER 111 5LT(38140019)\r\nMELAMINE MATT 4L(32081019)\r\nCELLOCOAT THINNER 111 1(38140019)\r\nTIMBERCOAT PUMED FILLER 1.5L(32082090)\r\nTIMBERCOAT PU SATIN BASE 1L(32082090)\r\nPVC PIPE(39174000)\r\nRIGID PVC PIPE,110MM 6KG,\r\nCERAMIC TILES (69072100)\r\nNANO VITRIFIED / SOLUBLE SALT TILES\r\nIEC NO.: 2413012010\r\nINVOICE NO: 35/2025-26 DT: 09.05.2025\r\nS/BILL NO: 1687405DT: 10.05.2025\r\nGROSS WT:28200.00 KGS\r\nNET WT:27700.00 KGS\r\nFREIGHT PREPAID",
+        "cargoItems": [
+          {
+            "equipmentReference": "MRSU3079200",
+            "weight": 28200.0,
+            "volume": 0.0,
+            "weightUnit": "KGM",
+            "volumeUnit": "MTQ",
+            "numberOfPackages": 36,
+            "packageCode": "PX",
+            "packageNameOnBL": "PALLETS"
+          }
+        ],
+        "HSCode": "320890"
+      }
+    ],
+    "utilizedTransportEquipments": [
+      {
+        "equipment": {
+          "equipmentReference": "MRSU3079200",
+          "ISOEquipmentCode": "45G0"
+        },
+        "cargoGrossWeight": 28200.0,
+        "cargoGrossWeightUnit": "KGM",
+        "cargoGrossVolume": 0.0,
+        "cargoGrossVolumeUnit": "MTQ",
+        "numberOfPackages": 36,
+        "isShipperOwned": false,
+        "seals": [
+          {
+            "sealNumber": "IN2460110",
+            "sealSource": "CAR",
+            "sealType": "BLT"
+          }
+        ]
+      }
+    ],
+    "transportDocumentTypeCode": "BOL",
+    "numberOfOriginalsWithoutCharges": 3,
+    "displayedNameForPortOfLoad": [
+      "Mundra"
+    ],
+    "displayedNameForPortOfDischarge": [
+      "Victoria"
+    ],
+    "carrierBookingReference": "254161218",
+    "placeOfIssue": {
+      "locationName": "New Delhi",
+      "UNLocationCode": "INICD"
+    },
+    "documentParties": [
+      {
+        "party": {
+          "partyName": "NOBLE CON ENTERPRISE PTY LTD",
+          "taxReference1": "TIN842641112",
+          "address": {
+            "streetName": "PROVIDENCE INDUSTRIAL ESTATE",
+            "cityName": "VICTORIA",
+            "streetNumber": " ",
+            "stateRegion": " ",
+            "country": "Seychelles"
+          },
+          "partyContactDetails": [
+            {
+              "name": "Company Contact",
+              "phone": " ",
+              "email": "ravi@sahaj.sc"
+            }
+          ],
+          "identifyingCodes": [
+            {
+              "partyCode": "25400065955",
+              "codeListName": "maerskCustomerCode",
+              "DCSAResponsibleAgencyCode": "ZZZ"
+            }
+          ],
+          "displayedAddresses": [
+            {
+              "addressLine": "NOBLE CON ENTERPRISE PTY LTD\r\nPROVIDENCE INDUSTRIAL ESTATE \r\nP.O. BOX:1463 MAHE\r\nVICTORIA\r\nSeychelles\r\nTEL:002484601234"
+            }
+          ]
+        },
+        "partyFunction": "N1"
+      },
+      {
+        "party": {
+          "partyName": "NAKSH ENTERPRISE",
+          "taxReference1": "24BDIPT1927K1Z8",
+          "address": {
+            "streetName": "SUBHASNAGAR GROUND FLOOR-3,PLOT NO.125",
+            "cityName": "GANDHIDHAM",
+            "streetNumber": "SECTOR-8A",
+            "postCode": "370201",
+            "stateRegion": "GJ",
+            "country": "India"
+          },
+          "partyContactDetails": [
+            {
+              "name": "Company Contact",
+              "phone": " ",
+              "email": "shivang@nakshenterprise.in"
+            }
+          ],
+          "identifyingCodes": [
+            {
+              "partyCode": "41002802406",
+              "codeListName": "maerskCustomerCode",
+              "DCSAResponsibleAgencyCode": "ZZZ"
+            }
+          ],
+          "displayedAddresses": [
+            {
+              "addressLine": " "
+            }
+          ]
+        },
+        "partyFunction": "SCO"
+      },
+      {
+        "party": {
+          "partyName": "NAKSH ENTERPRISE",
+          "taxReference1": "24BDIPT1927K1Z8",
+          "address": {
+            "streetName": "SUBHASNAGAR GROUND FLOOR-3,PLOT NO.125",
+            "cityName": "GANDHIDHAM",
+            "streetNumber": "SECTOR-8A",
+            "postCode": "370201",
+            "stateRegion": "GJ",
+            "country": "India"
+          },
+          "partyContactDetails": [
+            {
+              "name": "Company Contact",
+              "phone": " ",
+              "email": "shivang@nakshenterprise.in"
+            }
+          ],
+          "identifyingCodes": [
+            {
+              "partyCode": "41002802406",
+              "codeListName": "maerskCustomerCode",
+              "DCSAResponsibleAgencyCode": "ZZZ"
+            }
+          ],
+          "displayedAddresses": [
+            {
+              "addressLine": " "
+            }
+          ]
+        },
+        "partyFunction": "BA"
+      },
+      {
+        "party": {
+          "partyName": "N K R GENERAL TRADING L.L.C.",
+          "taxReference1": " ",
+          "address": {
+            "streetName": "GALAOARI BROS BLDG AL KHABASI",
+            "cityName": "DUBAI",
+            "streetNumber": "B 02",
+            "stateRegion": " ",
+            "country": "United Arab Emirates"
+          },
+          "partyContactDetails": [
+            {
+              "name": "Company Contact",
+              "phone": " ",
+              "email": "nkrtradingco@gmail.com"
+            }
+          ],
+          "identifyingCodes": [
+            {
+              "partyCode": "43601076984",
+              "codeListName": "maerskCustomerCode",
+              "DCSAResponsibleAgencyCode": "ZZZ"
+            }
+          ],
+          "displayedAddresses": [
+            {
+              "addressLine": "N K R GENERAL TRADING L.L.C.\r\nB 02,GALAOARI BROS BLDG\r\nAL KHABASI,DUBAI,UAE\r\nPO BOX 48574"
+            }
+          ]
+        },
+        "partyFunction": "OS"
+      },
+      {
+        "party": {
+          "partyName": "NOBLE CON ENTERPRISE PTY LTD",
+          "taxReference1": "TIN842641112",
+          "address": {
+            "streetName": "PROVIDENCE INDUSTRIAL ESTATE",
+            "cityName": "VICTORIA",
+            "streetNumber": " ",
+            "stateRegion": " ",
+            "country": "Seychelles"
+          },
+          "partyContactDetails": [
+            {
+              "name": "Company Contact",
+              "phone": " ",
+              "email": "ravi@sahaj.sc"
+            }
+          ],
+          "identifyingCodes": [
+            {
+              "partyCode": "25400065955",
+              "codeListName": "maerskCustomerCode",
+              "DCSAResponsibleAgencyCode": "ZZZ"
+            }
+          ],
+          "displayedAddresses": [
+            {
+              "addressLine": "NOBLE CON ENTERPRISE PTY LTD\r\nPROVIDENCE INDUSTRIAL ESTATE \r\nP.O. BOX:1463 MAHE\r\nVICTORIA\r\nSeychelles\r\nTEL:002484601234"
+            }
+          ]
+        },
+        "partyFunction": "CN"
+      }
+    ],
+    "references": []
+  },
+  "transportDocumentCreatedDateTime": "2025-05-20T08:22:20Z",
+  "transportDocumentUpdatedDateTime": "2025-07-18T14:18:55Z",
+  "issueDate": "2025-07-03",
+  "shippedOnBoardDate": "2025-06-06",
+  "receivedForShipmentDate": "2025-05-16",
+  "receiptTypeAtOrigin": "CY",
+  "deliveryTypeAtDestination": "CY",
+  "cargoMovementTypeAtOrigin": "FCL",
+  "cargoMovementTypeAtDestination": "FCL",
+  "serviceContractReference": "299984106",
+  "vesselName": "MAERSK CAPE TOWN",
+  "carrierExportVoyageNumber": "523S",
+  "transports": [
+    {
+      "transportPlanStage": "MNC",
+      "transportPlanStageSequenceNumber": 1,
+      "loadLocation": {
+        "locationName": "Mundra Int.Cont.Ter. Pvt. Ltd.",
+        "UNLocationCode": "INMUN"
+      },
+      "dischargeLocation": {
+        "locationName": "Salalah Terminal",
+        "UNLocationCode": "OMSLL"
+      },
+      "plannedDepartureDate": "2025-06-07",
+      "plannedArrivalDate": "2025-06-09",
+      "modeOfTransport": "VESSEL",
+      "vesselName": "MAERSK CAPE TOWN",
+      "vesselIMONumber": "9525352",
+      "carrierImportVoyageNumber": " ",
+      "carrierExportVoyageNumber": "523S",
+      "isUnderShippersResponsibility": false
+    },
+    {
+      "transportPlanStage": "MNC",
+      "transportPlanStageSequenceNumber": 2,
+      "loadLocation": {
+        "locationName": "Salalah Terminal",
+        "UNLocationCode": "OMSLL"
+      },
+      "dischargeLocation": {
+        "locationName": "Victoria Port Terminal",
+        "UNLocationCode": "SCVIC"
+      },
+      "plannedDepartureDate": "2025-06-23",
+      "plannedArrivalDate": "2025-07-09",
+      "modeOfTransport": "VESSEL",
+      "vesselName": "JPO AQUARIUS",
+      "vesselIMONumber": "9220316",
+      "carrierImportVoyageNumber": " ",
+      "carrierExportVoyageNumber": "525S",
+      "isUnderShippersResponsibility": false
+    }
+  ],
+  "shipmentLocations": [
+    {
+      "shipmentLocationTypeCode": "PRE",
+      "eventDateTime": "2025-06-07T02:30:00Z",
+      "location": {
+        "locationName": "Mundra Int.Cont.Ter. Pvt. Ltd.",
+        "UNLocationCode": "INMUN"
+      }
+    },
+    {
+      "shipmentLocationTypeCode": "POL",
+      "eventDateTime": "2025-06-07T02:30:00Z",
+      "location": {
+        "locationName": "Mundra Int.Cont.Ter. Pvt. Ltd.",
+        "UNLocationCode": "INMUN"
+      }
+    },
+    {
+      "shipmentLocationTypeCode": "POD",
+      "eventDateTime": "2025-07-09T14:00:00Z",
+      "location": {
+        "locationName": "Victoria Port Terminal",
+        "UNLocationCode": "SCVIC"
+      }
+    },
+    {
+      "shipmentLocationTypeCode": "PDE",
+      "eventDateTime": "2025-07-09T14:00:00Z",
+      "location": {
+        "locationName": "Victoria Port Terminal",
+        "UNLocationCode": "SCVIC"
+      }
+    }
+  ],
+  "placeOfIssue": {
+    "locationName": "New Delhi",
+    "UNLocationCode": "INICD"
+  },
+  "charges": [
+    {
+      "chargeType": "Port Additionals / Port Dues - Import",
+      "currencyAmount": 500.0,
+      "currencyCode": "USD",
+      "paymentTermCode": "COL",
+      "calculationBasis": "Per Container",
+      "unitPrice": 500.0,
+      "quantity": 1.0
+    },
+    {
+      "chargeType": "Documentation fee - Destination",
+      "currencyAmount": 28.0,
+      "currencyCode": "USD",
+      "paymentTermCode": "COL",
+      "calculationBasis": "Per Container",
+      "unitPrice": 28.0,
+      "quantity": 1.0
+    }
+  ]
+}
