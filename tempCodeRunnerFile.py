@@ -1,1 +1,3 @@
-from auth.config import settings
+from Scheduler import *
+
+updateArrivalDate()
