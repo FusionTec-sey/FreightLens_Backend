@@ -16,3 +16,10 @@ class ReportDetailsSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ReportSchema(BaseModel):
+    report_id: int
+    ContainerNo: str
+    
+    class Config:
+        from_attributes = True
