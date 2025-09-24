@@ -1,6 +1,6 @@
 ﻿from fastapi import FastAPI
 
-
+from sqlalchemy import text
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
 scheduler = BackgroundScheduler()
@@ -42,7 +42,44 @@ def updateArrivalDate():
                 db.commit()
     finally:
         db.close()
+
+def updateStatus():
+    """
+    Run a single set-based UPDATE to refresh container status according to rules.
+    Uses the DB session from get_db() so it matches how you run other tasks.
+    """
+    STATUS_UPDATE_SQL = """
+        UPDATE container_details cd
+        LEFT JOIN bill_of_landing bol ON bol.BillOfLading = cd.BillOfLading
+        SET cd.status = CASE
+            WHEN cd.out_bound IS NOT NULL OR cd.unloaded_at_port IS NOT NULL THEN 4
+            WHEN cd.empty_date IS NOT NULL THEN 7
+            WHEN cd.in_bound IS NOT NULL THEN 6
+            WHEN bol.ArrivalDate IS NULL THEN 8
+            WHEN bol.ArrivalDate > CURDATE() THEN 1
+            ELSE 2
+        END
+        -- OPTIONAL: add WHERE clause to limit rows to update for big tables
+        ;
+        """
     
+    db = next(get_db())
+    try:
+        # logger.info("Starting status update at %s", datetime.now().isoformat())
+        # Use the session's connection to execute raw SQL; this avoids depending on model names
+        conn = db.connection()
+        conn.execute(text(STATUS_UPDATE_SQL))
+        db.commit()
+        # logger.info("Status update completed successfully.")
+    except Exception as e:
+        # logger.exception("Error during status update: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            print()
+            # logger.exception("Rollback failed")
+    finally:
+        db.close()    
         
     
 app = FastAPI()
