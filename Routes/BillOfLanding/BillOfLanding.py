@@ -185,7 +185,7 @@ class BillOfLandingAPI:
         return {"msg": "Bill of Landing updated successfully"}
 
     @BillOfLandingRouter.delete("/deleteBl/{bl_code}")
-    async def delete_bill_of_lading(
+    async def delete_bill_of_lading(self, 
         bl_code: str,
         db: Session = Depends(get_db),
         # current_user: dict = Depends(get_current_user),
