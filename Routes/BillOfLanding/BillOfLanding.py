@@ -76,7 +76,7 @@ class BillOfLandingAPI:
     
     @BillOfLandingRouter.get("/getBl", response_model=BillOfLandingListResponse)
     async def get_bls(self,
-        BillOfLandingNo: Optional[str] = Query(None),
+        BillOfLanding: Optional[str] = Query(None),
         ConsigneeName: Optional[str] = Query(None),
         Vessel: Optional[str] = Query(None),
         SupplierName: Optional[str] = Query(None),
@@ -100,8 +100,8 @@ class BillOfLandingAPI:
             )
 
             # Apply filters
-            if BillOfLandingNo:
-                query = query.filter(BillOfLanding.BillOfLanding == BillOfLandingNo)
+            if BillOfLanding:
+                query = query.filter(BillOfLanding.BillOfLanding == BillOfLanding)
 
             if ConsigneeName:
                 query = query.join(BillOfLanding.consignee_rel).filter(
