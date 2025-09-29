@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 # from sqlalchemy import func, desc, case
 from Model.db import get_db
+from Model import BillOfLanding as BOfL
 from Model import ContainerDetails, Supplier, LogisticsProvider,  Vessal, BillOfLanding, Consignee, ShippingDocument, ContainerDocs, ReportDetails, DamageProduct, ReportImage
 from Schema import   BillOfLandingInSchema, BillOfLandingWithContainersSchema, ContainerDetailsSchemaWithBl, BillOfLandingUpdateOnlySchema, BillOfLandingListResponse
 from Utils import *
@@ -76,7 +77,7 @@ class BillOfLandingAPI:
     
     @BillOfLandingRouter.get("/getBl", response_model=BillOfLandingListResponse)
     async def get_bls(self,
-        BillOfLandingNo: Optional[str] = Query(None),
+        BillOfLanding: Optional[str] = Query(None),
         ConsigneeName: Optional[str] = Query(None),
         Vessel: Optional[str] = Query(None),
         SupplierName: Optional[str] = Query(None),
@@ -89,48 +90,48 @@ class BillOfLandingAPI:
         ):
         try:
             query = (
-                db.query(BillOfLanding)
+                db.query(BOfL)
                 .options(
-                    joinedload(BillOfLanding.consignee_rel),
-                    joinedload(BillOfLanding.vessel_rel),
-                    joinedload(BillOfLanding.supplier_rel),
-                    joinedload(BillOfLanding.provider_rel),
-                    joinedload(BillOfLanding.doc_rel)
+                    joinedload(BOfL.consignee_rel),
+                    joinedload(BOfL.vessel_rel),
+                    joinedload(BOfL.supplier_rel),
+                    joinedload(BOfL.provider_rel),
+                    joinedload(BOfL.doc_rel)
                 )
             )
 
             # Apply filters
-            if BillOfLandingNo:
-                query = query.filter(BillOfLanding.BillOfLanding == BillOfLandingNo)
+            if BillOfLanding:
+                query = query.filter(BOfL.BillOfLanding == BillOfLanding)
 
             if ConsigneeName:
-                query = query.join(BillOfLanding.consignee_rel).filter(
+                query = query.join(BOfL.consignee_rel).filter(
                     Consignee.consignee_name.ilike(f"%{ConsigneeName}%")
                 )
 
             if Vessel:
-                query = query.join(BillOfLanding.vessel_rel).filter(
+                query = query.join(BOfL.vessel_rel).filter(
                     Vessal.name.ilike(f"%{Vessel}%")
                 )
 
             if SupplierName:
-                query = query.join(BillOfLanding.supplier_rel).filter(
+                query = query.join(BOfL.supplier_rel).filter(
                     Supplier.name.ilike(f"%{SupplierName}%")
                 )
 
             if Provider:
-                query = query.join(BillOfLanding.provider_rel).filter(
+                query = query.join(BOfL.provider_rel).filter(
                     LogisticsProvider.name.ilike(f"%{Provider}%")
                 )
 
             if ArrivalDate:
-                query = query.filter(BillOfLanding.ArrivalDate == ArrivalDate)
+                query = query.filter(BOfL.ArrivalDate == ArrivalDate)
 
             # Optional sorting
             if sort_by_arrival:
-                query = query.order_by(BillOfLanding.ArrivalDate.desc())
+                query = query.order_by(BOfL.ArrivalDate.desc())
             else:
-                query = query.order_by(BillOfLanding.ArrivalDate.asc())
+                query = query.order_by(BOfL.ArrivalDate.asc())
                 
             total_count = query.count()
             # Apply pagination
