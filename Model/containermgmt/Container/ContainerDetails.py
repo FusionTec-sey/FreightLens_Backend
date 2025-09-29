@@ -1,5 +1,6 @@
 from datetime import datetime, date
 from typing import Optional
+from sqlalchemy import event
 
 from sqlalchemy import Integer, String, Date, DateTime, Text, SmallInteger, ForeignKey, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,4 +55,59 @@ class ContainerDetails(Base):
     
     reports = relationship("ReportDetails", back_populates="container", cascade="all, delete-orphan")
     
-    
+
+
+
+@event.listens_for(ContainerDetails, "before_update")
+def set_status_before_update(mapper, connection, target):
+    """
+    Replicates the MySQL trigger logic in SQLAlchemy ORM.
+    """
+    # ✅ Allow manual override from 2 → 3
+    if target.status == 3 and target.__dict__.get("_orig_status") == 2:
+        return  # skip overriding
+
+    # ✅ Fetch arrival_date from related BillOfLanding
+    arrival_date = None
+    if target.bol:
+        arrival_date = target.bol.ArrivalDate
+
+    # ✅ Nested IF logic
+    if target.out_bound is not None or target.unloaded_at_port is not None:
+        target.status = 4
+    elif target.empty_date is not None:
+        target.status = 7
+    elif target.in_bound is not None:
+        target.status = 6
+    elif arrival_date and arrival_date > date.today():
+        target.status = 1
+    elif arrival_date and arrival_date <= date.today():
+        target.status = 2
+    else:
+        target.status = 8  # fallback
+
+
+@event.listens_for(ContainerDetails, "before_insert")
+def set_status_before_insert(mapper, connection, target):
+    """
+    Replicates the MySQL BEFORE INSERT trigger in SQLAlchemy ORM.
+    """
+
+    # ✅ Fetch arrival_date from related BillOfLanding
+    arrival_date = None
+    if target.bill_of_landing:
+        arrival_date = target.bill_of_landing.ArrivalDate
+
+    # ✅ Nested IF logic
+    if target.out_bound is not None or target.unloaded_at_port is not None:
+        target.status = 4  # Complete
+    elif target.empty_date is not None:
+        target.status = 7  # Empty
+    elif target.in_bound is not None:
+        target.status = 6  # Inbound
+    elif arrival_date is None:
+        target.status = 8  # Unknown/fallback
+    elif arrival_date > date.today():
+        target.status = 1  # In Transit
+    else:
+        target.status = 2  # On Port
