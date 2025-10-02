@@ -29,3 +29,9 @@ class Settings:
         raise ValueError("DATABASE_URL environment variable is not set!")
 
 settings = Settings()
+print(settings.DATABASE_URL)  # For debugging; remove in production
+print(f"Server will run on {settings.HOST_IP}:{settings.HOST_PORT}" )
+print(f"CMA CGM API Key: {settings.CMA_CGM_API_KEY}")  # For debugging; remove in production
+print(f"MEARSK Client ID: {settings.MEARSK_CLIENT_ID}")  # For debugging; remove in production
+print(f"MEARSK Token URL: {settings.MEARSK_TOKEN_URL}")  # For debugging; remove in production
+print(f"CMA CGM Token URL: {settings.CMA_CGM_TOKEN_URL}")   # For debugging; remove in production  
