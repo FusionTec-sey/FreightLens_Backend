@@ -85,11 +85,15 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this
+    allow_origins=[
+        "https://freightliner.fusiontech.services",
+        "https://w7pl0qxxs9kb.share.zrok.io"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
- )
+)
+
 
 
 scheduler = BackgroundScheduler()
