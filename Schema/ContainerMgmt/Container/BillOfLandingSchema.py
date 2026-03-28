@@ -28,6 +28,8 @@ class BillOfLandingInSchema(BaseModel):
     Doc: Optional[int] = None
     Supplier: Optional[int] = None
     Provider: Optional[int] = None
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
     new_containers: List[ContainerCreateSchema] = []
 
 
@@ -39,6 +41,8 @@ class BillOfLandingSchema(BaseModel):
     # Doc: Optional[int]
     # Supplier: Optional[int]
     # Provider: Optional[int]
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
 
     # Related Display Names
     consignee_name: Optional[str] = None
@@ -121,6 +125,8 @@ class BillOfLandingWithContainersSchema(BaseModel):
     # Doc: Optional[int]
     # Supplier: Optional[int]
     # Provider: Optional[int]
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
 
     # Related Display Names
     consignee_name: Optional[str] = None
@@ -160,4 +166,6 @@ class BillOfLandingUpdateOnlySchema(BaseModel):
     Doc: Optional[int] = None
     Supplier: Optional[int] = None
     Provider: Optional[int] = None
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
     

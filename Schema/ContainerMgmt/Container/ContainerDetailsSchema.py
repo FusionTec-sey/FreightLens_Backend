@@ -21,6 +21,7 @@ class ContainerDetailsSchema(BaseModel):
     tax: Optional[int]
     PONo: Optional[str]
     BillOfLanding: Optional[str]
+    FreeDays: Optional[int] = None
 
     # Only human-readable display names
     state: Optional[str] = None
@@ -68,6 +69,8 @@ class BillOfLandingUpdateSchema(BaseModel):
     Doc: Optional[int] = None
     
     ArrivalDate: Optional[datetime] = None
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
     # note: Optional[str]
 
 # Optional: Schema for Material associations
@@ -87,6 +90,7 @@ class ContainerUpdateSchema(BaseModel):
     note: Optional[str] = None
     tax: Optional[int] = None
     PONo: Optional[str] = None
+    FreeDays: Optional[int] = None
     
     # tax: Optional[int]
     # note: Optional[str]
@@ -115,6 +119,7 @@ class BillOfLandingCreateSchema(BaseModel):
     Doc: Optional[int] = None
     
     ArrivalDate: Optional[datetime] = None
+    FreeDays: Optional[int] = None
 
 
 class ContainerCreateSchema(BaseModel):
@@ -127,6 +132,7 @@ class ContainerCreateSchema(BaseModel):
     note: Optional[str] = None
     tax: Optional[int] = None
     PONo: Optional[str] = None
+    FreeDays: Optional[int] = None
     
     # tax: Optional[int]
     # note: Optional[str]

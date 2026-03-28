@@ -12,6 +12,8 @@ class BillOfLanding(Base):
     ArrivalDate = Column(DateTime, nullable=True)
     Supplier = Column(Integer, ForeignKey("containermgmt.supplier.supplier_id"), nullable=True)
     Provider = Column(Integer, ForeignKey("containermgmt.logisticsprovider.Id"), nullable=True)
+    FreeDays = Column(Integer, nullable=True)
+    status = Column(Integer, ForeignKey("containermgmt.status.status_id"), nullable=True)
     Doc = Column(Integer,  ForeignKey("containermgmt.shipping_document.doc_id"), nullable=True)
     # ✅ Relationships
     # In BillOfLanding model

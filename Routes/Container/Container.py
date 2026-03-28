@@ -51,7 +51,10 @@ async def parse_update_form(request: Request) -> ContainerUpdateSchema:
     datetime_or_date_fields = {"in_bound", "empty_date", "out_bound", "unloaded_at_port"}
 
     # Fields expected as ints
-    int_fields = {"tax", "status", "type", "emptied_at"}
+    int_fields = {"tax", "status", "type", "emptied_at", "FreeDays"}
+
+    # Fields expected as ints in bill_of_landing.*
+    bl_int_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "FreeDays", "status"}
 
     for key, value in form.items():
         if "." in key or key in {"materials", "remove_doc_ids"}:
@@ -74,7 +77,15 @@ async def parse_update_form(request: Request) -> ContainerUpdateSchema:
     for key, value in form.items():
         if key.startswith("bill_of_landing."):
             subkey = key[len("bill_of_landing.") :]
-            bill_data[subkey] = value
+            if value == "":
+                bill_data[subkey] = None
+            elif subkey in bl_int_fields:
+                try:
+                    bill_data[subkey] = int(value)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"bill_of_landing.{subkey} must be an integer")
+            else:
+                bill_data[subkey] = value
     if bill_data:
         data["bill_of_landing"] = bill_data
 
@@ -164,8 +175,16 @@ class ContainerAPI:
             db.add(new_bl)
 
         # 📦 Create Container and link to Bill of Landing
+        container_data = create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"})
+        # Inherit FreeDays from BoL if not explicitly set on container
+        if "FreeDays" not in container_data and bl_data.get("FreeDays") is not None:
+            container_data["FreeDays"] = bl_data.get("FreeDays")
+        # Inherit status from BoL if not explicitly set on container
+        if "status" not in container_data and bl_data.get("status") is not None:
+            container_data["status"] = bl_data.get("status")
+        
         container = ContainerDetails(
-            **create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"}),
+            **container_data,
             BillOfLanding=bl_number  # ✅ Set FK
         )
         db.add(container)
@@ -308,7 +327,7 @@ class ContainerAPI:
                         "vessal": container.bill_of_landing.vessel_rel.VessalNo if container.bill_of_landing.vessel_rel else None,
                         "Doc_name": container.bill_of_landing.doc_rel.doc_type if container.bill_of_landing.doc_rel else None,
                         "ExcludingDay": container.bill_of_landing.provider_rel.ExcludingDays if container.bill_of_landing.provider_rel else 0,
-                        "FreeDays": container.bill_of_landing.provider_rel.FreeDays if container.bill_of_landing.provider_rel else 0
+                        "FreeDays": container.bill_of_landing.FreeDays if container.bill_of_landing and container.bill_of_landing.FreeDays is not None else 0
                         
                     }
                 
@@ -525,6 +544,30 @@ class ContainerAPI:
 
             existing_bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
             if existing_bl:
+                # ── FreeDays conflict check + cascade ──────────────────────
+                if 'FreeDays' in bl_data and bl_data['FreeDays'] != existing_bl.FreeDays:
+                    children = db.query(ContainerDetails).filter_by(BillOfLanding=existing_bl.BillOfLanding).all()
+                    for child in children:
+                        if child.FreeDays is not None and existing_bl.FreeDays is not None and child.FreeDays != existing_bl.FreeDays:
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Cannot update Bill of Lading FreeDays: One or more containers have custom FreeDays. Please update individual containers instead."
+                            )
+                    for child in children:
+                        child.FreeDays = bl_data['FreeDays']
+
+                # ── Status conflict check + cascade ────────────────────────
+                if 'status' in bl_data and bl_data['status'] != existing_bl.status:
+                    children = db.query(ContainerDetails).filter_by(BillOfLanding=existing_bl.BillOfLanding).all()
+                    for child in children:
+                        if child.status is not None and existing_bl.status is not None and child.status != existing_bl.status:
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Cannot update Bill of Lading status: One or more containers have a custom status. Please update individual containers instead."
+                            )
+                    for child in children:
+                        child.status = bl_data['status']
+
                 for key, value in bl_data.items():
                     setattr(existing_bl, key, value)
             else:
