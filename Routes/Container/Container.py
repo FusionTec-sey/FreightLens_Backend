@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, desc, case
 from Model.db import get_db
 from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, ContainerDocs, DocType, ReportDetails, DamageProduct, ReportImage, BillOfLanding, Material
-from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse
+from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse, ReportSchema
 from Utils import *
 from auth.dependencies import get_current_user
 from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
@@ -306,7 +306,10 @@ class ContainerAPI:
                         "supplier_name": container.bill_of_landing.supplier_rel.name if container.bill_of_landing.supplier_rel else None,
                         "ArrivalDate": container.bill_of_landing.ArrivalDate.isoformat() if container.bill_of_landing.ArrivalDate else None,
                         "vessal": container.bill_of_landing.vessel_rel.VessalNo if container.bill_of_landing.vessel_rel else None,
-                        "Doc_name": container.bill_of_landing.doc_rel.doc_type if container.bill_of_landing.doc_rel else None
+                        "Doc_name": container.bill_of_landing.doc_rel.doc_type if container.bill_of_landing.doc_rel else None,
+                        "ExcludingDay": container.bill_of_landing.provider_rel.ExcludingDays if container.bill_of_landing.provider_rel else 0,
+                        "FreeDays": container.bill_of_landing.provider_rel.FreeDays if container.bill_of_landing.provider_rel else 0
+                        
                     }
                 
                 if container.materials:
@@ -581,6 +584,41 @@ class ContainerAPI:
         
         column = ['Report Id','Container No']
         return json.dumps({"column": column, "data": [list(row) for row in data]})
+    
+    @ContainerRouter.get("/getDamageReport")
+    async def get_ContainerReports(self, 
+                                    report_id: int = Form(None),
+                                    offset: int = Query(0, ge=0),
+                                    limit: int = Query(500, le=1000),
+                                    db: Session = Depends(get_db), 
+                                #    current_user: dict = Depends(get_current_user)
+                                   ):
+        base_query = ( 
+            db.query(
+                ReportDetails.report_id,
+                ContainerDetails.container_no
+            ) 
+            .outerjoin(ContainerDetails, ContainerDetails.Container_ID == ReportDetails.container_id) 
+            )
+        
+        if report_id:
+            base_query = base_query.filter(ReportDetails.report_id == report_id)
+            
+        total_count = base_query.count()
+        results = base_query.offset(offset).limit(limit).all()
+        
+        reports = []
+        for result in results:
+            # report = jsonable_encoder(ReportSchema.from_attributes(result))
+            formatted_data = {"ReportId": result[0], "ContainerNo": result[1]}
+            reports.append(formatted_data)
+            
+        print(reports)
+        print()
+        return {
+            "total_count": total_count,
+            "data": reports
+        } 
     
     @ContainerRouter.post("/submitDamagedProducts")
     async def submit_damage_report(self,

@@ -8,5 +8,7 @@ class LogisticsProvider(Base):
 
     Id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     Name: Mapped[str] = mapped_column(String(45), nullable=True)
+    ExcludingDays: Mapped[int] = mapped_column(Integer, default=0)
+    FreeDays: Mapped[int] = mapped_column(Integer, default=0)
     
     bill_of_landings = relationship("BillOfLanding", back_populates="provider_rel")
