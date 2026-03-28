@@ -26,6 +26,7 @@ class ContainerDetails(Base):
     # status: Mapped[Optional[int]] = mapped_column(ForeignKey("containermgmt.status.status_id"), nullable=True)
     tax: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     PONo: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    FreeDays: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     BillOfLanding = mapped_column(
         String(100), ForeignKey("containermgmt.bill_of_landing.BillOfLanding"), nullable=True
