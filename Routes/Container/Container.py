@@ -2,7 +2,7 @@
 from fastapi_utils.cbv import cbv
 from fastapi_utils.inferring_router import InferringRouter
 from fastapi import Depends, Form, File, UploadFile, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 # from sqlalchemy.sql import nullsfirst, nullslast
 from typing import List, Optional
 from pydantic import ValidationError
@@ -236,16 +236,23 @@ class ContainerAPI:
                 db.query(ContainerDetails)
                 .outerjoin(BillOfLanding, ContainerDetails.BillOfLanding == BillOfLanding.BillOfLanding)
                 .options(
+                    # To-one relationships: safe to joinedload (no collection, no subquery-LIMIT issue)
                     joinedload(ContainerDetails.bill_of_landing)
                     .joinedload(BillOfLanding.consignee_rel),
                     joinedload(ContainerDetails.bill_of_landing)
                     .joinedload(BillOfLanding.vessel_rel),
                     joinedload(ContainerDetails.bill_of_landing)
                     .joinedload(BillOfLanding.supplier_rel),
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.provider_rel),
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.doc_rel),
                     joinedload(ContainerDetails.status_rel),
                     joinedload(ContainerDetails.type_rel),
                     joinedload(ContainerDetails.emptied_at_rel),
-                    joinedload(ContainerDetails.materials)
+                    # Many-to-many collection: MUST use selectinload to avoid
+                    # MySQL's rejection of LIMIT inside a subquery (sqlalche.me/e/20/f405)
+                    selectinload(ContainerDetails.materials)
                 )
             )
 
