@@ -176,12 +176,17 @@ class ContainerAPI:
 
         # 📦 Create Container and link to Bill of Landing
         container_data = create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"})
-        # Inherit FreeDays from BoL if not explicitly set on container
-        if "FreeDays" not in container_data and bl_data.get("FreeDays") is not None:
-            container_data["FreeDays"] = bl_data.get("FreeDays")
-        # Inherit status from BoL if not explicitly set on container
-        if "status" not in container_data and bl_data.get("status") is not None:
-            container_data["status"] = bl_data.get("status")
+        
+        # 🔗 Inherit FreeDays and status from BoL (provided or existing) if not explicitly set on container
+        incoming_fd = bl_data.get("FreeDays")
+        current_fd = incoming_fd if incoming_fd is not None else (existing_bl.FreeDays if existing_bl else None)
+        if "FreeDays" not in container_data and current_fd is not None:
+            container_data["FreeDays"] = current_fd
+
+        incoming_st = bl_data.get("status")
+        current_st = incoming_st if incoming_st is not None else (existing_bl.status if existing_bl else None)
+        if "status" not in container_data and current_st is not None:
+            container_data["status"] = current_st
         
         container = ContainerDetails(
             **container_data,

@@ -65,9 +65,10 @@ class BillOfLandingAPI:
                 out_bound=container.out_bound,
                 unloaded_at_port=container.unloaded_at_port,
                 note=container.note,
-                status=container.status,
+                status=container.status if container.status is not None else data.status,
                 tax=container.tax,
                 PONo=container.PONo,
+                FreeDays=container.FreeDays if hasattr(container, 'FreeDays') and container.FreeDays is not None else data.FreeDays,
                 BillOfLanding=data.BillOfLanding,
             )
             db.add(new_container)
@@ -178,12 +179,42 @@ class BillOfLandingAPI:
         if not bl:
             raise HTTPException(status_code=404, detail="Bill of Landing not found")
 
-        # 2. Update only the provided fields
-        for key, value in data.dict(exclude_unset=True).items():
+        # 2. Handle Cascading Updates with Conflict Resolution
+        update_data = data.dict(exclude_unset=True)
+        containers = db.query(ContainerDetails).filter_by(BillOfLanding=bl_number).all()
+
+        # ── FreeDays cascade logic ──────────────────────────────────────────
+        if 'FreeDays' in update_data and update_data['FreeDays'] != bl.FreeDays:
+            for child in containers:
+                # If child has a custom value (different from BoL current), block BoL update
+                if child.FreeDays is not None and bl.FreeDays is not None and child.FreeDays != bl.FreeDays:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Cannot update Bill of Lading FreeDays: Container '{child.container_no}' has a custom value. Please update individual containers instead."
+                    )
+            # Apply to all children if no conflicts
+            for child in containers:
+                child.FreeDays = update_data['FreeDays']
+
+        # ── Status cascade logic ────────────────────────────────────────────
+        if 'status' in update_data and update_data['status'] != bl.status:
+            for child in containers:
+                # If child has a custom status (different from BoL current), block BoL update
+                if child.status is not None and bl.status is not None and child.status != bl.status:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Cannot update Bill of Lading status: Container '{child.container_no}' has a custom status. Please update individual containers instead."
+                    )
+            # Apply to all children if no conflicts
+            for child in containers:
+                child.status = update_data['status']
+
+        # 3. Update the Bill of Landing record itself
+        for key, value in update_data.items():
             setattr(bl, key, value)
 
         db.commit()
-        return {"msg": "Bill of Landing updated successfully"}
+        return {"msg": "Bill of Landing and associated containers updated successfully"}
 
     @BillOfLandingRouter.delete("/deleteBl/{bl_code}")
     async def delete_bill_of_lading(self, 
