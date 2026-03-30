@@ -74,7 +74,7 @@ All secure endpoints require a Bearer token in the `Authorization` header:
 - **Content-Type**: `application/json`
 - **Payload Fields**: Same as Add BoL, except `BillOfLanding` is in the URL path (not the body).
 
-> **⚠️ FreeDays & Status Conflict Rules** — see Section 5 below.
+> **⚠️ FreeDays & Status Conflict Rules** — See the [Frontend Logic Guide](./frontend_logic_guide.md) for how to handle syncing and UI restrictions.
 
 ---
 
