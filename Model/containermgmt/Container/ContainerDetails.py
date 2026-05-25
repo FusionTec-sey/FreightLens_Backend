@@ -29,17 +29,17 @@ class ContainerDetails(Base):
     FreeDays: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     BillOfLanding = mapped_column(
-        String(100), ForeignKey("containermgmt.bill_of_landing.BillOfLanding"), nullable=True
+        String(100), ForeignKey("containermgmt.bill_of_landing.BillOfLanding"), index=True, nullable=True
         )
     bill_of_landing = relationship("BillOfLanding", back_populates="containers", lazy="joined")
     
-    status = mapped_column(Integer, ForeignKey("containermgmt.status.status_id"), nullable=True)
+    status = mapped_column(Integer, ForeignKey("containermgmt.status.status_id"), index=True, nullable=True)
     status_rel = relationship("Status", lazy="joined")
 
-    emptied_at = mapped_column(Integer, ForeignKey("containermgmt.unload_venue.venue_id"), nullable=True)
+    emptied_at = mapped_column(Integer, ForeignKey("containermgmt.unload_venue.venue_id"), index=True, nullable=True)
     emptied_at_rel = relationship("UnloadVenue", lazy="joined")
 
-    type = mapped_column(Integer, ForeignKey("containermgmt.container_type.type_id"), nullable=True)
+    type = mapped_column(Integer, ForeignKey("containermgmt.container_type.type_id"), index=True, nullable=True)
     type_rel = relationship("ContainerType", lazy="joined")
     
     materials = relationship(

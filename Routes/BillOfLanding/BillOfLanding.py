@@ -35,7 +35,7 @@ def get_bls_with_in_transit_containers(db: Session):
 @cbv(BillOfLandingRouter)
 class BillOfLandingAPI:
     
-    @BillOfLandingRouter.post("/addBl")
+    @BillOfLandingRouter.post("/bills-of-lading")
     async def addBl(
         self,
         data: BillOfLandingInSchema = Body(...),
@@ -76,7 +76,7 @@ class BillOfLandingAPI:
         db.commit()
         return {"msg": "BL and containers created successfully"}
     
-    @BillOfLandingRouter.get("/getBl", response_model=BillOfLandingListResponse)
+    @BillOfLandingRouter.get("/bills-of-lading", response_model=BillOfLandingListResponse)
     async def get_bls(self,
         BillOfLanding: Optional[str] = Query(None),
         ConsigneeName: Optional[str] = Query(None),
@@ -85,7 +85,7 @@ class BillOfLandingAPI:
         Provider: Optional[str] = Query(None),
         ArrivalDate: Optional[datetime] = Query(None),
         offset: int = Query(0, ge=0),
-        limit: int = Query(0, le=500),
+        limit: int = Query(50, le=100),
         sort_by_arrival: bool = Query(True, description="Sort by ArrivalDate descending if True"),
         db: Session = Depends(get_db),
         ):
@@ -167,7 +167,7 @@ class BillOfLandingAPI:
             raise HTTPException(status_code=500, detail=f"Error fetching Bill of Lading data: {str(e)}")
 
 
-    @BillOfLandingRouter.post("/updateBl/{bl_number}")
+    @BillOfLandingRouter.patch("/bills-of-lading/{bl_number}")
     async def update_bl(self,
         bl_number: str,
         data: BillOfLandingUpdateOnlySchema = Body(...),
@@ -216,7 +216,7 @@ class BillOfLandingAPI:
         db.commit()
         return {"msg": "Bill of Landing and associated containers updated successfully"}
 
-    @BillOfLandingRouter.delete("/deleteBl/{bl_code}")
+    @BillOfLandingRouter.delete("/bills-of-lading/{bl_code}")
     async def delete_bill_of_lading(self, 
         bl_code: str,
         db: Session = Depends(get_db),

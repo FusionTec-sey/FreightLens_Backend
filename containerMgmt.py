@@ -1,130 +1,142 @@
-﻿from fastapi import FastAPI
+import logging
+import warnings
+from datetime import datetime
 
-from sqlalchemy import text
-from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi.middleware.cors import CORSMiddleware
-scheduler = BackgroundScheduler()
 import uvicorn
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from apscheduler.schedulers.background import BackgroundScheduler
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# ── Logging setup (must be before any module that uses logging) ───────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(),                           # Console output
+        logging.FileHandler("app.log", encoding="utf-8"), # Persistent log file
+    ],
+)
+logger = logging.getLogger("containerMgmt")
+
+# ── App configuration & models ────────────────────────────────────────────────
 from auth.config import settings
 from Schema import *
 from Model import *
-from apscheduler.schedulers.background import BackgroundScheduler
-from  datetime import datetime
-from Model.db import Base, engine
+from Model.db import Base, engine, get_db
 from ShippingProvider.Shipping import track_and_trace
-
-
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
 from auth import auth_router
-
 from Routes import *
 from Model.containermgmt.Container.BillOfLanding import BillOfLanding as bl
 
+from limiter import limiter, RATE_LIMIT_AVAILABLE
+
+if RATE_LIMIT_AVAILABLE:
+    from slowapi.errors import RateLimitExceeded
+    from slowapi import _rate_limit_exceeded_handler
+
+
+
+# ── Scheduler job ─────────────────────────────────────────────────────────────
 def updateArrivalDate():
     db = next(get_db())
     try:
-        # use db here
-        records = (db.query(bl)
-                   .filter(bl.ArrivalDate > datetime.now())
-                   .all())
-        
+        records = (
+            db.query(bl)
+            .filter(bl.ArrivalDate > datetime.now())
+            .all()
+        )
         for i in records:
             data = track_and_trace(i.BillOfLanding)
-            print(data)
+            logger.info("Arrival date update | BoL=%s | data=%s", i.BillOfLanding, data)
             if len(data) > 0:
                 db.query(bl).filter(bl.BillOfLanding == i.BillOfLanding).update(
                     {
-                    bl.ArrivalDate:  datetime.fromisoformat(data[0]["eventDateTime"]).strftime("%Y-%m-%d %H:%M:%S")
+                        bl.ArrivalDate: datetime.fromisoformat(
+                            data[0]["eventDateTime"]
+                        ).strftime("%Y-%m-%d %H:%M:%S")
                     }
                 )
                 db.commit()
+    except Exception as e:
+        logger.exception("Error in updateArrivalDate: %s", e)
     finally:
         db.close()
 
-# def updateStatus():
-#     """
-#     Run a single set-based UPDATE to refresh container status according to rules.
-#     Uses the DB session from get_db() so it matches how you run other tasks.
-#     """
-#     STATUS_UPDATE_SQL = """
-#         UPDATE container_details cd
-#         LEFT JOIN bill_of_landing bol ON bol.BillOfLading = cd.BillOfLading
-#         SET cd.status = CASE
-#             WHEN cd.out_bound IS NOT NULL OR cd.unloaded_at_port IS NOT NULL THEN 4
-#             WHEN cd.empty_date IS NOT NULL THEN 7
-#             WHEN cd.in_bound IS NOT NULL THEN 6
-#             WHEN bol.ArrivalDate IS NULL THEN 8
-#             WHEN bol.ArrivalDate > CURDATE() THEN 1
-#             ELSE 2
-#         END
-#         -- OPTIONAL: add WHERE clause to limit rows to update for big tables
-#         ;
-#         """
-    
-#     db = next(get_db())
-#     try:
-#         # logger.info("Starting status update at %s", datetime.now().isoformat())
-#         # Use the session's connection to execute raw SQL; this avoids depending on model names
-#         conn = db.connection()
-#         conn.execute(text(STATUS_UPDATE_SQL))
-#         db.commit()
-#         # logger.info("Status update completed successfully.")
-#     except Exception as e:
-#         # logger.exception("Error during status update: %s", e)
-#         try:
-#             db.rollback()
-#         except Exception:
-#             print()
-#             # logger.exception("Rollback failed")
-#     finally:
-#         db.close()    
-           
-app = FastAPI()
 
+# ── FastAPI app factory ────────────────────────────────────────────────────────
+app = FastAPI(
+    title="Container Management API",
+    version="1.0.0",
+    # Hide Swagger UI and ReDoc in production
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+)
+
+# ── Rate limiter state (must be set before routes are registered) ──────────────
+if RATE_LIMIT_AVAILABLE:
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this
+    allow_origins=settings.ALLOWED_ORIGINS,  # Read from ALLOWED_ORIGINS in .env
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
- )
+)
 
-
+# ── Background scheduler ──────────────────────────────────────────────────────
 scheduler = BackgroundScheduler()
-scheduler.add_job(updateArrivalDate, "cron", hour=15, minute=44)  # every day at 03:00 AM
+scheduler.add_job(updateArrivalDate, "cron", hour=15, minute=44)
 scheduler.start()
 
 
+# ── Lifecycle events ──────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    
-    # scheduler.add_job(call_my_api, "cron", hour=2, minute=0)  # 🔁 Daily at 2:00 AM
-    # scheduler.start()
-    
-    print(" Initializing database...")
+    logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
-    print(" Database tables are ready.")
-    # updateArrivalDate()
+    logger.info("Database tables are ready.")
+
 
 @app.on_event("shutdown")
 def shutdown_event():
     scheduler.shutdown()
+    logger.info("Application shutdown complete.")
 
 
+# ── Health check endpoint ─────────────────────────────────────────────────────
+@app.get("/health", tags=["System"])
+async def health_check(db: Session = Depends(get_db)):
+    """Returns database connectivity and API liveness status."""
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected", "environment": settings.ENVIRONMENT}
+    except Exception as e:
+        logger.error("Health check failed: %s", e)
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
+# ── Route registration ────────────────────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(Cinfo)
 app.include_router(ContainerRouter)
 app.include_router(CreadentialsInfo)
 app.include_router(TrackingRouter)
 app.include_router(BillOfLandingRouter)
+app.include_router(SettingRouter)
 
-# Add this block to run with `python main.py`
+
+# ── Entrypoint ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-     uvicorn.run("containerMgmt:app", host=settings.HOST_IP, port=settings.HOST_PORT, reload=True)
-    # uvicorn.run("containerMgmt:app", host="172.16.32.6", port=8000)
-
-         
+    uvicorn.run(
+        "containerMgmt:app",
+        host=settings.HOST_IP,
+        port=settings.HOST_PORT,
+        reload=True,
+    )

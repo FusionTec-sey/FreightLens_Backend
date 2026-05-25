@@ -21,31 +21,31 @@ Cinfo = InferringRouter()
 @cbv(Cinfo)
 class CinfoAPI:
     
-    @Cinfo.get("/supplierDetails")
+    @Cinfo.get("/suppliers")
     async def getsupplier(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(Supplier.supplier_id, Supplier.name).all()
     
         return json.dumps({ "data": [list(row) for row in data]})
     
-    @Cinfo.get("/containerType")
+    @Cinfo.get("/container-types")
     async def gettype(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(ContainerType.type_id, ContainerType.type).all()
         
         return json.dumps({ "data": [list(row) for row in data]})
     
-    @Cinfo.get("/unloadVenue")
+    @Cinfo.get("/unload-venues")
     async def getvenue(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(UnloadVenue.venue_id, UnloadVenue.venue).all()
         
         return json.dumps({ "data": [list(row) for row in data]})
     
-    @Cinfo.get("/consignee")
+    @Cinfo.get("/consignees")
     async def getconsignee(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(Consignee.consignee_id, Consignee.consignee_name).all()
         
         return json.dumps({"data": [list(row) for row in data]})
     
-    @Cinfo.get("/shippingDocument")
+    @Cinfo.get("/shipping-documents")
     async def getshippingDocument(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(ShippingDocument.doc_id, ShippingDocument.doc_type).all()
         # column = ['Document ID', 'Document Name']
@@ -57,29 +57,30 @@ class CinfoAPI:
         # column = ['Status ID', 'name']
         return json.dumps({ "data": [list(row) for row in data]})  
     
-    @Cinfo.get("/vessal")
+    @Cinfo.get("/vessels")
     async def getVessel(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(Vessal.id, Vessal.VessalNo).all()
         # column = ['Status ID', 'name']
         return json.dumps({ "data": [list(row) for row in data]})
     
-    @Cinfo.get("/logisticsProvider")
+    @Cinfo.get("/logistics-providers")
     async def getLogisticsProvider(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         
         data = db.query(LogisticsProvider.Id, LogisticsProvider.Name).distinct().all()
         # column = ['Logistics Provider']
         return json.dumps({ "data": [list(row) for row in data]})
     
-    @Cinfo.get("/material")
+    @Cinfo.get("/materials")
     async def getMaterial(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(Material.Id, Material.Name).all()
         return json.dumps({ "data": [list(row) for row in data]}) 
     
     
-    @Cinfo.post("/setVessal")
+    @Cinfo.post("/vessels")
     async def create_vessal(self,
         request: Request,
-        db: Session = Depends(get_db),):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         vessal_data = await request.json()
         # print(vessal_data)
@@ -97,10 +98,11 @@ class CinfoAPI:
 
         return {"id": new_vessal.id, "name": new_vessal.VessalNo}
 
-    @Cinfo.post("/setSupplier")
+    @Cinfo.post("/suppliers")
     async def create_supplier(self,
         request: Request,
-        db: Session = Depends(get_db),):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         supplier_data = await request.json()
         # print(supplier_data)
@@ -116,10 +118,11 @@ class CinfoAPI:
 
         return {"id": new_supplier.supplier_id, "name": new_supplier.name}
     
-    @Cinfo.post("/setUnloadVenue")
-    async def create_unload_venue(self, 
+    @Cinfo.post("/unload-venues")
+    async def create_unload_venue(self,
         request: Request,
-        db: Session = Depends(get_db),):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         venue_data = await request.json()
         # print(venue_data)
@@ -135,10 +138,11 @@ class CinfoAPI:
 
         return {"id": new_venue.venue_id, "name": new_venue.venue}
     
-    @Cinfo.post("/setConsignee")
+    @Cinfo.post("/consignees")
     async def create_consignee(self,
         request: Request,
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         consignee_data = await request.json()
         # print(consignee_data)
@@ -154,10 +158,11 @@ class CinfoAPI:
 
         return {"id": new_consignee.consignee_id, "name": new_consignee.consignee_name}
     
-    @Cinfo.post("/setContainerType")
+    @Cinfo.post("/container-types")
     async def create_container_type(self,
         request: Request,
-        db: Session = Depends(get_db),):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         type_data = await request.json()
         # print(type_data)
@@ -173,10 +178,11 @@ class CinfoAPI:
 
         return {"id": new_type.type_id, "name": new_type.type}
     
-    @Cinfo.post("/setShippingDocument")
+    @Cinfo.post("/shipping-documents")
     async def create_shipping_document(self,
         request: Request,
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         doc_data = await request.json()
     
@@ -192,10 +198,11 @@ class CinfoAPI:
 
         return {"id": new_doc.doc_id, "name": new_doc.doc_type}
    
-    @Cinfo.post("/setMaterial")
+    @Cinfo.post("/materials")
     async def create_Material(self,
         request: Request,
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         material_data = await request.json()
         # print(doc_data)
@@ -211,10 +218,11 @@ class CinfoAPI:
         
         return {"id": new_material.Id, "name": new_material.Name} 
     
-    @Cinfo.post("/setProvider")
-    async def create_logisticsProvider(sef,
+    @Cinfo.post("/logistics-providers")
+    async def create_logisticsProvider(self,
         request: Request,
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)):
         
         provider_data = await request.json()
         # print(doc_data)

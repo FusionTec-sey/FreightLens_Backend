@@ -146,7 +146,7 @@ async def parse_create_form(request: Request) -> ContainerCreateSchema:
 @cbv(ContainerRouter)
 class ContainerAPI:
 
-    @ContainerRouter.post("/createContainer")
+    @ContainerRouter.post("/containers")
     async def create_container(self,
         create_data: ContainerCreateSchema = Depends(parse_create_form),
         new_docs: List[UploadFile] = File([]),
@@ -220,7 +220,7 @@ class ContainerAPI:
 
         return {"message": "Container created successfully"}
     
-    @ContainerRouter.get("/getContainerDetails", response_model=ContainerListResponse)
+    @ContainerRouter.get("/containers", response_model=ContainerListResponse)
     async def get_container_details_by_id(self,
         container_id: Optional[int] = Query(None),
         container_no: Optional[str] = Query(None),
@@ -232,7 +232,7 @@ class ContainerAPI:
         material: Optional[str] = Query(None),
         order_by_arrival: Optional[bool] = Query(True, description="Sort by ArrivalDate (True=descending, False=ascending)"),
         offset: int = Query(0, ge=0),
-        limit: int = Query(500, le=1000),
+        limit: int = Query(50, le=100),
         db: Session = Depends(get_db),
         current_user: dict = Depends(get_current_user)
         ):
@@ -356,7 +356,7 @@ class ContainerAPI:
                 "data": serialized_data
             }
         
-    @ContainerRouter.delete("/deleteContainerDetails/{container_id}")
+    @ContainerRouter.delete("/containers/{container_id}")
     async def delete_container(self, 
         container_id: int,
         db: Session = Depends(get_db),
@@ -438,7 +438,7 @@ class ContainerAPI:
             }
         )
     
-    @ContainerRouter.post("/updateContainerDetails/{container_id}")
+    @ContainerRouter.put("/containers/{container_id}")
     async def update_container_details(self,
         container_id: int,
         request: Request,
@@ -521,7 +521,7 @@ class ContainerAPI:
         db.commit()
         return {"message": "Container updated successfully"}    
 
-    @ContainerRouter.post("/updateContainer/{container_id}")
+    @ContainerRouter.patch("/containers/{container_id}/status")
     async def update_container(self, 
         container_id: int,
         update_data: ContainerUpdateSchema = Depends(parse_update_form),
@@ -640,7 +640,7 @@ class ContainerAPI:
         column = ['Report Id','Container No']
         return json.dumps({"column": column, "data": [list(row) for row in data]})
     
-    @ContainerRouter.get("/getDamageReport")
+    @ContainerRouter.get("/damage-reports")
     async def get_ContainerReports(self, 
                                     report_id: int = Form(None),
                                     offset: int = Query(0, ge=0),
@@ -675,7 +675,7 @@ class ContainerAPI:
             "data": reports
         } 
     
-    @ContainerRouter.post("/submitDamagedProducts")
+    @ContainerRouter.post("/damage-reports")
     async def submit_damage_report(self,
         data: str = Form(...),
         files: Optional[List[UploadFile]] = File(None),
@@ -746,7 +746,7 @@ class ContainerAPI:
         db.commit()
         return {"message": "Report submitted", "report_id": report.report_id}
 
-    @ContainerRouter.get("/getDamageReportById/{report_id}")
+    @ContainerRouter.get("/damage-reports/{report_id}")
     async def get_damage_report(
         self,
         report_id: int,
@@ -783,7 +783,7 @@ class ContainerAPI:
             "products": products
         }
         
-    @ContainerRouter.post("/updateDamagedProducts/{report_id}")
+    @ContainerRouter.put("/damage-reports/{report_id}")
     async def update_damage_report(self,
         report_id: int,
         request: Request,
@@ -909,7 +909,7 @@ class ContainerAPI:
             }
         )
 
-    @ContainerRouter.delete("/deleteDamagedReport/{report_id}")
+    @ContainerRouter.delete("/damage-reports/{report_id}")
     def delete_damage_report(self,
         report_id: int,
         db: Session = Depends(get_db),

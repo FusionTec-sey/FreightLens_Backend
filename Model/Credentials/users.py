@@ -8,6 +8,7 @@ class User(Base):
     __table_args__ = {'schema': 'usercredentials'}
     id = Column(Integer, primary_key=True)
     username = Column(String(45), unique=True, nullable=False)
-    password_hash = Column(String(45), nullable=False)
+    password_hash = Column(String(255), nullable=False)
 
     roles = relationship("Role", secondary=user_roles, back_populates="users")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
