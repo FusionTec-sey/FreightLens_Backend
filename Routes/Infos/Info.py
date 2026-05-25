@@ -66,7 +66,7 @@ class CinfoAPI:
     @Cinfo.get("/logistics-providers")
     async def getLogisticsProvider(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         
-        data = db.query(LogisticsProvider.Id, LogisticsProvider.Name).filter(LogisticsProvider.is_deleted != True).distinct().all()
+        data = db.query(LogisticsProvider.Id, LogisticsProvider.Name, LogisticsProvider.FreeDays).filter(LogisticsProvider.is_deleted != True).distinct().all()
         # column = ['Logistics Provider']
         return json.dumps({ "data": [list(row) for row in data]})
     
@@ -111,6 +111,10 @@ class CinfoAPI:
         if not name:
             raise HTTPException(status_code=422, detail="Missing supplier name")
 
+        existing = db.query(Supplier).filter(Supplier.name.ilike(name), Supplier.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Supplier with this name already exists")
+
         new_supplier = Supplier(name=name)
         db.add(new_supplier)
         db.commit()
@@ -130,6 +134,10 @@ class CinfoAPI:
 
         if not venue_name:
             raise HTTPException(status_code=422, detail="Missing venue name")
+
+        existing = db.query(UnloadVenue).filter(UnloadVenue.venue.ilike(venue_name), UnloadVenue.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Venue with this name already exists")
 
         new_venue = UnloadVenue(venue=venue_name)
         db.add(new_venue)
@@ -151,6 +159,10 @@ class CinfoAPI:
         if not consignee_name:
             raise HTTPException(status_code=422, detail="Missing consignee name")
 
+        existing = db.query(Consignee).filter(Consignee.consignee_name.ilike(consignee_name), Consignee.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Consignee with this name already exists")
+
         new_consignee = Consignee(consignee_name=consignee_name)
         db.add(new_consignee)
         db.commit()
@@ -170,6 +182,10 @@ class CinfoAPI:
 
         if not type_name:
             raise HTTPException(status_code=422, detail="Missing container type name")
+
+        existing = db.query(ContainerType).filter(ContainerType.type.ilike(type_name), ContainerType.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Container type with this name already exists")
 
         new_type = ContainerType(type=type_name)
         db.add(new_type)
@@ -191,6 +207,10 @@ class CinfoAPI:
         if not doc_type:
             raise HTTPException(status_code=422, detail="Missing document type")
 
+        existing = db.query(ShippingDocument).filter(ShippingDocument.doc_type.ilike(doc_type), ShippingDocument.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Document type with this name already exists")
+
         new_doc = ShippingDocument(doc_type=doc_type)
         db.add(new_doc)
         db.commit()
@@ -206,10 +226,14 @@ class CinfoAPI:
         
         material_data = await request.json()
         # print(doc_data)
-        materials = material_data.get("material")
+        materials = material_data.get("name")
 
         if not materials:
-            raise HTTPException(status_code=422, detail="Missing document type")
+            raise HTTPException(status_code=422, detail="Missing material name")
+
+        existing = db.query(Material).filter(Material.Name.ilike(materials), Material.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Material with this name already exists")
 
         new_material = Material(Name=materials)
         db.add(new_material)
@@ -229,7 +253,11 @@ class CinfoAPI:
         provider = provider_data.get("name")
 
         if not provider:
-            raise HTTPException(status_code=422, detail="Missing document type")
+            raise HTTPException(status_code=422, detail="Missing logistics provider name")
+
+        existing = db.query(LogisticsProvider).filter(LogisticsProvider.Name.ilike(provider), LogisticsProvider.is_deleted != True).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Logistics Provider with this name already exists")
 
         new_provider = LogisticsProvider(Name=provider)
         db.add(new_provider)
@@ -242,7 +270,12 @@ class CinfoAPI:
         data = await request.json()
         item = db.query(Supplier).filter(Supplier.supplier_id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
-        item.name = data.get("name")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(Supplier).filter(Supplier.name.ilike(new_name), Supplier.supplier_id != item_id, Supplier.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Supplier with this name already exists")
+            item.name = new_name
         item.updated_by = current_user.get("id")
         db.commit()
         return {"id": item.supplier_id, "name": item.name}
@@ -282,7 +315,12 @@ class CinfoAPI:
         data = await request.json()
         item = db.query(UnloadVenue).filter(UnloadVenue.venue_id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
-        item.venue = data.get("name")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(UnloadVenue).filter(UnloadVenue.venue.ilike(new_name), UnloadVenue.venue_id != item_id, UnloadVenue.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Venue with this name already exists")
+            item.venue = new_name
         item.updated_by = current_user.get("id")
         db.commit()
         return {"id": item.venue_id, "name": item.venue}
@@ -302,7 +340,12 @@ class CinfoAPI:
         data = await request.json()
         item = db.query(Consignee).filter(Consignee.consignee_id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
-        item.consignee_name = data.get("name")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(Consignee).filter(Consignee.consignee_name.ilike(new_name), Consignee.consignee_id != item_id, Consignee.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Consignee with this name already exists")
+            item.consignee_name = new_name
         item.updated_by = current_user.get("id")
         db.commit()
         return {"id": item.consignee_id, "name": item.consignee_name}
@@ -322,7 +365,12 @@ class CinfoAPI:
         data = await request.json()
         item = db.query(Material).filter(Material.Id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
-        item.Name = data.get("name")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(Material).filter(Material.Name.ilike(new_name), Material.Id != item_id, Material.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Material with this name already exists")
+            item.Name = new_name
         item.updated_by = current_user.get("id")
         db.commit()
         return {"id": item.Id, "name": item.Name}
@@ -342,7 +390,12 @@ class CinfoAPI:
         data = await request.json()
         item = db.query(ShippingDocument).filter(ShippingDocument.doc_id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
-        item.doc_type = data.get("name")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(ShippingDocument).filter(ShippingDocument.doc_type.ilike(new_name), ShippingDocument.doc_id != item_id, ShippingDocument.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Shipping document with this name already exists")
+            item.doc_type = new_name
         item.updated_by = current_user.get("id")
         db.commit()
         return {"id": item.doc_id, "name": item.doc_type}
@@ -362,7 +415,12 @@ class CinfoAPI:
         data = await request.json()
         item = db.query(ContainerType).filter(ContainerType.type_id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
-        item.type = data.get("name")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(ContainerType).filter(ContainerType.type.ilike(new_name), ContainerType.type_id != item_id, ContainerType.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Container type with this name already exists")
+            item.type = new_name
         item.updated_by = current_user.get("id")
         db.commit()
         return {"id": item.type_id, "name": item.type}
