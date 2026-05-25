@@ -3,7 +3,9 @@
 from sqlalchemy import Column, Integer, String
 from ...db import Base  # Adjust the import based on your project structure
 
-class Status(Base):
+from ...mixins import AuditMixin
+
+class Status(AuditMixin, Base):
     __tablename__ = "status"
     __table_args__ = {'schema': 'containermgmt'}
     

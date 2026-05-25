@@ -8,7 +8,9 @@ from ..Cinfo.ContainerMaterial import container_products
 from ...db import Base  # Adjust path as needed
 # from ..Container.BillOfLanding import BillOfLanding
 
-class ContainerDetails(Base):
+from ...mixins import AuditMixin
+
+class ContainerDetails(AuditMixin, Base):
     __tablename__ = "container_details"
     __table_args__ = {"schema": "containermgmt"}  # Optional: Remove if no schema used
 

@@ -3,7 +3,9 @@ from sqlalchemy import Column, String,Integer
 from sqlalchemy.orm import relationship
 from ...db import Base
 # from Model.db import Base
-class Supplier(Base):
+from ...mixins import AuditMixin
+
+class Supplier(AuditMixin, Base):
     __tablename__ = 'supplier'
     __table_args__ = {'schema': 'containermgmt'}
 

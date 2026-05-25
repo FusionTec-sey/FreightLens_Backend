@@ -4,7 +4,9 @@ from typing import Optional
 from ...db import Base  # Adjust the import path to your project's base module
 from ..Cinfo.ContainerMaterial import container_products
 
-class Material(Base):
+from ...mixins import AuditMixin
+
+class Material(AuditMixin, Base):
     __tablename__ = "material"
     __table_args__ = {"schema": "containermgmt"}  # Remove if you're not using schema
 

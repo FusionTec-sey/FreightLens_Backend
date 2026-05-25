@@ -10,7 +10,9 @@ class DocType(enum.Enum):
     D = "D"  # Add more types as needed
 
 # Define the SQLAlchemy model
-class ContainerDocs(Base):
+from ...mixins import AuditMixin
+
+class ContainerDocs(AuditMixin, Base):
     __tablename__ = 'container_docs'
     __table_args__ = {'schema': 'containermgmt'}
 

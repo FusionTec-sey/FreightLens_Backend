@@ -4,7 +4,9 @@ from sqlalchemy.orm import relationship
 from ...db import Base
 
 
-class UnloadVenue(Base):
+from ...mixins import AuditMixin
+
+class UnloadVenue(AuditMixin, Base):
     __tablename__ = 'unload_venue'
     __table_args__ = {'schema': 'containermgmt'}
 

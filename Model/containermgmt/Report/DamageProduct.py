@@ -4,7 +4,9 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from ...db import Base
 
-class DamageProduct(Base):
+from ...mixins import AuditMixin
+
+class DamageProduct(AuditMixin, Base):
     __tablename__ = 'damageproduct'
     __table_args__ = {'schema': 'containermgmt'}
 

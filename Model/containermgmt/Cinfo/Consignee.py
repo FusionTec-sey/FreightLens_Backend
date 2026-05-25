@@ -2,7 +2,9 @@ from sqlalchemy import Column, String, Integer
 from sqlalchemy.orm import relationship
 from ...db import Base
 
-class Consignee(Base):
+from ...mixins import AuditMixin
+
+class Consignee(AuditMixin, Base):
     __tablename__ = 'consignee'
     __table_args__ = {'schema': 'containermgmt'}
 

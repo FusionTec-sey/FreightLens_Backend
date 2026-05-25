@@ -3,7 +3,9 @@ from ...db import Base # Adjust this import path based on your project
 from sqlalchemy.orm import relationship
 
 
-class ReportImage(Base):
+from ...mixins import AuditMixin
+
+class ReportImage(AuditMixin, Base):
     __tablename__ = 'report_images'
     __table_args__ = {'schema': 'containermgmt'}
 

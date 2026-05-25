@@ -11,6 +11,7 @@ from Model.Credentials.users import User
 from Model.Credentials.roles import Role
 from Model.Credentials.permissions import Permission
 from Model.Credentials.refresh_tokens import RefreshToken
+from Model.Credentials.SessionAudit import SessionAudit
 from Model.db import get_db
 
 from auth.security import verify_password
@@ -46,6 +47,15 @@ async def login(
             form_data.username,
             request.client.host if request.client else "unknown",
         )
+        # Audit failed login
+        audit = SessionAudit(
+            login_time=datetime.utcnow(),
+            ip_address=request.client.host if request.client else "unknown",
+            device_info=request.headers.get("user-agent"),
+            login_status="FAILED"
+        )
+        db.add(audit)
+        db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # ── Build token with actual DB roles (not hardcoded "admin") ──────────────
@@ -77,6 +87,18 @@ async def login(
         .distinct()
         .all()
     )
+
+    # ── Audit successful login ───────────────────────────────────────────────
+    audit = SessionAudit(
+        user_id=user.id,
+        login_time=datetime.utcnow(),
+        ip_address=request.client.host if request.client else "unknown",
+        device_info=request.headers.get("user-agent"),
+        login_status="SUCCESS",
+        refresh_token_id=str(db_token.id)  # or token_hash if id is auto-generated and not flushed
+    )
+    db.add(audit)
+    db.commit()
 
     logger.info("Successful login | username=%s", user.username)
     return {
@@ -137,6 +159,12 @@ async def logout(
     db_token = db.query(RefreshToken).filter_by(token_hash=token_hash, revoked=0).first()
     if db_token:
         db_token.revoked = 1
+        
+        # Audit logout
+        audit = db.query(SessionAudit).filter_by(refresh_token_id=str(db_token.id)).order_by(SessionAudit.session_id.desc()).first()
+        if audit:
+            audit.logout_time = datetime.utcnow()
+            
         db.commit()
     logger.info("User logged out | username=%s", current_user.username)
     return {"message": "Logged out successfully"}

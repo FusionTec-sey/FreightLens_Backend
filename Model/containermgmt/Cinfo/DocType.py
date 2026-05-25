@@ -3,7 +3,9 @@ from sqlalchemy import Column, String,Integer
 from sqlalchemy.orm import relationship
 from ...db import Base
 
-class ShippingDocument(Base):
+from ...mixins import AuditMixin
+
+class ShippingDocument(AuditMixin, Base):
     __tablename__ = 'shipping_document'
     __table_args__ = {'schema': 'containermgmt'}
 

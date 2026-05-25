@@ -6,7 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...db import Base
 
-class Vessal(Base):
+from ...mixins import AuditMixin
+
+class Vessal(AuditMixin, Base):
     __tablename__ = 'vessals'
     __table_args__ = {'schema': 'containermgmt'}
 

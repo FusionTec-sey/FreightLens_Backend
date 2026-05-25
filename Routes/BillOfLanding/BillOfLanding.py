@@ -10,7 +10,7 @@ from Model import BillOfLanding as BOfL
 from Model import ContainerDetails, Supplier, LogisticsProvider,  Vessal, BillOfLanding, Consignee, ShippingDocument, ContainerDocs, ReportDetails, DamageProduct, ReportImage
 from Schema import   BillOfLandingInSchema, BillOfLandingWithContainersSchema, ContainerDetailsSchemaWithBl, BillOfLandingUpdateOnlySchema, BillOfLandingListResponse
 from Utils import *
-# from auth.dependencies import get_current_user
+from auth.dependencies import get_current_user
 from fastapi import  Depends, Body
 # from fastapi.responses import FileResponse, StreamingResponse
 # import json
@@ -92,6 +92,7 @@ class BillOfLandingAPI:
         try:
             query = (
                 db.query(BOfL)
+                .filter(BOfL.is_deleted == False)
                 .options(
                     joinedload(BOfL.consignee_rel),
                     joinedload(BOfL.vessel_rel),
@@ -220,7 +221,7 @@ class BillOfLandingAPI:
     async def delete_bill_of_lading(self, 
         bl_code: str,
         db: Session = Depends(get_db),
-        # current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(get_current_user),
         ):
         # Step 1: Fetch the Bill of Lading
         bl = db.query(BillOfLanding).filter(BillOfLanding.BillOfLanding == bl_code).first()
@@ -270,11 +271,15 @@ class BillOfLandingAPI:
             # 2.7: Clear many-to-many material links
             container.materials.clear()
 
-            # 2.8: Delete container itself
-            db.delete(container)
+            # 2.8: Soft delete container
+            container.is_deleted = True
+            container.deleted_by = current_user.id
+            container.deleted_at = datetime.utcnow()
 
-        # Step 3: Delete the Bill of Lading
-        db.delete(bl)
+        # Step 3: Soft delete the Bill of Lading
+        bl.is_deleted = True
+        bl.deleted_by = current_user.id
+        bl.deleted_at = datetime.utcnow()
 
         # Step 4: Commit all deletions
         db.commit()

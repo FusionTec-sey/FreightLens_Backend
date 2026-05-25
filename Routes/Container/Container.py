@@ -239,6 +239,7 @@ class ContainerAPI:
 
             base_query = (
                 db.query(ContainerDetails)
+                .filter(ContainerDetails.is_deleted == False)
                 .outerjoin(BillOfLanding, ContainerDetails.BillOfLanding == BillOfLanding.BillOfLanding)
                 .options(
                     # To-one relationships: safe to joinedload (no collection, no subquery-LIMIT issue)
@@ -404,11 +405,20 @@ class ContainerAPI:
         # for (path,) in doc_paths:
         #     remove_file_from_disk(path)
 
-        # Step 8: Clear many-to-many materials
+        # Step 8: Clear many-to-many materials (optional for soft delete, but good for cleanup)
         container.materials.clear()
 
-        # Step 9: Delete the container
-        db.delete(container)
+        # Step 9: Soft delete the container instead of hard delete
+        container.is_deleted = True
+        container.deleted_by = current_user.id
+        container.deleted_at = datetime.utcnow()
+        
+        # Soft delete associated reports
+        db.query(ReportDetails).filter(ReportDetails.container_id == container_id).update({
+            "is_deleted": True,
+            "deleted_by": current_user.id,
+            "deleted_at": datetime.utcnow()
+        }, synchronize_session=False)
 
         # Step 10: Commit all changes
         db.commit()

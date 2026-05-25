@@ -2,7 +2,9 @@ from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from ...db import Base
 
-class BillOfLanding(Base):
+from ...mixins import AuditMixin
+
+class BillOfLanding(AuditMixin, Base):
     __tablename__ = "bill_of_landing"
     __table_args__ = {'schema': 'containermgmt'}
 
