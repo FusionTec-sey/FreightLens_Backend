@@ -235,7 +235,7 @@ class CinfoAPI:
         db.add(new_provider)
         db.commit()
         db.refresh(new_provider)
-        
+        return {"id": new_provider.Id, "name": new_provider.Name}
     
     @Cinfo.get("/getDashboardInfo")
     async def getContainerInfo(self, db: Session = Depends(get_db)):

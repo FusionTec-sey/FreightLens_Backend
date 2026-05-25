@@ -19,8 +19,8 @@ CreadentialsInfo = InferringRouter()
 class CreadentialsInfoAPI:
     @CreadentialsInfo.get("/getRole")
     async def getRole(self, db: Session = Depends(get_db)):
-        roles = db.query(Role).filter(Role.is_deleted == False).all()
-        return [{"id": role.id, "name": role.name} for role in roles]
+        roles = db.query(Role).options(joinedload(Role.permissions)).filter(Role.is_deleted == False).all()
+        return [{"id": role.id, "name": role.name, "permissions": [p.id for p in role.permissions]} for role in roles]
     
     @CreadentialsInfo.get("/getUser")
     async def getUsers(self, db: Session = Depends(get_db)):
@@ -101,6 +101,42 @@ class CreadentialsInfoAPI:
         user.deleted_by = current_user.id
         user.deleted_at = datetime.utcnow()
         db.commit()
+    
+    @CreadentialsInfo.put("/updateUser/{user_id}")
+    async def update_user(self, user_id: int, payload: UserBase, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if payload.username:
+            user.username = payload.username
+        if payload.password:
+            user.password_hash = hash_password(payload.password)
+        
+        if payload.roles is not None:
+            role_objs = db.query(Role).filter(Role.id.in_(payload.roles)).all()
+            user.roles = role_objs
+            
+        db.commit()
+        db.refresh(user)
+        return {"id": user.id, "username": user.username, "roles": [role.name for role in user.roles]}
+
+    @CreadentialsInfo.put("/updateRole/{role_id}")
+    async def update_role(self, role_id: int, payload: RoleBase, db: Session = Depends(get_db)):
+        role = db.query(Role).filter(Role.id == role_id, Role.is_deleted == False).first()
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+            
+        if payload.name:
+            role.name = payload.name
+            
+        if payload.permissions is not None:
+            permission_objs = db.query(Permission).filter(Permission.id.in_(payload.permissions)).all()
+            role.permissions = permission_objs
+            
+        db.commit()
+        db.refresh(role)
+        return {"id": role.id, "name": role.name, "permissions": [{"id": p.id, "name": p.name} for p in role.permissions]}
     
     @CreadentialsInfo.delete("/deleteRole/{role_id}")
     async def deleteRole(self, role_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
