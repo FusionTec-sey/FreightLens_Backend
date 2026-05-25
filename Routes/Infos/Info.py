@@ -1,5 +1,5 @@
 
-
+from datetime import datetime
 from fastapi_utils.cbv import cbv
 from fastapi_utils.inferring_router import InferringRouter
 from fastapi import Depends
@@ -23,56 +23,56 @@ class CinfoAPI:
     
     @Cinfo.get("/suppliers")
     async def getsupplier(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(Supplier.supplier_id, Supplier.name).all()
+        data = db.query(Supplier.supplier_id, Supplier.name).filter(Supplier.is_deleted != True).all()
     
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/container-types")
     async def gettype(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(ContainerType.type_id, ContainerType.type).all()
+        data = db.query(ContainerType.type_id, ContainerType.type).filter(ContainerType.is_deleted != True).all()
         
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/unload-venues")
     async def getvenue(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(UnloadVenue.venue_id, UnloadVenue.venue).all()
+        data = db.query(UnloadVenue.venue_id, UnloadVenue.venue).filter(UnloadVenue.is_deleted != True).all()
         
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/consignees")
     async def getconsignee(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(Consignee.consignee_id, Consignee.consignee_name).all()
+        data = db.query(Consignee.consignee_id, Consignee.consignee_name).filter(Consignee.is_deleted != True).all()
         
         return json.dumps({"data": [list(row) for row in data]})
     
     @Cinfo.get("/shipping-documents")
     async def getshippingDocument(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(ShippingDocument.doc_id, ShippingDocument.doc_type).all()
+        data = db.query(ShippingDocument.doc_id, ShippingDocument.doc_type).filter(ShippingDocument.is_deleted != True).all()
         # column = ['Document ID', 'Document Name']
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/status")
     async def getStatus(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(Status.status_id, Status.name).all()
+        data = db.query(Status.status_id, Status.name).filter(Status.is_deleted != True).all()
         # column = ['Status ID', 'name']
         return json.dumps({ "data": [list(row) for row in data]})  
     
     @Cinfo.get("/vessels")
     async def getVessel(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(Vessal.id, Vessal.VessalNo).all()
+        data = db.query(Vessal.id, Vessal.VessalNo).filter(Vessal.is_deleted != True).all()
         # column = ['Status ID', 'name']
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/logistics-providers")
     async def getLogisticsProvider(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         
-        data = db.query(LogisticsProvider.Id, LogisticsProvider.Name).distinct().all()
+        data = db.query(LogisticsProvider.Id, LogisticsProvider.Name).filter(LogisticsProvider.is_deleted != True).distinct().all()
         # column = ['Logistics Provider']
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/materials")
     async def getMaterial(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(Material.Id, Material.Name).all()
+        data = db.query(Material.Id, Material.Name).filter(Material.is_deleted != True).all()
         return json.dumps({ "data": [list(row) for row in data]}) 
     
     
@@ -236,6 +236,146 @@ class CinfoAPI:
         db.commit()
         db.refresh(new_provider)
         return {"id": new_provider.Id, "name": new_provider.Name}
+    
+    @Cinfo.put("/suppliers/{item_id}")
+    async def update_supplier(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(Supplier).filter(Supplier.supplier_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.name = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.supplier_id, "name": item.name}
+
+    @Cinfo.delete("/suppliers/{item_id}")
+    async def delete_supplier(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(Supplier).filter(Supplier.supplier_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
+
+    @Cinfo.put("/vessels/{item_id}")
+    async def update_vessel(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(Vessal).filter(Vessal.id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.VessalNo = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.id, "name": item.VessalNo}
+
+    @Cinfo.delete("/vessels/{item_id}")
+    async def delete_vessel(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(Vessal).filter(Vessal.id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
+
+    @Cinfo.put("/unload-venues/{item_id}")
+    async def update_venue(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(UnloadVenue).filter(UnloadVenue.venue_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.venue = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.venue_id, "name": item.venue}
+
+    @Cinfo.delete("/unload-venues/{item_id}")
+    async def delete_venue(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(UnloadVenue).filter(UnloadVenue.venue_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
+
+    @Cinfo.put("/consignees/{item_id}")
+    async def update_consignee(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(Consignee).filter(Consignee.consignee_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.consignee_name = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.consignee_id, "name": item.consignee_name}
+
+    @Cinfo.delete("/consignees/{item_id}")
+    async def delete_consignee(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(Consignee).filter(Consignee.consignee_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
+
+    @Cinfo.put("/materials/{item_id}")
+    async def update_material(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(Material).filter(Material.Id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.Name = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.Id, "name": item.Name}
+
+    @Cinfo.delete("/materials/{item_id}")
+    async def delete_material(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(Material).filter(Material.Id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
+
+    @Cinfo.put("/shipping-documents/{item_id}")
+    async def update_shipping_doc(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(ShippingDocument).filter(ShippingDocument.doc_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.doc_type = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.doc_id, "name": item.doc_type}
+
+    @Cinfo.delete("/shipping-documents/{item_id}")
+    async def delete_shipping_doc(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(ShippingDocument).filter(ShippingDocument.doc_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
+
+    @Cinfo.put("/container-types/{item_id}")
+    async def update_container_type(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(ContainerType).filter(ContainerType.type_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.type = data.get("name")
+        item.updated_by = current_user.get("id")
+        db.commit()
+        return {"id": item.type_id, "name": item.type}
+
+    @Cinfo.delete("/container-types/{item_id}")
+    async def delete_container_type(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(ContainerType).filter(ContainerType.type_id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.get("id")
+        db.commit()
+        return {"success": True}
     
     @Cinfo.get("/getDashboardInfo")
     async def getContainerInfo(self, db: Session = Depends(get_db)):
