@@ -3,8 +3,9 @@ from sqlalchemy.orm import relationship
 from .user_roles import user_roles
 from .role_permissions import role_permissions
 from ..db import Base
+from ..mixins import AuditMixin
 
-class Role(Base):
+class Role(AuditMixin, Base):
     __tablename__ = 'roles'
     __table_args__ = {'schema': 'usercredentials'}
     id = Column(Integer, primary_key=True)

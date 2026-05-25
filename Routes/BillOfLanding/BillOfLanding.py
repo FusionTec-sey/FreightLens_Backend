@@ -13,8 +13,10 @@ from Utils import *
 from auth.dependencies import get_current_user
 from fastapi import  Depends, Body
 # from fastapi.responses import FileResponse, StreamingResponse
-# import json
-# import mimetypes
+# import asyncio
+from datetime import datetime
+import json
+import mimetypes
 from typing import List, Optional
 # import os 
 from datetime import datetime
@@ -256,26 +258,27 @@ class BillOfLandingAPI:
             dmgp_ids = [d[0] for d in dmgp_ids]
 
             # 2.3: Delete report images
+            now = datetime.utcnow()
             if dmgp_ids:
                 db.query(ReportImage).filter(
                     ReportImage.DMGP_id.in_(dmgp_ids)
-                ).delete(synchronize_session=False)
+                ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
             # 2.4: Delete damage products
             if report_ids:
                 db.query(DamageProduct).filter(
                     DamageProduct.report_id.in_(report_ids)
-                ).delete(synchronize_session=False)
+                ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
             # 2.5: Delete reports
             db.query(ReportDetails).filter(
                 ReportDetails.container_id == container_id
-            ).delete(synchronize_session=False)
+            ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
             # 2.6: Delete container documents
             db.query(ContainerDocs).filter(
                 ContainerDocs.container_id == container_id
-            ).delete(synchronize_session=False)
+            ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
             # 2.7: Clear many-to-many material links
             container.materials.clear()

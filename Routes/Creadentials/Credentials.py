@@ -7,9 +7,10 @@ from Model.db import get_db
 from Model import User, Role, Permission
 from Schema import UserBase, RoleBase
 from Utils import *
-# from ...auth.dependencies import get_current_user
+from auth.dependencies import get_current_user
 from fastapi import  Depends, HTTPException
 from auth.security import hash_password
+from datetime import datetime
 
 CreadentialsInfo = InferringRouter()
 
@@ -18,12 +19,12 @@ CreadentialsInfo = InferringRouter()
 class CreadentialsInfoAPI:
     @CreadentialsInfo.get("/getRole")
     async def getRole(self, db: Session = Depends(get_db)):
-        roles = db.query(Role).all()
+        roles = db.query(Role).filter(Role.is_deleted == False).all()
         return [{"id": role.id, "name": role.name} for role in roles]
     
     @CreadentialsInfo.get("/getUser")
     async def getUsers(self, db: Session = Depends(get_db)):
-        users = db.query(User).options(joinedload(User.roles)).all()
+        users = db.query(User).filter(User.is_deleted == False).options(joinedload(User.roles)).all()
         # roles = db.query(USer).filter().all()
         
         return [{"id": user.id, "username": user.username, "roles": [role.name for role in user.roles]} for user in users]
@@ -87,8 +88,8 @@ class CreadentialsInfoAPI:
         }
     
     @CreadentialsInfo.delete("/deleteUser/{user_id}")
-    async def delete_user(self, user_id: int, db: Session = Depends(get_db)):
-        user = db.query(User).filter(User.id == user_id).first()
+    async def delete_user(self, user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -96,12 +97,14 @@ class CreadentialsInfoAPI:
         # Clear many-to-many relationships
         user.roles.clear()  # Removes all related role associations
 
-        db.delete(user)     # Delete the user
+        user.is_deleted = True
+        user.deleted_by = current_user.id
+        user.deleted_at = datetime.utcnow()
         db.commit()
     
     @CreadentialsInfo.delete("/deleteRole/{role_id}")
-    async def deleteRole(self, role_id: int, db: Session = Depends(get_db)):
-        role = db.query(Role).filter(Role.id == role_id).first()
+    async def deleteRole(self, role_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        role = db.query(Role).filter(Role.id == role_id, Role.is_deleted == False).first()
         if not role:
             raise HTTPException(status_code=404, detail="Role not found")
 
@@ -109,6 +112,8 @@ class CreadentialsInfoAPI:
         role.users.clear()           # Unlink role from users (via user_roles)
         role.permissions.clear()     # Unlink role from permissions (via role_permissions)
 
-        db.delete(role)
+        role.is_deleted = True
+        role.deleted_by = current_user.id
+        role.deleted_at = datetime.utcnow()
         db.commit()
     

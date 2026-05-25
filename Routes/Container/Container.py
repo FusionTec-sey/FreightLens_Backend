@@ -14,6 +14,8 @@ from Utils import *
 from auth.dependencies import get_current_user
 from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
 from fastapi.responses import FileResponse, StreamingResponse
+import asyncio
+from datetime import datetime
 import json
 import mimetypes
 from typing import List, Optional, Dict, Any
@@ -33,6 +35,34 @@ def parse_optional_json(field: Optional[str], field_name: str):
         return json.loads(field)
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=422, detail=f"Invalid JSON in field '{field_name}': {e}")
+
+def sync_bol_status(db: Session, bl_number: str, current_user_id: int):
+    """
+    Checks if all undeleted containers in a Bill of Lading have the exact same status.
+    If they do, updates the Bill of Lading's status to match.
+    """
+    if not bl_number:
+        return
+        
+    bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
+    if not bl:
+        return
+        
+    # Get all active containers for this BoL
+    containers = db.query(ContainerDetails).filter_by(BillOfLanding=bl_number, is_deleted=False).all()
+    if not containers:
+        return
+        
+    # Check if they all share the exact same status
+    first_status = containers[0].status
+    if first_status is None:
+        return
+        
+    all_match = all(c.status == first_status for c in containers)
+    if all_match and bl.status != first_status:
+        bl.status = first_status
+        bl.updated_by = current_user_id
+        db.add(bl)
 
 def parse_date_optional(field: Optional[str]):
     
@@ -115,17 +145,45 @@ async def parse_create_form(request: Request) -> ContainerCreateSchema:
     form = await request.form()
     data = {}
 
-    # Top-level container fields (non-nested)
+    # Fields expected as ISO date/datetime strings
+    datetime_or_date_fields = {"in_bound", "empty_date", "out_bound", "unloaded_at_port"}
+
+    # Fields expected as ints
+    int_fields = {"tax", "status", "type", "emptied_at", "FreeDays"}
+
+    # Fields expected as ints in bill_of_landing.*
+    bl_int_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "FreeDays", "status"}
+
     for key, value in form.items():
-        if "." not in key and key != "materials":
+        if "." in key or key in {"materials", "remove_doc_ids"}:
+            continue  # skip nested or list fields
+
+        if value == "":
+            data[key] = None
+        elif key in datetime_or_date_fields:
+            data[key] = parse_date_optional(value)
+        elif key in int_fields:
+            try:
+                data[key] = int(value)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+        else:
             data[key] = value
 
     # Nested bill_of_landing.* fields
     bill_data = {}
     for key, value in form.items():
         if key.startswith("bill_of_landing."):
-            nested_key = key.replace("bill_of_landing.", "")
-            bill_data[nested_key] = value
+            subkey = key[len("bill_of_landing.") :]
+            if value == "":
+                bill_data[subkey] = None
+            elif subkey in bl_int_fields:
+                try:
+                    bill_data[subkey] = int(value)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"bill_of_landing.{subkey} must be an integer")
+            else:
+                bill_data[subkey] = value
     if bill_data:
         data["bill_of_landing"] = bill_data
 
@@ -388,26 +446,27 @@ class ContainerAPI:
         ).all()
         dmgp_ids = [d[0] for d in dmgp_ids]
 
-        # Step 4: Delete associated report images
+        # Step 4: Soft Delete associated report images
+        now = datetime.utcnow()
         if dmgp_ids:
             db.query(ReportImage).filter(
                 ReportImage.DMGP_id.in_(dmgp_ids)
-            ).delete(synchronize_session=False)
+            ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
-        # Step 5: Delete damage products
+        # Step 5: Soft Delete damage products
         if report_ids:
             db.query(DamageProduct).filter(
                 DamageProduct.report_id.in_(report_ids)
-            ).delete(synchronize_session=False)
+            ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
-        # Step 6: Delete report details
+        # Step 6: Soft Delete report details
         db.query(ReportDetails).filter(
             ReportDetails.container_id == container_id
-        ).delete(synchronize_session=False)
+        ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
-        # Step 7: Delete container documents (and optionally remove files from disk)
+        # Step 7: Soft Delete container documents (and optionally remove files from disk)
         doc_paths = db.query(ContainerDocs.path).filter(ContainerDocs.container_id == container_id).all()
-        db.query(ContainerDocs).filter(ContainerDocs.container_id == container_id).delete(synchronize_session=False)
+        db.query(ContainerDocs).filter(ContainerDocs.container_id == container_id).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
 
         # OPTIONAL: delete physical files if needed
         # for (path,) in doc_paths:
@@ -427,6 +486,10 @@ class ContainerAPI:
             "deleted_by": current_user.id,
             "deleted_at": datetime.utcnow()
         }, synchronize_session=False)
+
+        # Sync BoL status since a container was removed
+        if container.BillOfLanding:
+            sync_bol_status(db, container.BillOfLanding, current_user.id)
 
         # Step 10: Commit all changes
         db.commit()
@@ -632,6 +695,10 @@ class ContainerAPI:
             save_and_link(inbound_images, "InBoundContainer", DocType.AD)
         if empty_images:
             save_and_link(empty_images, "EmptyContainer", DocType.ED)
+
+        # 🔄 Sync BoL status if all containers now match
+        if container.BillOfLanding:
+            sync_bol_status(db, container.BillOfLanding, current_user.id)
 
         # 💾 Commit all changes
         db.commit()
@@ -944,6 +1011,7 @@ class ContainerAPI:
 
         # Collect image paths for removal from disk
         paths_to_remove: List[str] = []
+        now = datetime.utcnow()
 
         # Get all products for the report
         products = db.query(DamageProduct).filter(DamageProduct.report_id==report_id).all()
@@ -952,18 +1020,26 @@ class ContainerAPI:
             images = db.query(ReportImage).filter(ReportImage.DMGP_id==product.id).all()
             for img in images:
                 paths_to_remove.append(img.path)
-                db.delete(img)
+                img.is_deleted = True
+                img.deleted_by = current_user.id
+                img.deleted_at = now
 
-            db.delete(product)
+            product.is_deleted = True
+            product.deleted_by = current_user.id
+            product.deleted_at = now
 
         # Delete images directly associated with report (if any)
         other_images = db.query(ReportImage).filter(ReportImage.DMGP_id==report_id).all()
         for img in other_images:
             paths_to_remove.append(img.path)
-            db.delete(img)
+            img.is_deleted = True
+            img.deleted_by = current_user.id
+            img.deleted_at = now
 
-        # Finally delete the report itself
-        db.delete(report)
+        # Finally soft delete the report itself
+        report.is_deleted = True
+        report.deleted_by = current_user.id
+        report.deleted_at = now
         db.commit()
 
         # Remove files from disk
