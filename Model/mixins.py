@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, DateTime, Boolean, ForeignKey, func
-from sqlalchemy.orm import declared_attr
+from sqlalchemy.orm import declared_attr, relationship
 
 class AuditMixin:
     """
@@ -24,3 +24,11 @@ class AuditMixin:
     @declared_attr
     def deleted_by(cls):
         return Column(Integer, ForeignKey('usercredentials.users.id'), nullable=True)
+
+    @declared_attr
+    def created_by_user(cls):
+        return relationship("User", primaryjoin=f"User.id == {cls.__name__}.created_by", viewonly=True)
+
+    @declared_attr
+    def updated_by_user(cls):
+        return relationship("User", primaryjoin=f"User.id == {cls.__name__}.updated_by", viewonly=True)

@@ -44,12 +44,20 @@ class BillOfLandingSchema(BaseModel):
     FreeDays: Optional[int] = None
     status: Optional[int] = None
 
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
     # Related Display Names
     consignee_name: Optional[str] = None
     vessel_name: Optional[str] = None
     supplier_name: Optional[str] = None
     provider_name: Optional[str] = None
     Doc_name: Optional[str] = None
+
+    created_by_user: Optional[object] = Field(None, exclude=True)
+    updated_by_user: Optional[object] = Field(None, exclude=True)
 
     class Config:
         from_attributes = True
@@ -67,6 +75,12 @@ class BillOfLandingSchema(BaseModel):
             schema.provider_name = obj.provider_rel.Name
         if obj.doc_rel:
             schema.Doc_name = obj.doc_rel.doc_type
+            
+        if obj.created_by_user:
+            schema.created_by_name = obj.created_by_user.username
+        if obj.updated_by_user:
+            schema.updated_by_name = obj.updated_by_user.username
+            
         return schema
 
 class ContainerDetailsSchemaWithBl(BaseModel):
@@ -82,6 +96,11 @@ class ContainerDetailsSchemaWithBl(BaseModel):
     PONo: Optional[str]
     BillOfLanding: Optional[str]
 
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
     # Only human-readable display names
     state: Optional[str] = None
     containerType: Optional[str] = None
@@ -96,6 +115,8 @@ class ContainerDetailsSchemaWithBl(BaseModel):
     status_rel: Optional[object] = Field(None, exclude=True)
     type_rel: Optional[object] = Field(None, exclude=True)
     emptied_at_rel: Optional[object] = Field(None, exclude=True)
+    created_by_user: Optional[object] = Field(None, exclude=True)
+    updated_by_user: Optional[object] = Field(None, exclude=True)
 
     class Config:
         from_attributes = True
@@ -111,9 +132,12 @@ class ContainerDetailsSchemaWithBl(BaseModel):
             schema.containerType = obj.type_rel.type
         if obj.emptied_at_rel:
             schema.location = obj.emptied_at_rel.venue
-
-
-        
+            
+        if obj.created_by_user:
+            schema.created_by_name = obj.created_by_user.username
+        if obj.updated_by_user:
+            schema.updated_by_name = obj.updated_by_user.username
+            
         return schema
 
 

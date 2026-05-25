@@ -152,7 +152,8 @@ class ContainerAPI:
         new_docs: List[UploadFile] = File([]),
         inbound_images: Optional[List[UploadFile]] = File([]),
         empty_images: Optional[List[UploadFile]] = File([]),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
         ):
         # 🔒 Manual required field checks
         if not create_data.container_no:
@@ -170,7 +171,10 @@ class ContainerAPI:
         if existing_bl:
             for key, value in bl_data.items():
                 setattr(existing_bl, key, value)
+            existing_bl.updated_by = current_user.id
         else:
+            bl_data["created_by"] = current_user.id
+            bl_data["updated_by"] = current_user.id
             new_bl = BillOfLanding(**bl_data)
             db.add(new_bl)
 
@@ -190,7 +194,9 @@ class ContainerAPI:
         
         container = ContainerDetails(
             **container_data,
-            BillOfLanding=bl_number  # ✅ Set FK
+            BillOfLanding=bl_number,  # ✅ Set FK
+            created_by=current_user.id,
+            updated_by=current_user.id
         )
         db.add(container)
         db.flush()  # Get container.Container_ID for FK refs
@@ -256,6 +262,8 @@ class ContainerAPI:
                     joinedload(ContainerDetails.status_rel),
                     joinedload(ContainerDetails.type_rel),
                     joinedload(ContainerDetails.emptied_at_rel),
+                    joinedload(ContainerDetails.created_by_user),
+                    joinedload(ContainerDetails.updated_by_user),
                     # Many-to-many collection: MUST use selectinload to avoid
                     # MySQL's rejection of LIMIT inside a subquery (sqlalche.me/e/20/f405)
                     selectinload(ContainerDetails.materials)
@@ -539,7 +547,8 @@ class ContainerAPI:
         inbound_images: Optional[List[UploadFile]] = File([]),
         empty_images: Optional[List[UploadFile]] = File([]),
         remove_doc_ids: Optional[List[int]] = Form([]),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
         ):
         # 🔍 Get the container
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
@@ -550,6 +559,7 @@ class ContainerAPI:
         # 🛠️ Update basic container fields (excluding materials and BL)
         for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"}).items():
             setattr(container, key, value)
+        container.updated_by = current_user.id
 
         # 🔁 Update materials (many-to-many)
         if update_data.materials is not None:
@@ -592,8 +602,11 @@ class ContainerAPI:
 
                 for key, value in bl_data.items():
                     setattr(existing_bl, key, value)
+                existing_bl.updated_by = current_user.id
             else:
                 # Unlikely but safe fallback
+                bl_data["created_by"] = current_user.id
+                bl_data["updated_by"] = current_user.id
                 new_bl = BillOfLanding(**bl_data)
                 db.add(new_bl)
 

@@ -39,7 +39,8 @@ class BillOfLandingAPI:
     async def addBl(
         self,
         data: BillOfLandingInSchema = Body(...),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
         ):
         # 1. Create Bill of Landing
         new_bl = BillOfLanding(
@@ -49,7 +50,9 @@ class BillOfLandingAPI:
             ArrivalDate=data.ArrivalDate,
             Doc=data.Doc,
             Supplier=data.Supplier,
-            Provider=data.Provider
+            Provider=data.Provider,
+            created_by=current_user.id,
+            updated_by=current_user.id
         )
         db.add(new_bl)
         db.flush()  # Gets persisted BL value for FK reference
@@ -70,6 +73,8 @@ class BillOfLandingAPI:
                 PONo=container.PONo,
                 FreeDays=container.FreeDays if hasattr(container, 'FreeDays') and container.FreeDays is not None else data.FreeDays,
                 BillOfLanding=data.BillOfLanding,
+                created_by=current_user.id,
+                updated_by=current_user.id
             )
             db.add(new_container)
 
@@ -98,7 +103,9 @@ class BillOfLandingAPI:
                     joinedload(BOfL.vessel_rel),
                     joinedload(BOfL.supplier_rel),
                     joinedload(BOfL.provider_rel),
-                    joinedload(BOfL.doc_rel)
+                    joinedload(BOfL.doc_rel),
+                    joinedload(BOfL.created_by_user),
+                    joinedload(BOfL.updated_by_user)
                 )
             )
 
@@ -172,7 +179,8 @@ class BillOfLandingAPI:
     async def update_bl(self,
         bl_number: str,
         data: BillOfLandingUpdateOnlySchema = Body(...),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
         ):
         
         # 1. Fetch the existing Bill of Landing
@@ -213,6 +221,7 @@ class BillOfLandingAPI:
         # 3. Update the Bill of Landing record itself
         for key, value in update_data.items():
             setattr(bl, key, value)
+        bl.updated_by = current_user.id
 
         db.commit()
         return {"msg": "Bill of Landing and associated containers updated successfully"}

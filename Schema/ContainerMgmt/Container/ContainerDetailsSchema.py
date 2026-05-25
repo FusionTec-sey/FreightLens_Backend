@@ -23,6 +23,11 @@ class ContainerDetailsSchema(BaseModel):
     BillOfLanding: Optional[str]
     FreeDays: Optional[int] = None
 
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
     # Only human-readable display names
     state: Optional[str] = None
     containerType: Optional[str] = None
@@ -37,6 +42,8 @@ class ContainerDetailsSchema(BaseModel):
     status_rel: Optional[object] = Field(None, exclude=True)
     type_rel: Optional[object] = Field(None, exclude=True)
     emptied_at_rel: Optional[object] = Field(None, exclude=True)
+    created_by_user: Optional[object] = Field(None, exclude=True)
+    updated_by_user: Optional[object] = Field(None, exclude=True)
 
     class Config:
         from_attributes = True
@@ -52,9 +59,19 @@ class ContainerDetailsSchema(BaseModel):
             schema.containerType = obj.type_rel.type
         if obj.emptied_at_rel:
             schema.location = obj.emptied_at_rel.venue
+        
+        if obj.created_by_user:
+            schema.created_by_name = obj.created_by_user.username
+        if obj.updated_by_user:
+            schema.updated_by_name = obj.updated_by_user.username
 
         if obj.bill_of_landing:
             schema.bill_of_landing = BillOfLandingSchema.from_orm_flat(obj.bill_of_landing)
+
+        if obj.created_by_user:
+            schema.created_by_name = obj.created_by_user.username
+        if obj.updated_by_user:
+            schema.updated_by_name = obj.updated_by_user.username
 
         
         return schema
