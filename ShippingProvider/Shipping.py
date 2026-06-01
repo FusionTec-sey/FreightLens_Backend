@@ -44,12 +44,19 @@ def get_eta_data(events_data):
     
     return discharge_events
 
-def get_container_vessel_arrival_date(data, target_location_code="SCVIC"):
+def get_container_vessel_arrival_date(data, target_location_code=["SCVIC", "SCPOV"]):
+    if isinstance(target_location_code, str):
+        target_codes = {target_location_code}
+    else:
+        target_codes = set(target_location_code)
+        
     for event in data.get("events", []):
-        if event.get("transportCall", {}).get("UNLocationCode") == target_location_code:
+        tc = event.get("transportCall") or {}
+        if tc.get("UNLocationCode") in target_codes:
+            vessel = tc.get("vessel") or {}
             return {
                 "eventDateTime": event.get("eventDateTime"),
-                "vesselIMONumber": event.get("transportCall", {}).get("vessel", {}).get("vesselIMONumber")
+                "vesselIMONumber": vessel.get("vesselIMONumber")
             }
     return None
 
@@ -82,6 +89,19 @@ def track_and_trace(transportDocumentReference):
                 # for container in list(set(extract_values(content, "equipmentReference"))):
         
                 containers =  get_eta_data(content.get('events'))
+                if not containers:
+                    # Fallback for in-transit CMA CGM cargo before discharge
+                    c_list = list(set(extract_values(content, "equipmentReference")))
+                    arrival_info = get_container_vessel_arrival_date(content)
+                    if arrival_info:
+                        for container in c_list:
+                            containers.append({
+                                "eventDateTime": arrival_info["eventDateTime"],
+                                "vesselIMONumber": arrival_info["vesselIMONumber"],
+                                "containerNo": container
+                            })
+                for c in containers:
+                    c["provider"] = "CMA CGM"
             else:
                 for container in list(set(extract_values(content, "equipmentReference"))):
 
@@ -89,6 +109,8 @@ def track_and_trace(transportDocumentReference):
                     if arrival_info:
                         arrival_info["containerNo"] = container
                         containers.append(arrival_info)
+                for c in containers:
+                    c["provider"] = "Maersk"
                         
 
             if len(content.get("events")) == 0:
