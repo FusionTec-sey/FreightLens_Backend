@@ -11,7 +11,7 @@ class ReportDetails(AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     report_id = Column(Integer, primary_key=True, autoincrement=True)
-    container_id = Column(Integer, ForeignKey('containermgmt.container_details.container_no'), nullable=False)
+    container_id = Column(Integer, ForeignKey('containermgmt.container_details.Container_ID'), nullable=False)
     report_date = Column(Date, nullable=False)
 
     # Relationship to container

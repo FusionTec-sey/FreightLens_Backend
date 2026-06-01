@@ -7,8 +7,6 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from apscheduler.schedulers.background import BackgroundScheduler
-
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ── Logging setup (must be before any module that uses logging) ───────────────
@@ -40,31 +38,7 @@ if RATE_LIMIT_AVAILABLE:
 
 
 
-# ── Scheduler job ─────────────────────────────────────────────────────────────
-def updateArrivalDate():
-    db = next(get_db())
-    try:
-        records = (
-            db.query(bl)
-            .filter(bl.ArrivalDate > datetime.now())
-            .all()
-        )
-        for i in records:
-            data = track_and_trace(i.BillOfLanding)
-            logger.info("Arrival date update | BoL=%s | data=%s", i.BillOfLanding, data)
-            if len(data) > 0:
-                db.query(bl).filter(bl.BillOfLanding == i.BillOfLanding).update(
-                    {
-                        bl.ArrivalDate: datetime.fromisoformat(
-                            data[0]["eventDateTime"]
-                        ).strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                )
-                db.commit()
-    except Exception as e:
-        logger.exception("Error in updateArrivalDate: %s", e)
-    finally:
-        db.close()
+from cron_jobs import create_scheduler, backfill_container_statuses
 
 
 # ── FastAPI app factory ────────────────────────────────────────────────────────
@@ -91,17 +65,51 @@ app.add_middleware(
 )
 
 # ── Background scheduler ──────────────────────────────────────────────────────
-scheduler = BackgroundScheduler()
-scheduler.add_job(updateArrivalDate, "cron", hour=15, minute=44)
+scheduler = create_scheduler()
 scheduler.start()
 
 
 # ── Lifecycle events ──────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
+    from sqlalchemy import create_engine
+    from Model.db import SessionLocal
+    from Model.seed import seed_db
+
+    logger.info("Initializing database schemas...")
+    try:
+        # Generate a temporary engine that connects directly to the MySQL server without a default schema/DB.
+        # This prevents "Unknown database" errors when the schema doesn't exist yet.
+        temp_url = engine.url.set(database=None)
+        temp_engine = create_engine(temp_url)
+        with temp_engine.connect() as conn:
+            conn.execute(text("CREATE DATABASE IF NOT EXISTS containermgmt"))
+            conn.execute(text("CREATE DATABASE IF NOT EXISTS usercredentials"))
+            conn.commit()
+        temp_engine.dispose()
+        logger.info("Database schemas are verified/created.")
+    except Exception as e:
+        logger.error("Failed to check/create database schemas: %s", e)
+        # Proceed anyway as the database might already exist or the user might not have admin rights to CREATE DATABASE
+
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables are ready.")
+
+    logger.info("Checking database seeding...")
+    db_session = SessionLocal()
+    try:
+        seed_db(db_session)
+    except Exception as e:
+        logger.error("Database seeding failed: %s", e)
+    finally:
+        db_session.close()
+
+    # ── One-shot status backfill ───────────────────────────────────────────────
+    # Corrects any containers entered before auto-status logic existed.
+    # Safe to run on every restart — only logs changes, commits only if needed.
+    logger.info("Running one-shot container status backfill...")
+    backfill_container_statuses()
 
 
 @app.on_event("shutdown")

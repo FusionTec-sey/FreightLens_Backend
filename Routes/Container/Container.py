@@ -14,6 +14,7 @@ from Utils import *
 from auth.dependencies import get_current_user
 from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
 from fastapi.responses import FileResponse, StreamingResponse
+from cron_jobs import derive_status_from_dates
 import asyncio
 from datetime import datetime
 import json
@@ -258,6 +259,11 @@ class ContainerAPI:
         )
         db.add(container)
         db.flush()  # Get container.Container_ID for FK refs
+
+        # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
+        auto_status = derive_status_from_dates(container)
+        if auto_status is not None:
+            container.status = auto_status
 
         # 🔁 Add materials (many-to-many)
         if create_data.materials:
@@ -574,6 +580,11 @@ class ContainerAPI:
             if str(getattr(container, key)) != str(value):
                 setattr(container, key, value)
 
+        # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
+        auto_status = derive_status_from_dates(container)
+        if auto_status is not None:
+            container.status = auto_status
+
 
 
         # Remove selected documents
@@ -624,6 +635,13 @@ class ContainerAPI:
             setattr(container, key, value)
         container.updated_by = current_user.id
 
+        # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
+        # Only override if user has NOT explicitly supplied a status in this request
+        if "status" not in update_data.dict(exclude_unset=True):
+            auto_status = derive_status_from_dates(container)
+            if auto_status is not None:
+                container.status = auto_status
+
         # 🔁 Update materials (many-to-many)
         if update_data.materials is not None:
             container.materials.clear()
@@ -642,13 +660,24 @@ class ContainerAPI:
                 # ── FreeDays conflict check + cascade ──────────────────────
                 if 'FreeDays' in bl_data and bl_data['FreeDays'] != existing_bl.FreeDays:
                     children = db.query(ContainerDetails).filter_by(BillOfLanding=existing_bl.BillOfLanding).all()
+
+                    # Is the caller also directly setting FreeDays on this container?
+                    container_has_own_freedays = "FreeDays" in update_data.dict(exclude_unset=True)
+
+                    # Conflict = another container (not this one) has a custom FreeDays
                     for child in children:
+                        if child.Container_ID == container_id:
+                            continue  # skip self — it is being updated intentionally
                         if child.FreeDays is not None and existing_bl.FreeDays is not None and child.FreeDays != existing_bl.FreeDays:
                             raise HTTPException(
                                 status_code=409,
                                 detail="Cannot update Bill of Lading FreeDays: One or more containers have custom FreeDays. Please update individual containers instead."
                             )
+
+                    # Cascade to all children EXCEPT this container if it has its own value
                     for child in children:
+                        if child.Container_ID == container_id and container_has_own_freedays:
+                            continue  # preserve the individual container's own value
                         child.FreeDays = bl_data['FreeDays']
 
                 # ── Status conflict check + cascade ────────────────────────

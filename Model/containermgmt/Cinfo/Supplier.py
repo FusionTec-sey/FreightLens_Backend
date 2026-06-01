@@ -10,7 +10,7 @@ class Supplier(AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     supplier_id = Column(Integer, primary_key=True)
-    name = Column(String(45))
+    name = Column(String(255))
     address = Column(String(45))
     email = Column(String(45))
     
