@@ -630,14 +630,16 @@ class ContainerAPI:
         if not container:
             raise HTTPException(status_code=404, detail="Container not found.")
 
+        original_status = container.status
+
         # 🛠️ Update basic container fields (excluding materials and BL)
         for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"}).items():
             setattr(container, key, value)
         container.updated_by = current_user.id
 
         # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
-        # Only override if user has NOT explicitly supplied a status in this request
-        if "status" not in update_data.dict(exclude_unset=True):
+        # Only override if user has explicitly changed the status to a new value
+        if "status" not in update_data.dict(exclude_unset=True) or update_data.status is None or update_data.status == original_status:
             auto_status = derive_status_from_dates(container)
             if auto_status is not None:
                 container.status = auto_status

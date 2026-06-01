@@ -46,7 +46,7 @@ def derive_status_from_dates(container) -> int | None:
 
     Priority (highest → lowest):
       1. out_bound OR unloaded_at_port  → Complete  (4)
-      2. empty_date                     → Empty     (7)
+      2. empty_date                     → Unloaded     (7)
       3. in_bound                       → Inbound   (6)
       4. None of the above              → return None (leave unchanged; cron handles the rest)
 
@@ -104,7 +104,7 @@ def updateContainerStatus():
     - ArrivalDate >  NOW  →  status = 1 (In Transit)  [vessel still at sea]
 
     Containers already in Gate Pass (3), Complete (4), Inbound (6),
-    Empty (7), or Unknown (8) are intentionally left untouched.
+    Unloaded (7), or Unknown (8) are intentionally left untouched.
 
     Schedule: 04:01, 13:01, 20:01 daily (runs 1 minute after updateArrivalDate).
     """
@@ -179,7 +179,7 @@ def backfill_container_statuses():
 
     Applies the full priority chain:
       1. out_bound / unloaded_at_port  → Complete  (4)
-      2. empty_date                    → Empty     (7)
+      2. empty_date                    → Unloaded     (7)
       3. in_bound                      → Inbound   (6)
       4. ArrivalDate <= now            → On Port   (2)
       5. ArrivalDate > now             → In Transit (1)
