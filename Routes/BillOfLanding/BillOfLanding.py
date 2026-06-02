@@ -156,20 +156,39 @@ class BillOfLandingAPI:
         resolved_provider_id = resolve_provider(db, data.Provider, current_user.id)
         resolved_status_id = resolve_status(db, data.status)
 
-        new_bl = BillOfLanding(
-            BillOfLanding=data.BillOfLanding,
-            Consignee=resolved_consignee_id,
-            Vessel=resolved_vessel_id,
-            ArrivalDate=data.ArrivalDate,
-            Doc=resolved_doc_id,
-            Supplier=resolved_supplier_id,
-            Provider=resolved_provider_id,
-            FreeDays=data.FreeDays,
-            status=resolved_status_id,
-            created_by=current_user.id,
-            updated_by=current_user.id
-        )
-        db.add(new_bl)
+        existing_bl = db.query(BillOfLanding).filter(BillOfLanding.BillOfLanding == data.BillOfLanding).first()
+        if existing_bl:
+            if existing_bl.is_deleted:
+                existing_bl.is_deleted = False
+                existing_bl.deleted_at = None
+                existing_bl.deleted_by = None
+                existing_bl.Consignee = resolved_consignee_id
+                existing_bl.Vessel = resolved_vessel_id
+                existing_bl.ArrivalDate = data.ArrivalDate
+                existing_bl.Doc = resolved_doc_id
+                existing_bl.Supplier = resolved_supplier_id
+                existing_bl.Provider = resolved_provider_id
+                existing_bl.FreeDays = data.FreeDays
+                existing_bl.status = resolved_status_id
+                existing_bl.updated_by = current_user.id
+                new_bl = existing_bl
+            else:
+                raise HTTPException(status_code=409, detail="Bill of Lading already exists")
+        else:
+            new_bl = BillOfLanding(
+                BillOfLanding=data.BillOfLanding,
+                Consignee=resolved_consignee_id,
+                Vessel=resolved_vessel_id,
+                ArrivalDate=data.ArrivalDate,
+                Doc=resolved_doc_id,
+                Supplier=resolved_supplier_id,
+                Provider=resolved_provider_id,
+                FreeDays=data.FreeDays,
+                status=resolved_status_id,
+                created_by=current_user.id,
+                updated_by=current_user.id
+            )
+            db.add(new_bl)
         db.flush()  # Gets persisted BL value for FK reference
 
         # 2. Create new containers associated with this BL

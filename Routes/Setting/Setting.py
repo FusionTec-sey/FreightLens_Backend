@@ -26,7 +26,7 @@ class SettingAPI:
         current_user: dict = Depends(get_current_user)
     ):
         """Lists all logistics providers with parsed ExcludingDaysList."""
-        providers = db.query(LogisticsProvider).all()
+        providers = db.query(LogisticsProvider).filter(LogisticsProvider.is_deleted != True).all()
         results = []
         for provider in providers:
             # Parse excluding days list from bitmask

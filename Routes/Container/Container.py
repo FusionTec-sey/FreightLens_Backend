@@ -365,6 +365,9 @@ class ContainerAPI:
         if existing_bl:
             for key, value in bl_data.items():
                 setattr(existing_bl, key, value)
+            existing_bl.is_deleted = False
+            existing_bl.deleted_at = None
+            existing_bl.deleted_by = None
             existing_bl.updated_by = current_user.id
         else:
             bl_data["created_by"] = current_user.id
