@@ -7,7 +7,7 @@ from typing import List, Optional
 # from sqlalchemy import func, desc, case
 from Model.db import get_db
 from Model import BillOfLanding as BOfL
-from Model import ContainerDetails, Supplier, LogisticsProvider,  Vessal, BillOfLanding, Consignee, ShippingDocument, ContainerDocs, ReportDetails, DamageProduct, ReportImage
+from Model import ContainerDetails, Supplier, LogisticsProvider,  Vessal, BillOfLanding, Consignee, ShippingDocument, ContainerDocs, ReportDetails, DamageProduct, ReportImage, Material, ContainerType, UnloadVenue, Status
 from Schema import   BillOfLandingInSchema, BillOfLandingWithContainersSchema, ContainerDetailsSchemaWithBl, BillOfLandingUpdateOnlySchema, BillOfLandingListResponse
 from Utils import *
 from auth.dependencies import get_current_user
@@ -17,12 +17,116 @@ from fastapi import  Depends, Body
 from datetime import datetime
 import json
 import mimetypes
-from typing import List, Optional
+from typing import List, Optional, Any, Union
 # import os 
 from datetime import datetime
 # from io import BytesIO
 
 BillOfLandingRouter = InferringRouter()
+
+# Helpers to resolve reference data dynamically
+def resolve_vessel(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    vessel = db.query(Vessal).filter(Vessal.VessalNo.ilike(val), Vessal.is_deleted != True).first()
+    if not vessel:
+        vessel = Vessal(VessalNo=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(vessel)
+        db.flush()
+    return vessel.id
+
+def resolve_supplier(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    supplier = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True).first()
+    if not supplier:
+        supplier = Supplier(name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(supplier)
+        db.flush()
+    return supplier.supplier_id
+
+def resolve_provider(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    provider = db.query(LogisticsProvider).filter(LogisticsProvider.Name.ilike(val), LogisticsProvider.is_deleted != True).first()
+    if not provider:
+        provider = LogisticsProvider(Name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(provider)
+        db.flush()
+    return provider.Id
+
+def resolve_doc(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    doc = db.query(ShippingDocument).filter(ShippingDocument.doc_type.ilike(val), ShippingDocument.is_deleted != True).first()
+    if not doc:
+        doc = ShippingDocument(doc_type=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(doc)
+        db.flush()
+    return doc.doc_id
+
+def resolve_consignee(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    consignee = db.query(Consignee).filter(Consignee.consignee_name.ilike(val), Consignee.is_deleted != True).first()
+    if not consignee:
+        consignee = Consignee(consignee_name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(consignee)
+        db.flush()
+    return consignee.consignee_id
+
+def resolve_container_type(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    c_type = db.query(ContainerType).filter(ContainerType.type.ilike(val), ContainerType.is_deleted != True).first()
+    if not c_type:
+        c_type = ContainerType(type=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(c_type)
+        db.flush()
+    return c_type.type_id
+
+def resolve_unload_venue(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    venue = db.query(UnloadVenue).filter(UnloadVenue.venue.ilike(val), UnloadVenue.is_deleted != True).first()
+    if not venue:
+        venue = UnloadVenue(venue=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(venue)
+        db.flush()
+    return venue.venue_id
+
+def resolve_status(db: Session, entry: Any) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    status = db.query(Status).filter(Status.name.ilike(val), Status.is_deleted != True).first()
+    if status:
+        return status.status_id
+    return None
+
+def resolve_materials(db: Session, materials_list: List[Union[int, str]], current_user_id: int) -> List[Material]:
+    resolved = []
+    for entry in materials_list:
+        if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()):
+            material = db.query(Material).filter_by(Id=int(entry)).first()
+            if material:
+                resolved.append(material)
+        elif isinstance(entry, str) and entry.strip():
+            material_name = entry.strip()
+            material = db.query(Material).filter(Material.Name.ilike(material_name), Material.is_deleted != True).first()
+            if not material:
+                material = Material(Name=material_name, created_by=current_user_id, updated_by=current_user_id)
+                db.add(material)
+                db.flush()
+            resolved.append(material)
+    return resolved
 
 def get_bls_with_in_transit_containers(db: Session):
     result = (
@@ -45,14 +149,22 @@ class BillOfLandingAPI:
         current_user = Depends(get_current_user)
         ):
         # 1. Create Bill of Landing
+        resolved_consignee_id = resolve_consignee(db, data.Consignee, current_user.id)
+        resolved_vessel_id = resolve_vessel(db, data.Vessel, current_user.id)
+        resolved_doc_id = resolve_doc(db, data.Doc, current_user.id)
+        resolved_supplier_id = resolve_supplier(db, data.Supplier, current_user.id)
+        resolved_provider_id = resolve_provider(db, data.Provider, current_user.id)
+        resolved_status_id = resolve_status(db, data.status)
+
         new_bl = BillOfLanding(
             BillOfLanding=data.BillOfLanding,
-            Consignee=data.Consignee,
-            Vessel=data.Vessel,
+            Consignee=resolved_consignee_id,
+            Vessel=resolved_vessel_id,
             ArrivalDate=data.ArrivalDate,
-            Doc=data.Doc,
-            Supplier=data.Supplier,
-            Provider=data.Provider,
+            Doc=resolved_doc_id,
+            Supplier=resolved_supplier_id,
+            Provider=resolved_provider_id,
+            status=resolved_status_id,
             created_by=current_user.id,
             updated_by=current_user.id
         )
@@ -61,16 +173,23 @@ class BillOfLandingAPI:
 
         # 2. Create new containers associated with this BL
         for container in data.new_containers:
+            resolved_type_id = resolve_container_type(db, container.type, current_user.id)
+            resolved_venue_id = resolve_unload_venue(db, container.emptied_at, current_user.id)
+            
+            # Determine container status
+            container_status_input = container.status if container.status is not None else data.status
+            resolved_container_status_id = resolve_status(db, container_status_input)
+
             new_container = ContainerDetails(
                 container_no=container.container_no,
-                type=container.type,
+                type=resolved_type_id,
                 in_bound=container.in_bound,
-                emptied_at=container.emptied_at,
+                emptied_at=resolved_venue_id,
                 empty_date=container.empty_date,
                 out_bound=container.out_bound,
                 unloaded_at_port=container.unloaded_at_port,
                 note=container.note,
-                status=container.status if container.status is not None else data.status,
+                status=resolved_container_status_id,
                 tax=container.tax,
                 PONo=container.PONo,
                 FreeDays=container.FreeDays if hasattr(container, 'FreeDays') and container.FreeDays is not None else data.FreeDays,
@@ -79,6 +198,11 @@ class BillOfLandingAPI:
                 updated_by=current_user.id
             )
             db.add(new_container)
+            
+            # Resolve materials and link to container
+            if getattr(container, "materials", None):
+                resolved_m = resolve_materials(db, container.materials, current_user.id)
+                new_container.materials.extend(resolved_m)
 
         db.commit()
         return {"msg": "BL and containers created successfully"}
@@ -192,6 +316,21 @@ class BillOfLandingAPI:
 
         # 2. Handle Cascading Updates with Conflict Resolution
         update_data = data.dict(exclude_unset=True)
+        
+        # Resolve BL reference fields dynamically before conflict logic
+        if "Consignee" in update_data and update_data["Consignee"] is not None:
+            update_data["Consignee"] = resolve_consignee(db, update_data["Consignee"], current_user.id)
+        if "Vessel" in update_data and update_data["Vessel"] is not None:
+            update_data["Vessel"] = resolve_vessel(db, update_data["Vessel"], current_user.id)
+        if "Supplier" in update_data and update_data["Supplier"] is not None:
+            update_data["Supplier"] = resolve_supplier(db, update_data["Supplier"], current_user.id)
+        if "Provider" in update_data and update_data["Provider"] is not None:
+            update_data["Provider"] = resolve_provider(db, update_data["Provider"], current_user.id)
+        if "Doc" in update_data and update_data["Doc"] is not None:
+            update_data["Doc"] = resolve_doc(db, update_data["Doc"], current_user.id)
+        if "status" in update_data and update_data["status"] is not None:
+            update_data["status"] = resolve_status(db, update_data["status"])
+
         containers = db.query(ContainerDetails).filter_by(BillOfLanding=bl_number).all()
 
         # ── FreeDays cascade logic ──────────────────────────────────────────

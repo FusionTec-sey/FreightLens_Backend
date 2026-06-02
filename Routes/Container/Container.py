@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import ValidationError
 from sqlalchemy import func, desc, case
 from Model.db import get_db
-from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, ContainerDocs, DocType, ReportDetails, DamageProduct, ReportImage, BillOfLanding, Material
+from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, ContainerDocs, DocType, ReportDetails, DamageProduct, ReportImage, BillOfLanding, Material, ContainerType
 from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse, ReportSchema
 from Utils import *
 from auth.dependencies import get_current_user
@@ -19,7 +19,7 @@ import asyncio
 from datetime import datetime
 import json
 import mimetypes
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import os 
 from datetime import datetime, date
 from io import BytesIO
@@ -74,6 +74,110 @@ def parse_date_optional(field: Optional[str]):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Invalid date/time format: {field}")
 
+# Helpers to resolve reference data dynamically
+def resolve_vessel(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    vessel = db.query(Vessal).filter(Vessal.VessalNo.ilike(val), Vessal.is_deleted != True).first()
+    if not vessel:
+        vessel = Vessal(VessalNo=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(vessel)
+        db.flush()
+    return vessel.id
+
+def resolve_supplier(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    supplier = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True).first()
+    if not supplier:
+        supplier = Supplier(name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(supplier)
+        db.flush()
+    return supplier.supplier_id
+
+def resolve_provider(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    provider = db.query(LogisticsProvider).filter(LogisticsProvider.Name.ilike(val), LogisticsProvider.is_deleted != True).first()
+    if not provider:
+        provider = LogisticsProvider(Name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(provider)
+        db.flush()
+    return provider.Id
+
+def resolve_doc(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    doc = db.query(ShippingDocument).filter(ShippingDocument.doc_type.ilike(val), ShippingDocument.is_deleted != True).first()
+    if not doc:
+        doc = ShippingDocument(doc_type=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(doc)
+        db.flush()
+    return doc.doc_id
+
+def resolve_consignee(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    consignee = db.query(Consignee).filter(Consignee.consignee_name.ilike(val), Consignee.is_deleted != True).first()
+    if not consignee:
+        consignee = Consignee(consignee_name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(consignee)
+        db.flush()
+    return consignee.consignee_id
+
+def resolve_container_type(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    c_type = db.query(ContainerType).filter(ContainerType.type.ilike(val), ContainerType.is_deleted != True).first()
+    if not c_type:
+        c_type = ContainerType(type=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(c_type)
+        db.flush()
+    return c_type.type_id
+
+def resolve_unload_venue(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    venue = db.query(UnloadVenue).filter(UnloadVenue.venue.ilike(val), UnloadVenue.is_deleted != True).first()
+    if not venue:
+        venue = UnloadVenue(venue=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(venue)
+        db.flush()
+    return venue.venue_id
+
+def resolve_status(db: Session, entry: Any) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    status = db.query(Status).filter(Status.name.ilike(val), Status.is_deleted != True).first()
+    if status:
+        return status.status_id
+    return None
+
+def resolve_materials(db: Session, materials_list: List[Union[int, str]], current_user_id: int) -> List[Material]:
+    resolved = []
+    for entry in materials_list:
+        if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()):
+            material = db.query(Material).filter_by(Id=int(entry)).first()
+            if material:
+                resolved.append(material)
+        elif isinstance(entry, str) and entry.strip():
+            material_name = entry.strip()
+            material = db.query(Material).filter(Material.Name.ilike(material_name), Material.is_deleted != True).first()
+            if not material:
+                material = Material(Name=material_name, created_by=current_user_id, updated_by=current_user_id)
+                db.add(material)
+                db.flush()
+            resolved.append(material)
+    return resolved
+
 async def parse_update_form(request: Request) -> ContainerUpdateSchema:
     form = await request.form()
     data = {}
@@ -81,11 +185,10 @@ async def parse_update_form(request: Request) -> ContainerUpdateSchema:
     # Fields expected as ISO date/datetime strings
     datetime_or_date_fields = {"in_bound", "empty_date", "out_bound", "unloaded_at_port"}
 
-    # Fields expected as ints
-    int_fields = {"tax", "status", "type", "emptied_at", "FreeDays"}
-
-    # Fields expected as ints in bill_of_landing.*
-    bl_int_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "FreeDays", "status"}
+    # Fields expected as ints (numeric only)
+    numeric_int_fields = {"tax", "FreeDays"}
+    # Fields expected as ints or strings (reference fields)
+    ref_fields = {"status", "type", "emptied_at"}
 
     for key, value in form.items():
         if "." in key or key in {"materials", "remove_doc_ids"}:
@@ -95,38 +198,47 @@ async def parse_update_form(request: Request) -> ContainerUpdateSchema:
             data[key] = None
         elif key in datetime_or_date_fields:
             data[key] = parse_date_optional(value)
-        elif key in int_fields:
+        elif key in numeric_int_fields:
             try:
                 data[key] = int(value)
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+        elif key in ref_fields:
+            if value.isdigit():
+                data[key] = int(value)
+            else:
+                data[key] = value
         else:
             data[key] = value
 
     # bill_of_landing.* nested fields
     bill_data = {}
+    bl_numeric_int_fields = {"FreeDays"}
+    bl_ref_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "status"}
     for key, value in form.items():
         if key.startswith("bill_of_landing."):
             subkey = key[len("bill_of_landing.") :]
             if value == "":
                 bill_data[subkey] = None
-            elif subkey in bl_int_fields:
+            elif subkey in bl_numeric_int_fields:
                 try:
                     bill_data[subkey] = int(value)
                 except ValueError:
                     raise HTTPException(status_code=400, detail=f"bill_of_landing.{subkey} must be an integer")
+            elif subkey in bl_ref_fields:
+                if value.isdigit():
+                    bill_data[subkey] = int(value)
+                else:
+                    bill_data[subkey] = value
             else:
                 bill_data[subkey] = value
     if bill_data:
         data["bill_of_landing"] = bill_data
 
-    # materials=MaterialId[] → List[MaterialEntrySchema]
+    # materials=MaterialId[]
     material_ids = form.getlist("materials")
     if material_ids:
-        try:
-            data["materials"] = [int(mid) for mid in material_ids if mid]
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid material ID")
+        data["materials"] = [int(mid) if mid.isdigit() else mid for mid in material_ids if mid]
 
     # remove_doc_ids[]=int → List[int] (optional if field enabled)
     remove_doc_ids = form.getlist("remove_doc_ids")
@@ -149,11 +261,10 @@ async def parse_create_form(request: Request) -> ContainerCreateSchema:
     # Fields expected as ISO date/datetime strings
     datetime_or_date_fields = {"in_bound", "empty_date", "out_bound", "unloaded_at_port"}
 
-    # Fields expected as ints
-    int_fields = {"tax", "status", "type", "emptied_at", "FreeDays"}
-
-    # Fields expected as ints in bill_of_landing.*
-    bl_int_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "FreeDays", "status"}
+    # Fields expected as ints (numeric only)
+    numeric_int_fields = {"tax", "FreeDays"}
+    # Fields expected as ints or strings (reference fields)
+    ref_fields = {"status", "type", "emptied_at"}
 
     for key, value in form.items():
         if "." in key or key in {"materials", "remove_doc_ids"}:
@@ -163,38 +274,47 @@ async def parse_create_form(request: Request) -> ContainerCreateSchema:
             data[key] = None
         elif key in datetime_or_date_fields:
             data[key] = parse_date_optional(value)
-        elif key in int_fields:
+        elif key in numeric_int_fields:
             try:
                 data[key] = int(value)
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+        elif key in ref_fields:
+            if value.isdigit():
+                data[key] = int(value)
+            else:
+                data[key] = value
         else:
             data[key] = value
 
     # Nested bill_of_landing.* fields
     bill_data = {}
+    bl_numeric_int_fields = {"FreeDays"}
+    bl_ref_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "status"}
     for key, value in form.items():
         if key.startswith("bill_of_landing."):
             subkey = key[len("bill_of_landing.") :]
             if value == "":
                 bill_data[subkey] = None
-            elif subkey in bl_int_fields:
+            elif subkey in bl_numeric_int_fields:
                 try:
                     bill_data[subkey] = int(value)
                 except ValueError:
                     raise HTTPException(status_code=400, detail=f"bill_of_landing.{subkey} must be an integer")
+            elif subkey in bl_ref_fields:
+                if value.isdigit():
+                    bill_data[subkey] = int(value)
+                else:
+                    bill_data[subkey] = value
             else:
                 bill_data[subkey] = value
     if bill_data:
         data["bill_of_landing"] = bill_data
 
-    # Parse materials as list of ints
+    # Parse materials
     materials = form.getlist("materials")
     if materials:
-        try:
-            data["materials"] = [int(mid) for mid in materials if mid]
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid material ID in materials list")
+        data["materials"] = [int(mid) if mid.isdigit() else mid for mid in materials if mid]
 
     # Validate and return the schema
     try:
@@ -223,6 +343,21 @@ class ContainerAPI:
 
         # 📦 Extract BL data
         bl_data = create_data.bill_of_landing.dict(exclude_unset=True)
+        
+        # Resolve BL reference fields dynamically
+        if "Consignee" in bl_data and bl_data["Consignee"] is not None:
+            bl_data["Consignee"] = resolve_consignee(db, bl_data["Consignee"], current_user.id)
+        if "Vessel" in bl_data and bl_data["Vessel"] is not None:
+            bl_data["Vessel"] = resolve_vessel(db, bl_data["Vessel"], current_user.id)
+        if "Supplier" in bl_data and bl_data["Supplier"] is not None:
+            bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id)
+        if "Provider" in bl_data and bl_data["Provider"] is not None:
+            bl_data["Provider"] = resolve_provider(db, bl_data["Provider"], current_user.id)
+        if "Doc" in bl_data and bl_data["Doc"] is not None:
+            bl_data["Doc"] = resolve_doc(db, bl_data["Doc"], current_user.id)
+        if "status" in bl_data and bl_data["status"] is not None:
+            bl_data["status"] = resolve_status(db, bl_data["status"])
+
         bl_number = bl_data.get("BillOfLanding")
 
         # 🔄 Create or update Bill of Landing
@@ -240,6 +375,14 @@ class ContainerAPI:
         # 📦 Create Container and link to Bill of Landing
         container_data = create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"})
         
+        # Resolve container reference fields dynamically
+        if "type" in container_data and container_data["type"] is not None:
+            container_data["type"] = resolve_container_type(db, container_data["type"], current_user.id)
+        if "emptied_at" in container_data and container_data["emptied_at"] is not None:
+            container_data["emptied_at"] = resolve_unload_venue(db, container_data["emptied_at"], current_user.id)
+        if "status" in container_data and container_data["status"] is not None:
+            container_data["status"] = resolve_status(db, container_data["status"])
+
         # 🔗 Inherit FreeDays and status from BoL (provided or existing) if not explicitly set on container
         incoming_fd = bl_data.get("FreeDays")
         current_fd = incoming_fd if incoming_fd is not None else (existing_bl.FreeDays if existing_bl else None)
@@ -267,10 +410,8 @@ class ContainerAPI:
 
         # 🔁 Add materials (many-to-many)
         if create_data.materials:
-            for entry in create_data.materials:
-                material = db.query(Material).filter_by(Id=entry).first()
-                if material:
-                    container.materials.append(material)
+            resolved_materials = resolve_materials(db, create_data.materials, current_user.id)
+            container.materials.extend(resolved_materials)
 
         # 📁 Upload and save document paths
         shipping_paths = save_uploaded_files(new_docs, "Shipping")
@@ -634,6 +775,12 @@ class ContainerAPI:
 
         # 🛠️ Update basic container fields (excluding materials and BL)
         for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"}).items():
+            if key == "type" and value is not None:
+                value = resolve_container_type(db, value, current_user.id)
+            elif key == "emptied_at" and value is not None:
+                value = resolve_unload_venue(db, value, current_user.id)
+            elif key == "status" and value is not None:
+                value = resolve_status(db, value)
             setattr(container, key, value)
         container.updated_by = current_user.id
 
@@ -647,14 +794,27 @@ class ContainerAPI:
         # 🔁 Update materials (many-to-many)
         if update_data.materials is not None:
             container.materials.clear()
-            for entry in update_data.materials:
-                material = db.query(Material).filter_by(Id=entry).first()
-                if material:
-                    container.materials.append(material)
+            resolved_materials = resolve_materials(db, update_data.materials, current_user.id)
+            container.materials.extend(resolved_materials)
 
         # 🔄 Update Bill of Landing
         if update_data.bill_of_landing:
             bl_data = update_data.bill_of_landing.dict(exclude_unset=True)
+            
+            # Resolve BL reference fields dynamically
+            if "Consignee" in bl_data and bl_data["Consignee"] is not None:
+                bl_data["Consignee"] = resolve_consignee(db, bl_data["Consignee"], current_user.id)
+            if "Vessel" in bl_data and bl_data["Vessel"] is not None:
+                bl_data["Vessel"] = resolve_vessel(db, bl_data["Vessel"], current_user.id)
+            if "Supplier" in bl_data and bl_data["Supplier"] is not None:
+                bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id)
+            if "Provider" in bl_data and bl_data["Provider"] is not None:
+                bl_data["Provider"] = resolve_provider(db, bl_data["Provider"], current_user.id)
+            if "Doc" in bl_data and bl_data["Doc"] is not None:
+                bl_data["Doc"] = resolve_doc(db, bl_data["Doc"], current_user.id)
+            if "status" in bl_data and bl_data["status"] is not None:
+                bl_data["status"] = resolve_status(db, bl_data["status"])
+
             bl_number = container.BillOfLanding
 
             existing_bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Union
 # from .ContainerDetailsSchema import ContainerDetailsSchemaWithBl
 from Model.containermgmt.Container import ContainerDetails
 
@@ -16,20 +16,21 @@ class ContainerCreateSchema(BaseModel):
     note: Optional[str] = None
     tax: Optional[int] = None
     PONo: Optional[str] = None
-    type: Optional[int] = None
-    status: Optional[int] = None
-    emptied_at: Optional[int] = None
+    type: Optional[Union[int, str]] = None
+    status: Optional[Union[int, str]] = None
+    emptied_at: Optional[Union[int, str]] = None
+    materials: Optional[List[Union[int, str]]] = []
 
 class BillOfLandingInSchema(BaseModel):
     BillOfLanding: str
-    Consignee: Optional[int] = None
-    Vessel: Optional[int] = None
+    Consignee: Optional[Union[int, str]] = None
+    Vessel: Optional[Union[int, str]] = None
     ArrivalDate: datetime
-    Doc: Optional[int] = None
-    Supplier: Optional[int] = None
-    Provider: Optional[int] = None
+    Doc: Optional[Union[int, str]] = None
+    Supplier: Optional[Union[int, str]] = None
+    Provider: Optional[Union[int, str]] = None
     FreeDays: Optional[int] = None
-    status: Optional[int] = None
+    status: Optional[Union[int, str]] = None
     new_containers: List[ContainerCreateSchema] = []
 
 
@@ -184,12 +185,12 @@ class BillOfLandingListResponse(BaseModel):
     
 
 class BillOfLandingUpdateOnlySchema(BaseModel):
-    Consignee: Optional[int] = None
-    Vessel: Optional[int] = None
+    Consignee: Optional[Union[int, str]] = None
+    Vessel: Optional[Union[int, str]] = None
     ArrivalDate: Optional[datetime] = None
-    Doc: Optional[int] = None
-    Supplier: Optional[int] = None
-    Provider: Optional[int] = None
+    Doc: Optional[Union[int, str]] = None
+    Supplier: Optional[Union[int, str]] = None
+    Provider: Optional[Union[int, str]] = None
     FreeDays: Optional[int] = None
-    status: Optional[int] = None
+    status: Optional[Union[int, str]] = None
     

@@ -13,6 +13,15 @@ class CMACGM(DCSA):
         self.api_key = api_key
         self._token_data = {"access_token": None, "expires_at": 0}
 
+    @property
+    def proxies(self) -> Dict[str, str]:
+        if settings.TRACKING_PROXY:
+            return {
+                "http": settings.TRACKING_PROXY,
+                "https": settings.TRACKING_PROXY,
+            }
+        return {}
+
     def _get_access_token(self, scope: Optional[str] = "") -> str:
         current_time = time.time()
         if self._token_data["access_token"] and current_time < self._token_data["expires_at"]:
@@ -30,7 +39,7 @@ class CMACGM(DCSA):
             "scope" : scope
         }
 
-        response = requests.post(self.token_url, headers=headers, data=data)
+        response = requests.post(self.token_url, headers=headers, data=data, proxies=self.proxies)
         response.raise_for_status()
         json_data = response.json()
         # print(json_data)
@@ -52,7 +61,7 @@ class CMACGM(DCSA):
         }
 
 
-        response = requests.get(url,  headers=headers, params=params)
+        response = requests.get(url,  headers=headers, params=params, proxies=self.proxies)
         response.raise_for_status()
         return response.json()
 

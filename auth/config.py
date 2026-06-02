@@ -38,6 +38,8 @@ class Settings:
     MEARSK_SHIPMENTS_URL = os.getenv("MEARSK_SHIPMENTS_URL", "")
     MEARSK_TOKEN_URL = os.getenv("MEARSK_OAUTH", "")
 
+    TRACKING_PROXY = os.getenv("TRACKING_PROXY", "")
+
     # ── Database ───────────────────────────────────────────────────────────────
     DATABASE_URL = os.getenv("DATABASE_URL")
     if not DATABASE_URL:

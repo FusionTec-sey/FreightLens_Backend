@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ValidationError
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Union
 from datetime import datetime, date
 from fastapi import UploadFile
 
@@ -79,15 +79,15 @@ class ContainerDetailsSchema(BaseModel):
 
 class BillOfLandingUpdateSchema(BaseModel):
     
-    Vessel: Optional[int] = None 
-    Provider: Optional[int] = None
-    Consignee: Optional[int] = None
-    Supplier: Optional[int] = None
-    Doc: Optional[int] = None
+    Vessel: Optional[Union[int, str]] = None 
+    Provider: Optional[Union[int, str]] = None
+    Consignee: Optional[Union[int, str]] = None
+    Supplier: Optional[Union[int, str]] = None
+    Doc: Optional[Union[int, str]] = None
     
     ArrivalDate: Optional[datetime] = None
     FreeDays: Optional[int] = None
-    status: Optional[int] = None
+    status: Optional[Union[int, str]] = None
     # note: Optional[str]
 
 # Optional: Schema for Material associations
@@ -111,11 +111,11 @@ class ContainerUpdateSchema(BaseModel):
     
     # tax: Optional[int]
     # note: Optional[str]
-    status: Optional[int] = None
-    type: Optional[int] = None
-    emptied_at: Optional[int] = None
+    status: Optional[Union[int, str]] = None
+    type: Optional[Union[int, str]] = None
+    emptied_at: Optional[Union[int, str]] = None
     # Nested updates
-    materials: Optional[List[int]] = None
+    materials: Optional[List[Union[int, str]]] = None
     bill_of_landing: Optional[BillOfLandingUpdateSchema] = None
 
     
@@ -129,11 +129,11 @@ class ContainerUpdateSchema(BaseModel):
 
 class BillOfLandingCreateSchema(BaseModel):
     BillOfLanding: str  # required
-    Vessel: Optional[int] = None 
-    Provider: Optional[int] = None
-    Consignee: Optional[int] = None
-    Supplier: Optional[int] = None
-    Doc: Optional[int] = None
+    Vessel: Optional[Union[int, str]] = None 
+    Provider: Optional[Union[int, str]] = None
+    Consignee: Optional[Union[int, str]] = None
+    Supplier: Optional[Union[int, str]] = None
+    Doc: Optional[Union[int, str]] = None
     
     ArrivalDate: Optional[datetime] = None
     FreeDays: Optional[int] = None
@@ -153,10 +153,10 @@ class ContainerCreateSchema(BaseModel):
     
     # tax: Optional[int]
     # note: Optional[str]
-    status: Optional[int] = None
-    type: Optional[int] = None
-    emptied_at: Optional[int] = None
-    materials: Optional[List[int]] = []   
+    status: Optional[Union[int, str]] = None
+    type: Optional[Union[int, str]] = None
+    emptied_at: Optional[Union[int, str]] = None
+    materials: Optional[List[Union[int, str]]] = []   
 
 
 class ContainerListResponse(BaseModel):
