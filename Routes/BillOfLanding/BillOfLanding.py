@@ -164,6 +164,7 @@ class BillOfLandingAPI:
             Doc=resolved_doc_id,
             Supplier=resolved_supplier_id,
             Provider=resolved_provider_id,
+            FreeDays=data.FreeDays,
             status=resolved_status_id,
             created_by=current_user.id,
             updated_by=current_user.id
