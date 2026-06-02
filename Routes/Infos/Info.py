@@ -58,12 +58,14 @@ class CinfoAPI:
         return json.dumps({ "data": [list(row) for row in data]})  
     
     @Cinfo.get("/vessels")
+    @Cinfo.get("/vessal", deprecated=True)
     async def getVessel(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(Vessal.id, Vessal.VessalNo).filter(Vessal.is_deleted != True).all()
         # column = ['Status ID', 'name']
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/logistics-providers")
+    @Cinfo.get("/logisticsProvider", deprecated=True)
     async def getLogisticsProvider(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         
         data = db.query(LogisticsProvider.Id, LogisticsProvider.Name, LogisticsProvider.FreeDays).filter(LogisticsProvider.is_deleted != True).distinct().all()
@@ -71,12 +73,14 @@ class CinfoAPI:
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/materials")
+    @Cinfo.get("/material", deprecated=True)
     async def getMaterial(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
         data = db.query(Material.Id, Material.Name).filter(Material.is_deleted != True).all()
         return json.dumps({ "data": [list(row) for row in data]}) 
     
     
     @Cinfo.post("/vessels")
+    @Cinfo.post("/setVessal", deprecated=True)
     async def create_vessal(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -99,6 +103,7 @@ class CinfoAPI:
         return {"id": new_vessal.id, "name": new_vessal.VessalNo}
 
     @Cinfo.post("/suppliers")
+    @Cinfo.post("/setSupplier", deprecated=True)
     async def create_supplier(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -123,6 +128,7 @@ class CinfoAPI:
         return {"id": new_supplier.supplier_id, "name": new_supplier.name}
     
     @Cinfo.post("/unload-venues")
+    @Cinfo.post("/setUnloadVenue", deprecated=True)
     async def create_unload_venue(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -147,6 +153,7 @@ class CinfoAPI:
         return {"id": new_venue.venue_id, "name": new_venue.venue}
     
     @Cinfo.post("/consignees")
+    @Cinfo.post("/setConsignee", deprecated=True)
     async def create_consignee(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -171,6 +178,7 @@ class CinfoAPI:
         return {"id": new_consignee.consignee_id, "name": new_consignee.consignee_name}
     
     @Cinfo.post("/container-types")
+    @Cinfo.post("/setContainerType", deprecated=True)
     async def create_container_type(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -195,6 +203,7 @@ class CinfoAPI:
         return {"id": new_type.type_id, "name": new_type.type}
     
     @Cinfo.post("/shipping-documents")
+    @Cinfo.post("/setShippingDocument", deprecated=True)
     async def create_shipping_document(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -219,6 +228,7 @@ class CinfoAPI:
         return {"id": new_doc.doc_id, "name": new_doc.doc_type}
    
     @Cinfo.post("/materials")
+    @Cinfo.post("/setMaterial", deprecated=True)
     async def create_Material(self,
         request: Request,
         db: Session = Depends(get_db),
@@ -226,7 +236,7 @@ class CinfoAPI:
         
         material_data = await request.json()
         # print(doc_data)
-        materials = material_data.get("name")
+        materials = material_data.get("name") or material_data.get("material")
 
         if not materials:
             raise HTTPException(status_code=422, detail="Missing material name")
@@ -243,6 +253,7 @@ class CinfoAPI:
         return {"id": new_material.Id, "name": new_material.Name} 
     
     @Cinfo.post("/logistics-providers")
+    @Cinfo.post("/setProvider", deprecated=True)
     async def create_logisticsProvider(self,
         request: Request,
         db: Session = Depends(get_db),
