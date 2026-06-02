@@ -445,6 +445,33 @@ class CinfoAPI:
         item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
+
+    @Cinfo.put("/logistics-providers/{item_id}")
+    @Cinfo.put("/logisticsProvider/{item_id}", deprecated=True)
+    async def update_logistics_provider(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = await request.json()
+        item = db.query(LogisticsProvider).filter(LogisticsProvider.Id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        
+        new_name = data.get("name")
+        if new_name:
+            existing = db.query(LogisticsProvider).filter(LogisticsProvider.Name.ilike(new_name), LogisticsProvider.Id != item_id, LogisticsProvider.is_deleted != True).first()
+            if existing: raise HTTPException(status_code=400, detail="Logistics Provider with this name already exists")
+            item.Name = new_name
+        item.updated_by = current_user.id
+        db.commit()
+        return {"id": item.Id, "name": item.Name}
+
+    @Cinfo.delete("/logistics-providers/{item_id}")
+    @Cinfo.delete("/logisticsProvider/{item_id}", deprecated=True)
+    async def delete_logistics_provider(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        item = db.query(LogisticsProvider).filter(LogisticsProvider.Id == item_id).first()
+        if not item: raise HTTPException(status_code=404, detail="Not found")
+        item.is_deleted = True
+        item.deleted_at = datetime.utcnow()
+        item.deleted_by = current_user.id
+        db.commit()
+        return {"success": True}
     
     @Cinfo.get("/getDashboardInfo")
     async def getContainerInfo(self, db: Session = Depends(get_db)):
