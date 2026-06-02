@@ -287,7 +287,7 @@ class CinfoAPI:
             existing = db.query(Supplier).filter(Supplier.name.ilike(new_name), Supplier.supplier_id != item_id, Supplier.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Supplier with this name already exists")
             item.name = new_name
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.supplier_id, "name": item.name}
 
@@ -297,7 +297,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
 
@@ -307,7 +307,7 @@ class CinfoAPI:
         item = db.query(Vessal).filter(Vessal.id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.VessalNo = data.get("name")
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.id, "name": item.VessalNo}
 
@@ -317,7 +317,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
 
@@ -332,7 +332,7 @@ class CinfoAPI:
             existing = db.query(UnloadVenue).filter(UnloadVenue.venue.ilike(new_name), UnloadVenue.venue_id != item_id, UnloadVenue.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Venue with this name already exists")
             item.venue = new_name
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.venue_id, "name": item.venue}
 
@@ -342,7 +342,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
 
@@ -357,7 +357,7 @@ class CinfoAPI:
             existing = db.query(Consignee).filter(Consignee.consignee_name.ilike(new_name), Consignee.consignee_id != item_id, Consignee.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Consignee with this name already exists")
             item.consignee_name = new_name
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.consignee_id, "name": item.consignee_name}
 
@@ -367,7 +367,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
 
@@ -382,7 +382,7 @@ class CinfoAPI:
             existing = db.query(Material).filter(Material.Name.ilike(new_name), Material.Id != item_id, Material.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Material with this name already exists")
             item.Name = new_name
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.Id, "name": item.Name}
 
@@ -392,7 +392,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
 
@@ -407,7 +407,7 @@ class CinfoAPI:
             existing = db.query(ShippingDocument).filter(ShippingDocument.doc_type.ilike(new_name), ShippingDocument.doc_id != item_id, ShippingDocument.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Shipping document with this name already exists")
             item.doc_type = new_name
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.doc_id, "name": item.doc_type}
 
@@ -417,7 +417,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
 
@@ -432,7 +432,7 @@ class CinfoAPI:
             existing = db.query(ContainerType).filter(ContainerType.type.ilike(new_name), ContainerType.type_id != item_id, ContainerType.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Container type with this name already exists")
             item.type = new_name
-        item.updated_by = current_user.get("id")
+        item.updated_by = current_user.id
         db.commit()
         return {"id": item.type_id, "name": item.type}
 
@@ -442,7 +442,7 @@ class CinfoAPI:
         if not item: raise HTTPException(status_code=404, detail="Not found")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
-        item.deleted_by = current_user.get("id")
+        item.deleted_by = current_user.id
         db.commit()
         return {"success": True}
     
