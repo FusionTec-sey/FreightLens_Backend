@@ -25,7 +25,7 @@ class BillOfLandingInSchema(BaseModel):
     BillOfLanding: str
     Consignee: Optional[Union[int, str]] = None
     Vessel: Optional[Union[int, str]] = None
-    ArrivalDate: datetime
+    ArrivalDate: Optional[datetime] = None
     Doc: Optional[Union[int, str]] = None
     Supplier: Optional[Union[int, str]] = None
     Provider: Optional[Union[int, str]] = None
