@@ -130,6 +130,26 @@ async def health_check(db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
 
+# ── Temporary testing endpoint ────────────────────────────────────────────────
+@app.get("/test-connection", tags=["System"])
+async def test_connection():
+    """Temporary endpoint to test connectivity to remote endpoint http://100.90.45.82:8000/status"""
+    import requests
+    url = "http://100.90.45.82:8000/status"
+    try:
+        response = requests.get(url, timeout=10)
+        return {
+            "status": "connected",
+            "remote_status_code": response.status_code,
+            "remote_response": response.text[:2000]
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "status": "failed",
+            "error": str(e)
+        }
+
+
 # ── Route registration ────────────────────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(Cinfo)
