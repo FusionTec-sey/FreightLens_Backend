@@ -1,0 +1,210 @@
+from pydantic import BaseModel, Field
+from datetime import datetime, date
+from typing import Optional, List, Union
+# from .ContainerDetailsSchema import ContainerDetailsSchemaWithBl
+from Model.containermgmt.Container import ContainerDetails
+
+from .ContailerDocumenSchema import ContainerDocumentSchema
+from ..CInfo.ContainerMaterialSchema import ContainerProductSchema
+
+class ContainerCreateSchema(BaseModel):
+    container_no: str
+    in_bound: Optional[datetime] = None
+    out_bound: Optional[datetime] = None
+    empty_date: Optional[date] = None
+    unloaded_at_port: Optional[date] = None
+    note: Optional[str] = None
+    tax: Optional[int] = None
+    PONo: Optional[str] = None
+    type: Optional[Union[int, str]] = None
+    status: Optional[Union[int, str]] = None
+    emptied_at: Optional[Union[int, str]] = None
+    materials: Optional[List[Union[int, str]]] = []
+
+class BillOfLandingInSchema(BaseModel):
+    BillOfLanding: str
+    Consignee: Optional[Union[int, str]] = None
+    Vessel: Optional[Union[int, str]] = None
+    ArrivalDate: Optional[datetime] = None
+    Doc: Optional[Union[int, str]] = None
+    Supplier: Optional[Union[int, str]] = None
+    Provider: Optional[Union[int, str]] = None
+    FreeDays: Optional[int] = None
+    status: Optional[Union[int, str]] = None
+    new_containers: List[ContainerCreateSchema] = []
+
+
+class BillOfLandingSchema(BaseModel):
+    BillOfLanding: str
+    Consignee: Optional[int] = None
+    Vessel: Optional[int] = None
+    ArrivalDate: Optional[datetime] = None
+    Doc: Optional[int] = None
+    Supplier: Optional[int] = None
+    Provider: Optional[int] = None
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
+
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
+    # Related Display Names
+    consignee_name: Optional[str] = None
+    vessel_name: Optional[str] = None
+    supplier_name: Optional[str] = None
+    provider_name: Optional[str] = None
+    Doc_name: Optional[str] = None
+
+    created_by_user: Optional[object] = Field(None, exclude=True)
+    updated_by_user: Optional[object] = Field(None, exclude=True)
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm_flat(cls, obj):
+        schema = cls.model_validate(obj)
+        schema.Consignee = getattr(obj, "Consignee", None)
+        schema.Vessel = getattr(obj, "Vessel", None)
+        schema.Supplier = getattr(obj, "Supplier", None)
+        schema.Provider = getattr(obj, "Provider", None)
+        schema.Doc = getattr(obj, "Doc", None)
+        if obj.consignee_rel:
+            schema.consignee_name = obj.consignee_rel.consignee_name
+        if obj.vessel_rel:
+            schema.vessel_name = obj.vessel_rel.VessalNo
+        if obj.supplier_rel:
+            schema.supplier_name = obj.supplier_rel.name
+        if obj.provider_rel:
+            schema.provider_name = obj.provider_rel.Name
+        if obj.doc_rel:
+            schema.Doc_name = obj.doc_rel.doc_type
+            
+        if obj.created_by_user:
+            schema.created_by_name = obj.created_by_user.username
+        if obj.updated_by_user:
+            schema.updated_by_name = obj.updated_by_user.username
+            
+        return schema
+
+class ContainerDetailsSchemaWithBl(BaseModel):
+    container_id: int = Field(..., alias="Container_ID")
+    container_no: str
+
+    in_bound: Optional[datetime]
+    empty_date: Optional[date]
+    out_bound: Optional[datetime]
+    unloaded_at_port: Optional[date]
+    note: Optional[str]
+    tax: Optional[int]
+    PONo: Optional[str]
+    BillOfLanding: Optional[str]
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
+    type: Optional[int] = None
+    emptied_at: Optional[int] = None
+
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
+    # Only human-readable display names
+    state: Optional[str] = None
+    containerType: Optional[str] = None
+    location: Optional[str] = None
+
+    # Related data
+    documents: List[ContainerDocumentSchema] = []
+    materials: List[ContainerProductSchema] = []
+    # bill_of_landing: Optional[BillOfLandingSchema] = None
+
+    # Hidden ORM relationships (for internal use only)
+    status_rel: Optional[object] = Field(None, exclude=True)
+    type_rel: Optional[object] = Field(None, exclude=True)
+    emptied_at_rel: Optional[object] = Field(None, exclude=True)
+    created_by_user: Optional[object] = Field(None, exclude=True)
+    updated_by_user: Optional[object] = Field(None, exclude=True)
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+    @classmethod
+    def from_orm_flat(cls, obj: ContainerDetails) -> "ContainerDetailsSchemaWithBl":
+        schema = cls.model_validate(obj)
+
+        if obj.status_rel:
+            schema.state = obj.status_rel.name
+        if obj.type_rel:
+            schema.containerType = obj.type_rel.type
+        if obj.emptied_at_rel:
+            schema.location = obj.emptied_at_rel.venue
+            
+        if obj.created_by_user:
+            schema.created_by_name = obj.created_by_user.username
+        if obj.updated_by_user:
+            schema.updated_by_name = obj.updated_by_user.username
+            
+        return schema
+
+
+class BillOfLandingWithContainersSchema(BaseModel):
+    BillOfLanding: str
+    Consignee: Optional[int] = None
+    Vessel: Optional[int] = None
+    ArrivalDate: Optional[datetime] = None
+    Doc: Optional[int] = None
+    Supplier: Optional[int] = None
+    Provider: Optional[int] = None
+    FreeDays: Optional[int] = None
+    status: Optional[int] = None
+
+    # Related Display Names
+    consignee_name: Optional[str] = None
+    vessel_name: Optional[str] = None
+    supplier_name: Optional[str] = None
+    provider_name: Optional[str] = None
+    Doc_name: Optional[str] = None
+    containers: List[ContainerDetailsSchemaWithBl] = []
+    
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm_flat(cls, obj):
+        schema = cls.model_validate(obj)
+        schema.Consignee = getattr(obj, "Consignee", None)
+        schema.Vessel = getattr(obj, "Vessel", None)
+        schema.Supplier = getattr(obj, "Supplier", None)
+        schema.Provider = getattr(obj, "Provider", None)
+        schema.Doc = getattr(obj, "Doc", None)
+        if obj.consignee_rel:
+            schema.consignee_name = obj.consignee_rel.consignee_name
+        if obj.vessel_rel:
+            schema.vessel_name = obj.vessel_rel.VessalNo
+        if obj.supplier_rel:
+            schema.supplier_name = obj.supplier_rel.name
+        if obj.provider_rel:
+            schema.provider_name = obj.provider_rel.Name
+        if obj.doc_rel:
+            schema.Doc_name = obj.doc_rel.doc_type
+        return schema
+
+class BillOfLandingListResponse(BaseModel):
+    total_count: int
+    data: List[BillOfLandingWithContainersSchema]
+    
+
+class BillOfLandingUpdateOnlySchema(BaseModel):
+    Consignee: Optional[Union[int, str]] = None
+    Vessel: Optional[Union[int, str]] = None
+    ArrivalDate: Optional[datetime] = None
+    Doc: Optional[Union[int, str]] = None
+    Supplier: Optional[Union[int, str]] = None
+    Provider: Optional[Union[int, str]] = None
+    FreeDays: Optional[int] = None
+    status: Optional[Union[int, str]] = None
+    

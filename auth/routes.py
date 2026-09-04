@@ -1,0 +1,221 @@
+import hashlib
+import logging
+from datetime import datetime, timedelta
+
+import jwt
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+
+from Model.Credentials.users import User
+from Model.Credentials.roles import Role
+from Model.Credentials.permissions import Permission
+from Model.Credentials.refresh_tokens import RefreshToken
+from Model.Credentials.SessionAudit import SessionAudit
+from Model.db import get_db
+
+from auth.security import verify_password
+from auth.tokens import create_access_token, create_refresh_token, SECRET_KEY, ALGORITHM
+from auth.dependencies import get_current_user
+
+logger = logging.getLogger("auth")
+
+router = APIRouter()
+
+ACCESS_TOKEN_EXPIRE_HOUR = 1
+REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+
+
+def _hash_token(raw_token: str) -> str:
+    """Return SHA-256 hex digest of a raw refresh token string."""
+    return hashlib.sha256(raw_token.encode()).hexdigest()
+
+
+from limiter import limiter
+
+@router.post("/token")
+@limiter.limit("5/minute")
+async def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.password_hash):
+        logger.warning(
+            "Failed login attempt | username=%s | ip=%s",
+            form_data.username,
+            request.client.host if request.client else "unknown",
+        )
+        # Audit failed login
+        audit = SessionAudit(
+            login_time=datetime.utcnow(),
+            ip_address=request.client.host if request.client else "unknown",
+            device_info=request.headers.get("user-agent"),
+            login_status="FAILED"
+        )
+        db.add(audit)
+        db.commit()
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # ── Build token with actual DB roles and org info ──────────────────────────────
+    user_roles = [role.name for role in user.roles]
+    org = user.organisation
+    org_id = user.org_id or 1
+    is_root = (org.parent_org_id is None) if org else True
+    org_name = org.display_name or org.name if org else "Sahaj Construction"
+    modules = list(org.modules) if (org and org.modules) else ["LOGISTICS", "ORDERS"]
+    plan = org.plan if (org and org.plan) else "complete"
+
+    access_token = create_access_token(
+        {
+            "sub": user.username,
+            "roles": user_roles,
+            "org_id": org_id,
+            "is_root": is_root,
+            "modules": modules,
+            "plan": plan,
+        },
+        timedelta(hours=ACCESS_TOKEN_EXPIRE_HOUR),
+    )
+    refresh_token = create_refresh_token(
+        {"sub": user.username},
+        timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES),
+    )
+
+    # ── Persist hashed refresh token in DB ─────────────────────────────────────
+    db_token = RefreshToken(
+        user_id=user.id,
+        token_hash=_hash_token(refresh_token),
+        expires_at=datetime.utcnow() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES),
+    )
+    db.add(db_token)
+    db.commit()
+
+    # ── Fetch user permissions for response ───────────────────────────────────
+    permissions = (
+        db.query(Permission.name)
+        .join(Role.permissions)
+        .join(Role.users)
+        .filter(User.username == form_data.username)
+        .distinct()
+        .all()
+    )
+
+    # ── Audit successful login ───────────────────────────────────────────────
+    audit = SessionAudit(
+        user_id=user.id,
+        login_time=datetime.utcnow(),
+        ip_address=request.client.host if request.client else "unknown",
+        device_info=request.headers.get("user-agent"),
+        login_status="SUCCESS",
+        refresh_token_id=str(db_token.id)
+    )
+    db.add(audit)
+    db.commit()
+
+    logger.info("Successful login | username=%s | org_id=%s | modules=%s", user.username, org_id, modules)
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "org_id": org_id,
+        "org_name": org_name,
+        "is_root": is_root,
+        "modules": modules,
+        "plan": plan,
+        "permissions": [p[0] for p in permissions],
+    }
+
+
+
+@router.post("/refresh")
+async def refresh_token_endpoint(
+    refresh_token: str = Body(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # ── Validate against DB record ─────────────────────────────────────────────
+    token_hash = _hash_token(refresh_token)
+    db_token = (
+        db.query(RefreshToken)
+        .filter_by(token_hash=token_hash, revoked=0)
+        .first()
+    )
+    if not db_token or db_token.expires_at < datetime.utcnow():
+        logger.warning("Invalid or expired refresh token attempt | username=%s", username)
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    # ── Issue new access token ─────────────────────────────────────────────────
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    user_roles = [role.name for role in user.roles]
+    org = user.organisation
+    org_id = user.org_id or 1
+    is_root = (org.parent_org_id is None) if org else True
+    modules = list(org.modules) if (org and org.modules) else ["LOGISTICS", "ORDERS"]
+    plan = org.plan if (org and org.plan) else "complete"
+
+    access_token = create_access_token(
+        {
+            "sub": username,
+            "roles": user_roles,
+            "org_id": org_id,
+            "is_root": is_root,
+            "modules": modules,
+            "plan": plan,
+        },
+        timedelta(hours=ACCESS_TOKEN_EXPIRE_HOUR),
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "modules": modules,
+        "plan": plan,
+    }
+
+
+@router.post("/logout")
+async def logout(
+    refresh_token: str = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Revoke the provided refresh token so it can no longer be used."""
+    token_hash = _hash_token(refresh_token)
+    db_token = db.query(RefreshToken).filter_by(token_hash=token_hash, revoked=0).first()
+    if db_token:
+        db_token.revoked = 1
+        
+        # Audit logout
+        audit = db.query(SessionAudit).filter_by(refresh_token_id=str(db_token.id)).order_by(SessionAudit.session_id.desc()).first()
+        if audit:
+            audit.logout_time = datetime.utcnow()
+            
+        db.commit()
+    logger.info("User logged out | username=%s", current_user.username)
+    return {"message": "Logged out successfully"}
+
+
+@router.get("/users/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    org = current_user.organisation
+    return {
+        "username": current_user.username,
+        "roles": [r.name for r in current_user.roles],
+        "org_id": current_user.org_id or 1,
+        "org_name": org.display_name or org.name if org else "Sahaj Construction",
+        "is_root": (org.parent_org_id is None) if org else True,
+    }
+

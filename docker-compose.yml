@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sahaj_postgres_local
+    environment:
+      POSTGRES_DB: containermgmt_pg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_local
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d containermgmt_pg"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: sahaj_rustfs_local
+    restart: unless-stopped
+    environment:
+      - RUSTFS_ACCESS_KEY=rustfs_admin
+      - RUSTFS_SECRET_KEY=rustfs_secret_password_123
+      - RUSTFS_ADDRESS=:9000
+      - RUSTFS_CONSOLE_ADDRESS=:9001
+      - RUSTFS_CONSOLE_ENABLE=true
+    ports:
+      - "9005:9000"
+      - "9006:9001"
+    volumes:
+      - rustfs_data_local:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sahaj_backend_local
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres_local@postgres:5432/containermgmt_pg
+      - JWT_SECRET_KEY=change-this-to-a-secure-random-64-char-string-before-production
+      - JWT_ALGORITHM=HS256
+      - ENVIRONMENT=development
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      - HOST_IP=0.0.0.0
+      - HOST_PORT=9000
+      - RUSTFS_ENDPOINT_URL=http://rustfs:9000
+      - RUSTFS_ACCESS_KEY=rustfs_admin
+      - RUSTFS_SECRET_KEY=rustfs_secret_password_123
+      - RUSTFS_BUCKET_NAME=containermgmt-blobs
+      - RUSTFS_REGION=us-east-1
+    ports:
+      - "9000:9000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    command: ["uvicorn", "containerMgmt:app", "--host", "0.0.0.0", "--port", "9000"]
+
+  frontend:
+    build:
+      context: ../containermgmt
+      dockerfile: Dockerfile
+    container_name: sahaj_frontend_local
+    environment:
+      - REACT_APP_NETWORK=http://localhost:9000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata_local:
+  rustfs_data_local:

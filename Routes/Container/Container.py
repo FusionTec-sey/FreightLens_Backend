@@ -1,0 +1,1628 @@
+
+from fastapi_utils.cbv import cbv
+from fastapi_utils.inferring_router import InferringRouter
+from fastapi import Depends, Form, File, UploadFile, Query, Body
+from sqlalchemy.orm import Session, joinedload, selectinload
+# from sqlalchemy.sql import nullsfirst, nullslast
+from typing import List, Optional
+from pydantic import ValidationError
+from sqlalchemy import func, desc, case, or_
+from Model.db import get_db
+from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, ContainerDocs, DocType, ReportDetails, DamageProduct, ReportImage, BillOfLanding, Material, ContainerType, Consignee
+from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse, ReportSchema
+from Utils import *
+from auth.dependencies import get_current_user, get_org_context
+from Model.Credentials.users import User
+from Utils.org_filter import OrgContext, apply_org_filter
+from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
+
+from fastapi.responses import FileResponse, StreamingResponse
+from cron_jobs import derive_status_from_dates
+import asyncio
+from datetime import datetime
+import json
+import mimetypes
+from typing import List, Optional, Dict, Any, Union
+import os 
+from datetime import datetime, date
+from io import BytesIO
+from dateutil.parser import parse as parse_date  # install python-dateutil if needed
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+
+ContainerRouter = InferringRouter()
+
+def parse_optional_json(field: Optional[str], field_name: str):
+    if field is None or field == "":
+        return None
+    try:
+        return json.loads(field)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON in field '{field_name}': {e}")
+
+def sync_bol_status(db: Session, bl_number: str, current_user_id: int):
+    """
+    Checks if all undeleted containers in a Bill of Lading have the exact same status.
+    If they do, updates the Bill of Lading's status to match.
+    """
+    if not bl_number:
+        return
+        
+    bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
+    if not bl:
+        return
+        
+    # Get all active containers for this BoL
+    containers = db.query(ContainerDetails).filter_by(BillOfLanding=bl_number, is_deleted=False).all()
+    if not containers:
+        return
+        
+    # Check if they all share the exact same status
+    first_status = containers[0].status
+    if first_status is None:
+        return
+        
+    all_match = all(c.status == first_status for c in containers)
+    if all_match and bl.status != first_status:
+        bl.status = first_status
+        bl.updated_by = current_user_id
+        db.add(bl)
+
+def parse_date_optional(field: Optional[str]):
+    
+    if not field :
+        return None
+    try:
+        return parse_date(field)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid date/time format: {field}")
+
+# Helpers to resolve reference data dynamically
+def resolve_vessel(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    vessel = db.query(Vessal).filter(Vessal.VessalNo.ilike(val), Vessal.is_deleted != True).first()
+    if not vessel:
+        vessel = Vessal(VessalNo=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(vessel)
+        db.flush()
+    return vessel.id
+
+def resolve_supplier(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    supplier = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True).first()
+    if not supplier:
+        supplier = Supplier(name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(supplier)
+        db.flush()
+    return supplier.supplier_id
+
+def resolve_provider(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    provider = db.query(LogisticsProvider).filter(LogisticsProvider.Name.ilike(val), LogisticsProvider.is_deleted != True).first()
+    if not provider:
+        provider = LogisticsProvider(Name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(provider)
+        db.flush()
+    return provider.Id
+
+def resolve_doc(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    doc = db.query(ShippingDocument).filter(ShippingDocument.doc_type.ilike(val), ShippingDocument.is_deleted != True).first()
+    if not doc:
+        doc = ShippingDocument(doc_type=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(doc)
+        db.flush()
+    return doc.doc_id
+
+def resolve_consignee(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    consignee = db.query(Consignee).filter(Consignee.consignee_name.ilike(val), Consignee.is_deleted != True).first()
+    if not consignee:
+        consignee = Consignee(consignee_name=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(consignee)
+        db.flush()
+    return consignee.consignee_id
+
+def resolve_container_type(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    c_type = db.query(ContainerType).filter(ContainerType.type.ilike(val), ContainerType.is_deleted != True).first()
+    if not c_type:
+        c_type = ContainerType(type=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(c_type)
+        db.flush()
+    return c_type.type_id
+
+def resolve_unload_venue(db: Session, entry: Any, current_user_id: int) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    venue = db.query(UnloadVenue).filter(UnloadVenue.venue.ilike(val), UnloadVenue.is_deleted != True).first()
+    if not venue:
+        venue = UnloadVenue(venue=val, created_by=current_user_id, updated_by=current_user_id)
+        db.add(venue)
+        db.flush()
+    return venue.venue_id
+
+def resolve_status(db: Session, entry: Any) -> Any:
+    if entry is None or entry == "": return None
+    if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
+    val = str(entry).strip()
+    status = db.query(Status).filter(Status.name.ilike(val), Status.is_deleted != True).first()
+    if status:
+        return status.status_id
+    return None
+
+def resolve_materials(db: Session, materials_list: List[Union[int, str]], current_user_id: int) -> List[Material]:
+    resolved = []
+    for entry in materials_list:
+        if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()):
+            material = db.query(Material).filter_by(Id=int(entry)).first()
+            if material:
+                resolved.append(material)
+        elif isinstance(entry, str) and entry.strip():
+            material_name = entry.strip()
+            material = db.query(Material).filter(Material.Name.ilike(material_name), Material.is_deleted != True).first()
+            if not material:
+                material = Material(Name=material_name, created_by=current_user_id, updated_by=current_user_id)
+                db.add(material)
+                db.flush()
+            resolved.append(material)
+    return resolved
+
+async def parse_update_form(request: Request) -> ContainerUpdateSchema:
+    form = await request.form()
+    data = {}
+
+    # Fields expected as ISO date/datetime strings
+    datetime_or_date_fields = {"in_bound", "empty_date", "out_bound", "unloaded_at_port"}
+
+    # Fields expected as ints (numeric only)
+    numeric_int_fields = {"tax", "FreeDays"}
+    # Fields expected as ints or strings (reference fields)
+    ref_fields = {"status", "type", "emptied_at"}
+
+    for key, value in form.items():
+        if "." in key or key in {"materials", "remove_doc_ids"}:
+            continue  # skip nested or list fields
+
+        if value == "":
+            data[key] = None
+        elif key in datetime_or_date_fields:
+            data[key] = parse_date_optional(value)
+        elif key in numeric_int_fields:
+            try:
+                data[key] = int(value)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+        elif key in ref_fields:
+            if value.isdigit():
+                data[key] = int(value)
+            else:
+                data[key] = value
+        else:
+            data[key] = value
+
+    # bill_of_landing.* nested fields
+    bill_data = {}
+    bl_numeric_int_fields = {"FreeDays"}
+    bl_ref_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "status"}
+    for key, value in form.items():
+        if key.startswith("bill_of_landing."):
+            subkey = key[len("bill_of_landing.") :]
+            if value == "":
+                bill_data[subkey] = None
+            elif subkey in bl_numeric_int_fields:
+                try:
+                    bill_data[subkey] = int(value)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"bill_of_landing.{subkey} must be an integer")
+            elif subkey in bl_ref_fields:
+                if value.isdigit():
+                    bill_data[subkey] = int(value)
+                else:
+                    bill_data[subkey] = value
+            else:
+                bill_data[subkey] = value
+    if bill_data:
+        data["bill_of_landing"] = bill_data
+
+    # materials=MaterialId[]
+    material_ids = form.getlist("materials")
+    if material_ids:
+        data["materials"] = [int(mid) if mid.isdigit() else mid for mid in material_ids if mid]
+
+    # remove_doc_ids[]=int → List[int] (optional if field enabled)
+    remove_doc_ids = form.getlist("remove_doc_ids")
+    if remove_doc_ids:
+        try:
+            data["remove_doc_ids"] = [int(doc_id) for doc_id in remove_doc_ids if doc_id]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    # Validate with schema
+    try:
+        return ContainerUpdateSchema(**data)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+
+async def parse_create_form(request: Request) -> ContainerCreateSchema:
+    form = await request.form()
+    data = {}
+
+    # Fields expected as ISO date/datetime strings
+    datetime_or_date_fields = {"in_bound", "empty_date", "out_bound", "unloaded_at_port"}
+
+    # Fields expected as ints (numeric only)
+    numeric_int_fields = {"tax", "FreeDays"}
+    # Fields expected as ints or strings (reference fields)
+    ref_fields = {"status", "type", "emptied_at"}
+
+    for key, value in form.items():
+        if "." in key or key in {"materials", "remove_doc_ids"}:
+            continue  # skip nested or list fields
+
+        if value == "":
+            data[key] = None
+        elif key in datetime_or_date_fields:
+            data[key] = parse_date_optional(value)
+        elif key in numeric_int_fields:
+            try:
+                data[key] = int(value)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+        elif key in ref_fields:
+            if value.isdigit():
+                data[key] = int(value)
+            else:
+                data[key] = value
+        else:
+            data[key] = value
+
+    # Nested bill_of_landing.* fields
+    bill_data = {}
+    bl_numeric_int_fields = {"FreeDays"}
+    bl_ref_fields = {"Consignee", "Vessel", "Supplier", "Provider", "Doc", "status"}
+    for key, value in form.items():
+        if key.startswith("bill_of_landing."):
+            subkey = key[len("bill_of_landing.") :]
+            if value == "":
+                bill_data[subkey] = None
+            elif subkey in bl_numeric_int_fields:
+                try:
+                    bill_data[subkey] = int(value)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"bill_of_landing.{subkey} must be an integer")
+            elif subkey in bl_ref_fields:
+                if value.isdigit():
+                    bill_data[subkey] = int(value)
+                else:
+                    bill_data[subkey] = value
+            else:
+                bill_data[subkey] = value
+    if bill_data:
+        data["bill_of_landing"] = bill_data
+
+    # Parse materials
+    materials = form.getlist("materials")
+    if materials:
+        data["materials"] = [int(mid) if mid.isdigit() else mid for mid in materials if mid]
+
+    # Validate and return the schema
+    try:
+        return ContainerCreateSchema(**data)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+
+@cbv(ContainerRouter)
+class ContainerAPI:
+
+    @ContainerRouter.post("/containers")
+    async def create_container(self,
+        create_data: ContainerCreateSchema = Depends(parse_create_form),
+        new_docs: List[UploadFile] = File([]),
+        inbound_images: Optional[List[UploadFile]] = File([]),
+        empty_images: Optional[List[UploadFile]] = File([]),
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
+        ):
+        # 🔒 Manual required field checks
+        if not create_data.container_no:
+            raise HTTPException(status_code=400, detail="Container number is required.")
+        
+        if not create_data.bill_of_landing or not create_data.bill_of_landing.BillOfLanding:
+            raise HTTPException(status_code=400, detail="Bill of Landing is required.")
+
+        # 📦 Extract BL data
+        bl_data = create_data.bill_of_landing.dict(exclude_unset=True)
+        bl_data["org_id"] = org_context.current_org_id
+        
+        # Resolve BL reference fields dynamically
+        if "Consignee" in bl_data and bl_data["Consignee"] is not None:
+            bl_data["Consignee"] = resolve_consignee(db, bl_data["Consignee"], current_user.id)
+        if "Vessel" in bl_data and bl_data["Vessel"] is not None:
+            bl_data["Vessel"] = resolve_vessel(db, bl_data["Vessel"], current_user.id)
+        if "Supplier" in bl_data and bl_data["Supplier"] is not None:
+            bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id)
+        if "Provider" in bl_data and bl_data["Provider"] is not None:
+            bl_data["Provider"] = resolve_provider(db, bl_data["Provider"], current_user.id)
+        if "Doc" in bl_data and bl_data["Doc"] is not None:
+            bl_data["Doc"] = resolve_doc(db, bl_data["Doc"], current_user.id)
+        if "status" in bl_data and bl_data["status"] is not None:
+            bl_data["status"] = resolve_status(db, bl_data["status"])
+
+        bl_number = bl_data.get("BillOfLanding")
+
+        # 🔄 Create or update Bill of Landing
+        existing_bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
+        if existing_bl:
+            for key, value in bl_data.items():
+                setattr(existing_bl, key, value)
+            existing_bl.is_deleted = False
+            existing_bl.deleted_at = None
+            existing_bl.deleted_by = None
+            existing_bl.updated_by = current_user.id
+        else:
+            bl_data["created_by"] = current_user.id
+            bl_data["updated_by"] = current_user.id
+            new_bl = BillOfLanding(**bl_data)
+            db.add(new_bl)
+
+        # 📦 Create Container and link to Bill of Landing
+        container_data = create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"})
+        container_data["org_id"] = org_context.current_org_id
+        
+        # Resolve container reference fields dynamically
+        if "type" in container_data and container_data["type"] is not None:
+            container_data["type"] = resolve_container_type(db, container_data["type"], current_user.id)
+        if "emptied_at" in container_data and container_data["emptied_at"] is not None:
+            container_data["emptied_at"] = resolve_unload_venue(db, container_data["emptied_at"], current_user.id)
+        if "status" in container_data and container_data["status"] is not None:
+            container_data["status"] = resolve_status(db, container_data["status"])
+
+        # 🔗 Inherit FreeDays and status from BoL (provided or existing) if not explicitly set on container
+        incoming_fd = bl_data.get("FreeDays")
+        current_fd = incoming_fd if incoming_fd is not None else (existing_bl.FreeDays if existing_bl else None)
+        if "FreeDays" not in container_data and current_fd is not None:
+            container_data["FreeDays"] = current_fd
+
+        incoming_st = bl_data.get("status")
+        current_st = incoming_st if incoming_st is not None else (existing_bl.status if existing_bl else None)
+        if "status" not in container_data and current_st is not None:
+            container_data["status"] = current_st
+        
+        container = ContainerDetails(
+            **container_data,
+            BillOfLanding=bl_number,  # ✅ Set FK
+            created_by=current_user.id,
+            updated_by=current_user.id
+        )
+        db.add(container)
+        db.flush()  # Get container.Container_ID for FK refs
+
+        # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
+        auto_status = derive_status_from_dates(container)
+        if auto_status is not None:
+            container.status = auto_status
+
+        # 🔁 Add materials (many-to-many)
+        if create_data.materials:
+            resolved_materials = resolve_materials(db, create_data.materials, current_user.id)
+            container.materials.extend(resolved_materials)
+
+        # 📁 Upload and save document paths
+        shipping_paths = save_uploaded_files(new_docs, "Shipping")
+        for path in shipping_paths:
+            db.add(ContainerDocs(container_id=container.Container_ID, path=path, Type=DocType.D))
+
+        inbound_paths = save_uploaded_files(inbound_images, "InBoundContainer")
+        for path in inbound_paths:
+            db.add(ContainerDocs(container_id=container.Container_ID, path=path, Type=DocType.AD))
+
+        empty_paths = save_uploaded_files(empty_images, "EmptyContainer")
+        for path in empty_paths:
+            db.add(ContainerDocs(container_id=container.Container_ID, path=path, Type=DocType.ED))
+
+        # 💾 Finalize transaction
+        db.commit()
+
+        return {"message": "Container created successfully"}
+    
+    @ContainerRouter.get("/containers", response_model=ContainerListResponse)
+    async def get_container_details_by_id(self,
+        container_id: Optional[int] = Query(None),
+        container_no: Optional[str] = Query(None),
+        search: Optional[str] = Query(None),
+        bill_of_landing: Optional[str] = Query(None),
+        SupplierName: Optional[str] = Query(None),
+        ConsigneeName: Optional[str] = Query(None),
+        status: Optional[int] = Query(None),
+        status_order: Optional[List[int]] = Query(None),
+        excStatus: Optional[int] = Query(None),
+        from_date: Optional[date] = Query(None),
+        to_date: Optional[date] = Query(None),
+        material: Optional[str] = Query(None),
+        order_by_arrival: Optional[bool] = Query(True, description="Sort by ArrivalDate (True=descending, False=ascending)"),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(50, le=1000),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
+        ):
+
+            base_query = (
+                db.query(ContainerDetails)
+                .filter(ContainerDetails.is_deleted == False)
+            )
+            base_query = apply_org_filter(base_query, ContainerDetails, org_context)
+            base_query = (
+                base_query
+                .outerjoin(BillOfLanding, ContainerDetails.BillOfLanding == BillOfLanding.BillOfLanding)
+
+                .options(
+                    # To-one relationships: safe to joinedload (no collection, no subquery-LIMIT issue)
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.consignee_rel),
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.vessel_rel),
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.supplier_rel),
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.provider_rel),
+                    joinedload(ContainerDetails.bill_of_landing)
+                    .joinedload(BillOfLanding.doc_rel),
+                    joinedload(ContainerDetails.status_rel),
+                    joinedload(ContainerDetails.type_rel),
+                    joinedload(ContainerDetails.emptied_at_rel),
+                    joinedload(ContainerDetails.created_by_user),
+                    joinedload(ContainerDetails.updated_by_user),
+                    # Many-to-many collection: MUST use selectinload to avoid
+                    # MySQL's rejection of LIMIT inside a subquery (sqlalche.me/e/20/f405)
+                    selectinload(ContainerDetails.materials)
+                )
+            )
+
+            # Apply filters
+            if search and search.strip():
+                term = f"%{search.strip()}%"
+                base_query = base_query.outerjoin(BillOfLanding.consignee_rel).outerjoin(BillOfLanding.supplier_rel).outerjoin(BillOfLanding.vessel_rel).filter(
+                    or_(
+                        ContainerDetails.container_no.ilike(term),
+                        ContainerDetails.BillOfLanding.ilike(term),
+                        Consignee.consignee_name.ilike(term),
+                        Supplier.name.ilike(term),
+                        Vessal.name.ilike(term)
+                    )
+                )
+
+            if bill_of_landing and bill_of_landing.strip():
+                base_query = base_query.filter(ContainerDetails.BillOfLanding.ilike(f"%{bill_of_landing.strip()}%"))
+
+            if SupplierName and SupplierName.strip():
+                base_query = base_query.join(BillOfLanding.supplier_rel).filter(Supplier.name.ilike(f"%{SupplierName.strip()}%"))
+
+            if ConsigneeName and ConsigneeName.strip():
+                base_query = base_query.join(BillOfLanding.consignee_rel).filter(Consignee.consignee_name.ilike(f"%{ConsigneeName.strip()}%"))
+
+            if material:
+                base_query = base_query.join(ContainerDetails.materials)
+                base_query = base_query.filter(Material.Name.ilike(f"%{material}%"))
+            if container_id:
+                base_query = base_query.filter(ContainerDetails.Container_ID == container_id)
+            if container_no:
+                base_query = base_query.filter(ContainerDetails.container_no.ilike(f"%{container_no}%"))
+                
+            if status is not None:
+                base_query = base_query.filter(ContainerDetails.status == status)
+            if from_date and to_date:
+                base_query = base_query.filter(BillOfLanding.ArrivalDate.between(from_date, to_date))
+            elif from_date:
+                base_query = base_query.filter(BillOfLanding.ArrivalDate >= from_date)
+            elif to_date:
+                base_query = base_query.filter(BillOfLanding.ArrivalDate <= to_date)
+            if excStatus:
+                base_query = base_query.filter(ContainerDetails.status != excStatus)
+            
+            if status_order:
+                status_order_case = case(
+                    *[(sid, i) for i, sid in enumerate(status_order)],
+                    value=ContainerDetails.status,
+                    else_=len(status_order)
+                )
+
+                if order_by_arrival is not None:
+                    if order_by_arrival:
+                        base_query = base_query.order_by(
+                            status_order_case,
+                            case((BillOfLanding.ArrivalDate == None, 1), else_=0),
+                            BillOfLanding.ArrivalDate.desc()
+                        )
+                    else:
+                        base_query = base_query.order_by(
+                            status_order_case,
+                            case((BillOfLanding.ArrivalDate == None, 0), else_=1),
+                            BillOfLanding.ArrivalDate.asc()
+                        )
+                else:
+                    # Just order by status if no date ordering is specified
+                    base_query = base_query.order_by(status_order_case)
+            else:
+                # fallback: only date sorting if no status_order
+                if order_by_arrival is not None:
+                    if order_by_arrival:
+                        base_query = base_query.order_by(
+                            case((BillOfLanding.ArrivalDate == None, 1), else_=0),
+                            BillOfLanding.ArrivalDate.desc()
+                        )
+                    else:
+                        base_query = base_query.order_by(
+                            case((BillOfLanding.ArrivalDate == None, 0), else_=1),
+                            BillOfLanding.ArrivalDate.asc()
+                        )
+   
+                    
+            # Get total count before pagination
+            total_count = base_query.count()
+
+            # Apply pagination
+            results = base_query.offset(offset).limit(limit).all()
+
+            # Convert to serializable format
+            serialized_data = []
+            for container in results:
+                container_dict = jsonable_encoder(ContainerDetailsSchema.from_orm_flat(container))
+                
+                # Manually handle relationships if needed
+                if container.bill_of_landing:
+                    container_dict["bill_of_landing"] = {
+                        "consignee_name": container.bill_of_landing.consignee_rel.consignee_name if container.bill_of_landing.consignee_rel else None,
+                        "supplier_name": container.bill_of_landing.supplier_rel.name if container.bill_of_landing.supplier_rel else None,
+                        "ArrivalDate": container.bill_of_landing.ArrivalDate.isoformat() if container.bill_of_landing.ArrivalDate else None,
+                        "vessal": container.bill_of_landing.vessel_rel.VessalNo if container.bill_of_landing.vessel_rel else None,
+                        "Doc_name": container.bill_of_landing.doc_rel.doc_type if container.bill_of_landing.doc_rel else None,
+                        "ExcludingDay": container.bill_of_landing.provider_rel.ExcludingDays if container.bill_of_landing.provider_rel else 0,
+                        "FreeDays": container.bill_of_landing.FreeDays if container.bill_of_landing and container.bill_of_landing.FreeDays is not None else 0
+                        
+                    }
+                
+                if container.materials:
+                    container_dict["materials"] = [
+                        {"Id": m.Id, "name": m.Name} 
+                        for m in container.materials
+                    ]
+                
+                serialized_data.append(container_dict)
+
+            return {
+                "total_count": total_count,
+                "data": serialized_data
+            }
+        
+    @ContainerRouter.delete("/containers/{container_id}")
+    async def delete_container(self, 
+        container_id: int,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user),
+        ):
+        # Step 1: Fetch the container
+        container = db.query(ContainerDetails).filter(ContainerDetails.Container_ID == container_id).first()
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        # Step 2: Get related report IDs
+        report_ids = db.query(ReportDetails.report_id).filter(
+            ReportDetails.container_id == container_id
+        ).all()
+        report_ids = [r[0] for r in report_ids]
+
+        # Step 3: Get related damage product IDs
+        dmgp_ids = db.query(DamageProduct.id).filter(
+            DamageProduct.report_id.in_(report_ids)
+        ).all()
+        dmgp_ids = [d[0] for d in dmgp_ids]
+
+        # Step 4: Soft Delete associated report images
+        now = datetime.utcnow()
+        if dmgp_ids:
+            db.query(ReportImage).filter(
+                ReportImage.DMGP_id.in_(dmgp_ids)
+            ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
+
+        # Step 5: Soft Delete damage products
+        if report_ids:
+            db.query(DamageProduct).filter(
+                DamageProduct.report_id.in_(report_ids)
+            ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
+
+        # Step 6: Soft Delete report details
+        db.query(ReportDetails).filter(
+            ReportDetails.container_id == container_id
+        ).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
+
+        # Step 7: Soft Delete container documents (and optionally remove files from disk)
+        doc_paths = db.query(ContainerDocs.path).filter(ContainerDocs.container_id == container_id).all()
+        db.query(ContainerDocs).filter(ContainerDocs.container_id == container_id).update({"is_deleted": True, "deleted_by": current_user.id, "deleted_at": now}, synchronize_session=False)
+
+        # OPTIONAL: delete physical files if needed
+        # for (path,) in doc_paths:
+        #     remove_file_from_disk(path)
+
+        # Step 8: Clear many-to-many materials (optional for soft delete, but good for cleanup)
+        container.materials.clear()
+
+        # Step 9: Soft delete the container instead of hard delete
+        container.is_deleted = True
+        container.deleted_by = current_user.id
+        container.deleted_at = datetime.utcnow()
+        
+        # Soft delete associated reports
+        db.query(ReportDetails).filter(ReportDetails.container_id == container_id).update({
+            "is_deleted": True,
+            "deleted_by": current_user.id,
+            "deleted_at": datetime.utcnow()
+        }, synchronize_session=False)
+
+        # Sync BoL status since a container was removed
+        if container.BillOfLanding:
+            sync_bol_status(db, container.BillOfLanding, current_user.id)
+
+        # Step 10: Commit all changes
+        db.commit()
+
+        return {"message": "Container and associated data deleted successfully"}
+    
+    @ContainerRouter.get("/getDocument/{doc_id}")
+    async def get_document(self, doc_id: int, db: Session = Depends(get_db)):
+        doc = db.query(ContainerDocs).filter(ContainerDocs.docs_id == doc_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        stream, mime_type, filename = blob_storage.get_file(doc.path)
+        if not stream:
+            raise HTTPException(status_code=404, detail="File blob not found in storage")
+
+        return StreamingResponse(
+            stream,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"'
+            }
+        )
+    
+    @ContainerRouter.put("/containers/{container_id}")
+    async def update_container_details(self,
+        container_id: int,
+        request: Request,
+        documents: List[UploadFile] = File([]),
+        inbound_images: Optional[List[UploadFile]] = File([]),
+        empty_images: Optional[List[UploadFile]] = File([]),
+        remove_doc_ids: List[int] = Form([]),
+        db: Session = Depends(get_db)
+        ):
+        
+        container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        form = await request.form()
+        updated_fields = dict(form)
+        skip_fields = {"remove_doc_ids"}
+        
+        for key in skip_fields:
+            updated_fields.pop(key, None)
+            # updated_fields.pop(key, '')
+            
+        # print(updated_fields)
+
+        if "tax" in updated_fields:
+            updated_fields["tax"] = int(updated_fields["tax"])
+
+        # Handle date fields properly (parse strings to date/datetime)
+        date_fields = {"arrival_on_port", "in_bound", "empty_date", "out_bound", "unloaded_at_dock", "emptied_at"}
+        for field in date_fields:
+            if field in updated_fields and updated_fields[field]:
+                # Example: parse date string in 'YYYY-MM-DD' format
+                try:
+                   
+                        # For datetime fields or other formats, adapt parsing as needed
+                        updated_fields[field] = updated_fields[field]  # Or parse accordingly
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid date format for {field}: {e}")
+
+        model_columns = ContainerDetails.__table__.columns.keys()
+        model_columns[-2] = "arrival_on_port"
+            
+        cleaned_fields = {
+            k: v for k, v in updated_fields.items()
+            if k in model_columns and k not in {"documents", "remove_doc_ids"}  # exclude ArrivalOn here since it's for Vessal
+        }
+        # if "arrival_on_port" in cleaned_fields:
+        #     cleaned_fields['Arrival_Date'] = cleaned_fields.pop('arrival_on_port') 
+        
+        # Update container fields
+        for key, value in cleaned_fields.items():
+            if str(getattr(container, key)) != str(value):
+                setattr(container, key, value)
+
+        # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
+        auto_status = derive_status_from_dates(container)
+        if auto_status is not None:
+            container.status = auto_status
+
+
+
+        # Remove selected documents
+        docs_to_remove = []
+        for doc_id in remove_doc_ids:
+            doc = db.query(ContainerDocs).filter_by(docs_id=doc_id, container_id=container_id).first()
+            if doc:
+                docs_to_remove.append(doc.path)
+                db.delete(doc)
+
+        remove_files(docs_to_remove)
+
+        # Save new uploaded documents
+        saved_paths = save_uploaded_files(documents, "Shipping")
+        for path in saved_paths:
+            db.add(ContainerDocs(container_id=container_id, path=path, Type=DocType.D))
+
+        saved_paths = save_uploaded_files(empty_images, "EmptyContainer")
+        for path in saved_paths:
+            db.add(ContainerDocs(container_id=container_id, path=path, Type=DocType.ED))
+
+        saved_paths = save_uploaded_files(inbound_images, "InBoundContainer")
+        for path in saved_paths:
+            db.add(ContainerDocs(container_id=container_id, path=path, Type=DocType.AD))
+
+        db.commit()
+        return {"message": "Container updated successfully"}    
+
+    @ContainerRouter.patch("/containers/{container_id}/status")
+    async def update_container(self, 
+        container_id: int,
+        update_data: ContainerUpdateSchema = Depends(parse_update_form),
+        new_docs: List[UploadFile] = File([]),
+        inbound_images: Optional[List[UploadFile]] = File([]),
+        empty_images: Optional[List[UploadFile]] = File([]),
+        remove_doc_ids: Optional[List[int]] = Form([]),
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
+        ):
+        # 🔍 Get the container
+        container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
+        # print(container)
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found.")
+
+        original_status = container.status
+
+        # 🛠️ Update basic container fields (excluding materials and BL)
+        for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"}).items():
+            if key == "type" and value is not None:
+                value = resolve_container_type(db, value, current_user.id)
+            elif key == "emptied_at" and value is not None:
+                value = resolve_unload_venue(db, value, current_user.id)
+            elif key == "status" and value is not None:
+                value = resolve_status(db, value)
+            setattr(container, key, value)
+        container.updated_by = current_user.id
+
+        # 🔄 Auto-derive status from date fields (in_bound / empty_date / out_bound / unloaded_at_port)
+        # Only override if user has explicitly changed the status to a new value
+        if "status" not in update_data.dict(exclude_unset=True) or update_data.status is None or update_data.status == original_status:
+            auto_status = derive_status_from_dates(container)
+            if auto_status is not None:
+                container.status = auto_status
+
+        # 🔁 Update materials (many-to-many)
+        if update_data.materials is not None:
+            container.materials.clear()
+            resolved_materials = resolve_materials(db, update_data.materials, current_user.id)
+            container.materials.extend(resolved_materials)
+
+        # 🔄 Update Bill of Landing
+        if update_data.bill_of_landing:
+            bl_data = update_data.bill_of_landing.dict(exclude_unset=True)
+            
+            # Resolve BL reference fields dynamically
+            if "Consignee" in bl_data and bl_data["Consignee"] is not None:
+                bl_data["Consignee"] = resolve_consignee(db, bl_data["Consignee"], current_user.id)
+            if "Vessel" in bl_data and bl_data["Vessel"] is not None:
+                bl_data["Vessel"] = resolve_vessel(db, bl_data["Vessel"], current_user.id)
+            if "Supplier" in bl_data and bl_data["Supplier"] is not None:
+                bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id)
+            if "Provider" in bl_data and bl_data["Provider"] is not None:
+                bl_data["Provider"] = resolve_provider(db, bl_data["Provider"], current_user.id)
+            if "Doc" in bl_data and bl_data["Doc"] is not None:
+                bl_data["Doc"] = resolve_doc(db, bl_data["Doc"], current_user.id)
+            if "status" in bl_data and bl_data["status"] is not None:
+                bl_data["status"] = resolve_status(db, bl_data["status"])
+
+            bl_number = container.BillOfLanding
+
+            existing_bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
+            if existing_bl:
+                # ── FreeDays conflict check + cascade ──────────────────────
+                if 'FreeDays' in bl_data and bl_data['FreeDays'] != existing_bl.FreeDays:
+                    children = db.query(ContainerDetails).filter_by(BillOfLanding=existing_bl.BillOfLanding).all()
+
+                    # Is the caller also directly setting FreeDays on this container?
+                    container_has_own_freedays = "FreeDays" in update_data.dict(exclude_unset=True)
+
+                    # Conflict = another container (not this one) has a custom FreeDays
+                    for child in children:
+                        if child.Container_ID == container_id:
+                            continue  # skip self — it is being updated intentionally
+                        if child.FreeDays is not None and existing_bl.FreeDays is not None and child.FreeDays != existing_bl.FreeDays:
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Cannot update Bill of Lading FreeDays: One or more containers have custom FreeDays. Please update individual containers instead."
+                            )
+
+                    # Cascade to all children EXCEPT this container if it has its own value
+                    for child in children:
+                        if child.Container_ID == container_id and container_has_own_freedays:
+                            continue  # preserve the individual container's own value
+                        child.FreeDays = bl_data['FreeDays']
+
+                # ── Status conflict check + cascade ────────────────────────
+                if 'status' in bl_data and bl_data['status'] != existing_bl.status:
+                    children = db.query(ContainerDetails).filter_by(BillOfLanding=existing_bl.BillOfLanding).all()
+                    for child in children:
+                        if child.status is not None and existing_bl.status is not None and child.status != existing_bl.status:
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Cannot update Bill of Lading status: One or more containers have a custom status. Please update individual containers instead."
+                            )
+                    for child in children:
+                        child.status = bl_data['status']
+
+                for key, value in bl_data.items():
+                    setattr(existing_bl, key, value)
+                existing_bl.updated_by = current_user.id
+            else:
+                # Unlikely but safe fallback
+                bl_data["created_by"] = current_user.id
+                bl_data["updated_by"] = current_user.id
+                new_bl = BillOfLanding(**bl_data)
+                db.add(new_bl)
+
+        # ❌ Remove selected documents
+        if remove_doc_ids:
+            remove_paths = []
+            for doc_id in remove_doc_ids:
+                doc = db.query(ContainerDocs).filter_by(docs_id=doc_id, container_id=container_id).first()
+                if doc:
+                    remove_paths.append(doc.path)
+                    db.delete(doc)
+            remove_files(remove_paths)
+
+        # 📁 Save uploaded documents and link
+        def save_and_link(files: List[UploadFile], folder: str, doc_type: str):
+            saved_paths = save_uploaded_files(files, folder)
+            for path in saved_paths:
+                db.add(ContainerDocs(container_id=container_id, path=path, Type=doc_type))
+
+        if new_docs:
+            save_and_link(new_docs, "Shipping", DocType.D)
+        if inbound_images:
+            save_and_link(inbound_images, "InBoundContainer", DocType.AD)
+        if empty_images:
+            save_and_link(empty_images, "EmptyContainer", DocType.ED)
+
+        # 🔄 Sync BoL status if all containers now match
+        if container.BillOfLanding:
+            sync_bol_status(db, container.BillOfLanding, current_user.id)
+
+        # 💾 Commit all changes
+        db.commit()
+
+        return {"message": "Container updated successfully"}
+     
+    @ContainerRouter.get("/getAllContainers")
+    async def getContainerForREport(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = ( db.query(
+            ContainerDetails.Container_ID,
+            ContainerDetails.container_no,
+            ContainerDetails.BillOfLanding,
+            Status.name.label("state"),
+            ContainerDetails.status,
+            ContainerDetails.unloaded_at_port,
+            ContainerDetails.in_bound,
+            ContainerDetails.empty_date,
+            ContainerDetails.out_bound,
+            UnloadVenue.venue.label("location"),
+            BillOfLanding.ArrivalDate,
+            ) 
+            .outerjoin(Status, ContainerDetails.status == Status.status_id)
+            .outerjoin(UnloadVenue, ContainerDetails.emptied_at == UnloadVenue.venue_id)
+            .outerjoin(BillOfLanding, ContainerDetails.BillOfLanding == BillOfLanding.BillOfLanding)
+            .filter(ContainerDetails.status != 4, ContainerDetails.is_deleted == False) 
+            ).all() 
+        
+        formatted = []
+        for row in data:
+            port_date = row[5] or row[10]
+            formatted.append([
+                row[0],
+                row[1],
+                row[2] or "",
+                row[3] or "In Transit",
+                row[4],
+                port_date.isoformat() if port_date else None,
+                row[6].isoformat() if row[6] else None,
+                row[7].isoformat() if row[7] else None,
+                row[8].isoformat() if row[8] else None,
+                row[9] or "",
+            ])
+        return json.dumps({ "data": formatted })
+    
+    @ContainerRouter.get("/getContainerReports")
+    async def get_ContainerReports(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+        data = ( db.query(
+            ReportDetails.report_id,
+            ContainerDetails.container_no
+            ) 
+            .outerjoin(ContainerDetails, ContainerDetails.Container_ID == ReportDetails.container_id) 
+            ).all() 
+        
+        column = ['Report Id','Container No']
+        return json.dumps({"column": column, "data": [list(row) for row in data]})
+    
+    @ContainerRouter.get("/damage-reports")
+    async def get_ContainerReports( 
+                                    report_id: int = Form(None),
+                                    offset: int = Query(0, ge=0),
+                                    limit: int = Query(500, le=1000),
+                                    db: Session = Depends(get_db), 
+                                #    current_user: dict = Depends(get_current_user)
+                                   ):
+        base_query = ( 
+            db.query(
+                ReportDetails.report_id,
+                ContainerDetails.container_no
+            ) 
+            .outerjoin(ContainerDetails, ContainerDetails.Container_ID == ReportDetails.container_id) 
+            )
+        
+        if report_id:
+            base_query = base_query.filter(ReportDetails.report_id == report_id)
+            
+        total_count = base_query.count()
+        results = base_query.offset(offset).limit(limit).all()
+        
+        reports = []
+        for result in results:
+            # report = jsonable_encoder(ReportSchema.from_attributes(result))
+            formatted_data = {"ReportId": result[0], "ContainerNo": result[1]}
+            reports.append(formatted_data)
+            
+        print(reports)
+        print()
+        return {
+            "total_count": total_count,
+            "data": reports
+        } 
+    
+    @ContainerRouter.post("/damage-reports")
+    async def submit_damage_report(self,
+        data: str = Form(...),
+        files: Optional[List[UploadFile]] = File(None),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
+        ):
+        print(data)
+        try:
+            parsed_data: Dict[str, Any] = json.loads(data)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON format in data.")
+
+
+        container_id = parsed_data.get("container_id")
+        products = parsed_data.get("products", [])
+
+        if not container_id:
+            raise HTTPException(status_code=422, detail="Missing container_id.")
+
+        # Create the report
+        report = ReportDetails(
+            container_id=container_id,
+            report_date=datetime.utcnow().date()
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        file_index = 0
+        files = files or []  # Ensure files is a list
+
+        for prod in products:
+            name = prod.get("name")
+            quantity = prod.get("quantity")
+            reason = prod.get("reason")
+            file_count = len(prod.get("files", []))
+
+            if not name or not quantity:
+                continue
+
+            # Save product to DB
+            damage_product = DamageProduct(
+                report_id=report.report_id,
+                product_name=name,
+                qty=quantity,
+                note=reason
+            )
+            db.add(damage_product)
+            db.commit()
+            db.refresh(damage_product)
+
+            # Select files for this product
+            product_files = files[file_index:file_index + file_count]
+            file_index += file_count
+
+            # Save files
+            # upload_dir = f"uploads/reports/{report.report_id}/product_{damage_product.id}"
+            saved_paths = save_uploaded_files(product_files, "Report")
+
+            # Save image paths to ReportImage
+            for path in saved_paths:
+                report_image = ReportImage(
+                    DMGP_id=str(damage_product.id),
+                    path=path
+                )
+                db.add(report_image)
+
+        db.commit()
+        return {"message": "Report submitted", "report_id": report.report_id}
+
+    @ContainerRouter.get("/damage-reports/{report_id}")
+    async def get_damage_report(
+        self,
+        report_id: int,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
+        ):
+        report = db.query(ReportDetails).filter(ReportDetails.report_id == report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        container = db.query(ContainerDetails).filter(ContainerDetails.Container_ID == report.container_id).first()
+
+        products = []
+        for dp in db.query(DamageProduct).filter(DamageProduct.report_id == report.report_id).all():
+            images = db.query(ReportImage).filter(ReportImage.DMGP_id == str(dp.id)).all()
+            products.append({
+                "id": dp.id,
+                "name": dp.product_name,
+                "quantity": dp.qty,
+                "reason": dp.note,
+                "files": [
+                    {
+                        "id": img.id,
+                        "filename": img.path.split("/")[-1]  # assuming img.path stores full file path or URL
+                    }
+                    for img in images
+                ]
+            })
+
+        return {
+            "report_id": report_id,
+            "containerId": container.Container_ID if container else None,
+            "container_number": container.container_no if container else None,
+            "products": products
+        }
+        
+    @ContainerRouter.put("/damage-reports/{report_id}")
+    async def update_damage_report(self,
+        report_id: int,
+        request: Request,
+        files: Optional[List[UploadFile]] = File(None),
+        remove_doc_ids: List[int] = Form([]),
+        remove_product_ids: List[int] = Form([]),
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
+        ):
+        report = db.query(ReportDetails).filter_by(report_id=report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        form = await request.form()
+        try:
+            parsed_data: Dict[str, Any] = json.loads(form.get("data", "{}"))
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON in 'data'")
+
+        new_products = parsed_data.get("products", [])
+        container_id = parsed_data.get("container_id")
+
+        files = files or []
+        file_index = 0
+        paths_to_remove = []
+
+        # print(new_products)
+        # Remove specified images
+        for doc_id in remove_doc_ids:
+            doc = db.query(ReportImage).filter_by(id=doc_id).first()
+            if doc:
+                paths_to_remove.append(doc.path)
+                db.delete(doc)
+
+        # Remove specified products (and their images)
+        for prod_id in remove_product_ids:
+            product = db.query(DamageProduct).filter_by(id=prod_id, report_id=report_id).first()
+            if product:
+                images = db.query(ReportImage).filter_by(DMGP_id=product.id).all()
+                for img in images:
+                    paths_to_remove.append(img.path)
+                    db.delete(img)
+                db.delete(product)
+
+        # Update report container if changed
+        if container_id and report.container_id != container_id:
+            report.container_id = container_id
+            db.add(report)
+
+        # Add or update products
+        for product in new_products:
+            
+            prod_id = product.get("id")
+            name = product.get("name")
+            quantity = product.get("quantity")
+            reason = product.get("reason")
+            file_count = len(product.get("files", []))
+
+            # if not name or not quantity:
+                # continue  # Skip invalid entries
+            
+            # print(prod_id)
+            if prod_id:  # Existing product — update
+                existing_product = db.query(DamageProduct).filter_by(id=prod_id).first()
+                if existing_product:
+                    if name is not None:
+                        existing_product.product_name = name
+                    if quantity is not None:
+                        existing_product.qty = quantity
+                    if reason is not None:
+                        existing_product.note = reason
+                    db.add(existing_product)
+                    db.commit()
+
+                    # Save new files if any
+                    new_files = files[file_index:file_index + file_count]
+                    saved_paths = save_uploaded_files(new_files, "Report")
+                    for path in saved_paths:
+                        db.add(ReportImage(DMGP_id=existing_product.id, path=path))
+                    file_index += file_count
+
+            else:  # New product — insert
+                new_product = DamageProduct(
+                    report_id=report_id,
+                    product_name=name,
+                    qty=quantity,
+                    note=reason
+                )
+                db.add(new_product)
+                db.commit()
+                db.refresh(new_product)
+
+                new_files = files[file_index:file_index + file_count]
+                saved_paths = save_uploaded_files(new_files, "Report")
+                for path in saved_paths:
+                    db.add(ReportImage(DMGP_id=new_product.id, path=path))
+                file_index += file_count
+
+        db.commit()
+        remove_files(paths_to_remove)
+
+        return {"message": "Report updated successfully", "report_id": report_id}
+
+    @ContainerRouter.get("/getReportImage/{image_id}")
+    async def get_report_image(self, image_id: int, db: Session = Depends(get_db)):
+        image = db.query(ReportImage).filter(ReportImage.id == image_id).first()
+        if not image:
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        stream, mime_type, filename = blob_storage.get_file(image.path)
+        if not stream:
+            raise HTTPException(status_code=404, detail="Report image not found in storage")
+
+        return StreamingResponse(
+            stream,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"'
+            }
+        )
+
+    @ContainerRouter.delete("/damage-reports/{report_id}")
+    def delete_damage_report(self,
+        report_id: int,
+        db: Session = Depends(get_db),
+        current_user: dict = Depends(get_current_user)
+      ):
+        report = db.query(ReportDetails).filter(ReportDetails.report_id == report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Collect image paths for removal from disk
+        paths_to_remove: List[str] = []
+        now = datetime.utcnow()
+
+        # Get all products for the report
+        products = db.query(DamageProduct).filter(DamageProduct.report_id==report_id).all()
+        for product in products:
+            # Get all images for each product
+            images = db.query(ReportImage).filter(ReportImage.DMGP_id==product.id).all()
+            for img in images:
+                paths_to_remove.append(img.path)
+                img.is_deleted = True
+                img.deleted_by = current_user.id
+                img.deleted_at = now
+
+            product.is_deleted = True
+            product.deleted_by = current_user.id
+            product.deleted_at = now
+
+        # Delete images directly associated with report (if any)
+        other_images = db.query(ReportImage).filter(ReportImage.DMGP_id==report_id).all()
+        for img in other_images:
+            paths_to_remove.append(img.path)
+            img.is_deleted = True
+            img.deleted_by = current_user.id
+            img.deleted_at = now
+
+        # Finally soft delete the report itself
+        report.is_deleted = True
+        report.deleted_by = current_user.id
+        report.deleted_at = now
+        db.commit()
+
+        # Remove files from disk
+        remove_files(paths_to_remove)
+
+        return {"message": "Report and all related data deleted", "report_id": report_id}
+
+    @ContainerRouter.get("/reports/{report_id}")
+    def get_report_pdf(self, report_id: int, db: Session = Depends(get_db)):
+        report = db.query(ReportDetails).filter(ReportDetails.report_id==report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        container = db.query(ContainerDetails).filter(ContainerDetails.Container_ID == report.container_id).first()
+        products = db.query(DamageProduct).filter(DamageProduct.report_id==report_id).all()
+        data = {
+            "container_number": container.container_no if container.container_no else "N/A",
+            "report_date": report.report_date.strftime("%Y-%m-%d"),
+            "products": [
+                {
+                    "product_name": p.product_name,
+                    "qty": p.qty,
+                    "note": p.note,
+                    "images": [img.path for img in p.images]  # make sure paths are accessible
+                }
+                for p in products
+            ]
+        }
+
+        pdf_bytes = generate_damage_report_pdf(data)
+        return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers={
+            "Content-Disposition": f"inline; filename=damage_report_{report_id}.pdf"
+        })
+    
+    @ContainerRouter.get("/arrived")
+    def get_arrived_containers(self,
+        
+        db: Session = Depends(get_db),
+       
+        ):
+        containers = (
+            db.query(ContainerDetails, UnloadVenue.venue.label("venue"), BillOfLanding.ArrivalDate.label("Arrival_Date"))
+            .outerjoin(UnloadVenue, ContainerDetails.emptied_at == UnloadVenue.venue_id)
+            .outerjoin(BillOfLanding, BillOfLanding.BillOfLanding == ContainerDetails.BillOfLanding)
+            .filter(ContainerDetails.status == 3)
+        ).all()
+
+        result = []
+        for container, venue, Arrival_Date in containers:
+            result.append({
+                "Container_ID": container.Container_ID,
+                "container_no": container.container_no,
+                "arrival_on_port": Arrival_Date,
+                "venue": venue
+            })
+
+        return result
+
+    @ContainerRouter.get("/toPickup")
+    def get_toPickup_containers(self, 
+        
+        db: Session = Depends(get_db),
+       
+        ):
+        containers = (
+            db.query(ContainerDetails, UnloadVenue.venue)
+            .outerjoin(UnloadVenue, ContainerDetails.emptied_at == UnloadVenue.venue_id)
+            
+            .filter(ContainerDetails.status == 7)
+            
+            
+        ).all()
+        result = []
+        for container, venue in containers:
+            result.append({
+                "Container_ID": container.Container_ID,
+                "container_no": container.container_no,
+                "emptyDate": container.empty_date,
+                "venue": venue
+            })
+
+        return result
+
+    @ContainerRouter.get("/containers/linkable-orders")
+    def get_linkable_orders(
+        self,
+        search: Optional[str] = Query(None),
+        db: Session = Depends(get_db),
+        org_context: OrgContext = Depends(get_org_context),
+        current_user: User = Depends(get_current_user)
+    ):
+        """Returns purchase orders available for linking to containers."""
+        from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+        q = db.query(PurchaseOrder).filter(PurchaseOrder.is_deleted == False)
+        q = apply_org_filter(q, PurchaseOrder, org_context)
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            q = q.filter(
+                or_(
+                    PurchaseOrder.po_number.ilike(term),
+                    PurchaseOrder.company.ilike(term),
+                    PurchaseOrder.goods_description.ilike(term)
+                )
+            )
+        orders = q.order_by(PurchaseOrder.created_at.desc()).limit(50).all()
+        return [
+            {
+                "id": po.id,
+                "po_number": po.po_number,
+                "supplier": po.company or (po.supplier_rel.name if po.supplier_rel else "—"),
+                "status": po.status,
+                "total_amount": float(po.total_amount or 0),
+                "currency": po.currency,
+                "goods_description": po.goods_description,
+                "created_at": po.created_at.isoformat() if po.created_at else None,
+            }
+            for po in orders
+        ]
+
+    @ContainerRouter.get("/containers/{container_id}/context")
+    def get_container_context(
+        self,
+        container_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """
+        Returns all cross-module data linked to a container:
+        - Container info
+        - Linked Purchase Orders (via OrderShipment)
+        - Goods Receipts (via GoodsReceipt.container_id)
+        - Defects & Damages (via DefectReport.container_id or receipt_id)
+        - Merged Documents (ContainerDocs + linked PO OrderDocuments)
+        - Summary metrics
+        """
+        container = db.query(ContainerDetails).filter_by(Container_ID=container_id, is_deleted=False).first()
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        from Model.containermgmt.Orders.GoodsReceipt import GoodsReceipt
+        from Model.containermgmt.Orders.DefectReport import DefectReport
+        from Model.containermgmt.Orders.OrderShipment import OrderShipment
+        from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+        from Model.containermgmt.Orders.OrderPackingList import OrderPackingList
+        from Model.containermgmt.Orders.OrderDocument import OrderDocument
+
+        user_modules = getattr(current_user, "modules", ["LOGISTICS", "ORDERS"])
+
+        orders_data = []
+        receipts_data = []
+        defects_data = []
+        order_docs = []
+
+        if "ORDERS" in user_modules or getattr(current_user, "is_root", False):
+            # 1. Orders linked via OrderShipment
+            shipments = db.query(OrderShipment).filter_by(container_id=container_id).all()
+            po_ids = list({s.po_id for s in shipments if s.po_id})
+
+            # Also check if ContainerDetails has legacy PONo string match
+            if container.PONo:
+                legacy_pos = db.query(PurchaseOrder).filter(PurchaseOrder.po_number.ilike(container.PONo.strip()), PurchaseOrder.is_deleted == False).all()
+                for lp in legacy_pos:
+                    if lp.id not in po_ids:
+                        po_ids.append(lp.id)
+
+            if po_ids:
+                pos = db.query(PurchaseOrder).filter(PurchaseOrder.id.in_(po_ids), PurchaseOrder.is_deleted == False).all()
+                for po in pos:
+                    pls = db.query(OrderPackingList).filter_by(po_id=po.id).all()
+                    orders_data.append({
+                        "id": po.id,
+                        "po_number": po.po_number,
+                        "supplier": po.company or (po.supplier_rel.name if po.supplier_rel else "—"),
+                        "status": po.status,
+                        "shipment_status": po.shipment_status,
+                        "items_count": len(po.items or []),
+                        "total_amount": float(po.total_amount or 0),
+                        "currency": po.currency or "USD",
+                        "packing_lists": [
+                            {
+                                "id": pl.id,
+                                "pl_number": pl.packing_list_number,
+                                "cartons": pl.package_count,
+                                "cbm": float(pl.total_cbm or 0),
+                                "gross_weight": float(pl.total_gross_weight or 0),
+                                "status": pl.status
+                            }
+                            for pl in pls
+                        ]
+                    })
+
+                odocs = db.query(OrderDocument).filter(
+                    OrderDocument.po_id.in_(po_ids),
+                    OrderDocument.is_deleted == False
+                ).all()
+                for od in odocs:
+                    order_docs.append({
+                        "id": od.id,
+                        "name": od.file_name or od.title or f"document_{od.id}",
+                        "source": f"Order #{od.po_id}",
+                        "type": od.doc_type or "OTHER",
+                        "file_path": od.file_path,
+                        "is_order_doc": True,
+                    })
+
+            # 2. Goods Receipts
+            receipts = db.query(GoodsReceipt).filter_by(container_id=container_id, is_deleted=False).all()
+            receipt_ids = [r.id for r in receipts]
+            for r in receipts:
+                receipts_data.append({
+                    "id": r.id,
+                    "receipt_number": r.receipt_number,
+                    "po_number": r.purchase_order.po_number if r.purchase_order else None,
+                    "received_date": r.received_date.isoformat() if r.received_date else None,
+                    "status": r.status,
+                    "has_discrepancies": r.has_discrepancies,
+                    "items_count": len(r.items or []),
+                    "notes": r.notes
+                })
+
+            # 3. Defects (Container damage + Goods discrepancies)
+            def_filter = [DefectReport.container_id == container_id]
+            if receipt_ids:
+                def_filter.append(DefectReport.receipt_id.in_(receipt_ids))
+            if po_ids:
+                def_filter.append(DefectReport.po_id.in_(po_ids))
+
+            defects = db.query(DefectReport).filter(
+                or_(*def_filter),
+                DefectReport.is_deleted == False
+            ).all()
+
+            for d in defects:
+                defects_data.append({
+                    "id": d.id,
+                    "defect_number": d.defect_number,
+                    "report_type": d.report_type,
+                    "category": d.category,
+                    "title": d.title,
+                    "status": d.status,
+                    "discovery_date": d.discovery_date.isoformat() if d.discovery_date else None,
+                    "items_count": len(d.items or []),
+                    "images_count": len(d.images or [])
+                })
+
+        # 4. Container Documents
+        container_docs = []
+        for cd in (container.documents or []):
+            container_docs.append({
+                "id": cd.docs_id,
+                "name": cd.path.split("/")[-1] if cd.path else f"doc_{cd.docs_id}",
+                "source": "Container",
+                "type": "Shipping" if cd.Type == "D" else ("Inbound Photo" if cd.Type == "AD" else "Empty Photo"),
+                "file_path": cd.path,
+                "is_order_doc": False,
+            })
+
+        open_defects = sum(1 for d in defects_data if d["status"] != "RESOLVED" and d["status"] != "CLOSED")
+        has_disc = any(r["has_discrepancies"] for r in receipts_data)
+
+        venue_name = container.emptied_at_rel.venue if container.emptied_at_rel else None
+
+        return {
+            "container": {
+                "id": container.Container_ID,
+                "container_no": container.container_no,
+                "status": container.status_rel.name if container.status_rel else None,
+                "bill_of_lading": container.BillOfLanding,
+                "venue": venue_name,
+                "in_bound": container.in_bound.isoformat() if container.in_bound else None,
+                "empty_date": container.empty_date.isoformat() if container.empty_date else None,
+                "unloaded_at_port": container.unloaded_at_port.isoformat() if container.unloaded_at_port else None,
+                "free_days": container.FreeDays,
+            },
+            "orders": orders_data,
+            "receipts": receipts_data,
+            "defects": defects_data,
+            "documents": container_docs + order_docs,
+            "summary": {
+                "total_orders": len(orders_data),
+                "total_receipts": len(receipts_data),
+                "total_defects": len(defects_data),
+                "open_defects": open_defects,
+                "has_discrepancies": has_disc,
+            }
+        }
+
+    @ContainerRouter.post("/containers/{container_id}/link-order")
+    def link_order_to_container(
+        self,
+        container_id: int,
+        po_id: int = Body(..., embed=True),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """Creates an OrderShipment link between this container and a purchase order."""
+        container = db.query(ContainerDetails).filter_by(Container_ID=container_id, is_deleted=False).first()
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+        from Model.containermgmt.Orders.OrderShipment import OrderShipment
+
+        po = db.query(PurchaseOrder).filter_by(id=po_id, is_deleted=False).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+
+        existing = db.query(OrderShipment).filter_by(
+            container_id=container_id, po_id=po_id
+        ).first()
+        if existing:
+            return {"success": True, "message": "Order is already linked to this container", "shipment_id": existing.id}
+
+        shipment = OrderShipment(
+            po_id=po_id,
+            container_id=container_id,
+            bill_of_lading_no=container.BillOfLanding or "",
+            shipment_status="IN_TRANSIT" if not container.in_bound else "ARRIVED",
+            created_by=current_user.id
+        )
+        db.add(shipment)
+        db.commit()
+        db.refresh(shipment)
+        return {"success": True, "message": f"Order {po.po_number} successfully linked to container {container.container_no}", "shipment_id": shipment.id}
+
+    @ContainerRouter.delete("/containers/{container_id}/link-order/{po_id}")
+    def unlink_order_from_container(
+        self,
+        container_id: int,
+        po_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """Removes the OrderShipment link between this container and the purchase order."""
+        from Model.containermgmt.Orders.OrderShipment import OrderShipment
+        deleted = db.query(OrderShipment).filter_by(container_id=container_id, po_id=po_id).delete()
+        db.commit()
+        return {"success": True, "deleted_count": deleted}
+
