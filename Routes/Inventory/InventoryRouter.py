@@ -478,24 +478,38 @@ def lookup_products(
     org_context: OrgContext = Depends(get_org_context)
 ):
     """Autocomplete for PO / form creation. Returns active products only."""
-    query = db.query(Product).filter(Product.is_deleted == False, Product.status == "active")
+    query = (
+        db.query(Product)
+        .options(joinedload(Product.category), joinedload(Product.supplier))
+        .filter(Product.is_deleted == False, Product.status == "active")
+    )
     query = apply_org_filter(query, Product, org_context)
     if q:
         term = f"%{q.strip()}%"
         query = query.filter(or_(
             Product.sku.ilike(term), Product.code.ilike(term),
-            Product.name.ilike(term), Product.brand.ilike(term), Product.barcode.ilike(term)
+            Product.name.ilike(term), Product.brand.ilike(term), Product.barcode.ilike(term),
+            Product.description.ilike(term)
         ))
     if supplier_id:
         query = query.filter(Product.default_supplier_id == supplier_id)
     prods = query.order_by(Product.name.asc()).limit(limit).all()
     is_acc = is_accounts_user(current_user, org_context)
     return [{
-        "id": p.id, "code": p.code, "sku": p.sku, "name": p.name,
-        "description_quick": p.description_quick, "unit": p.unit or "PCS",
-        "brand": p.brand, "category_id": p.category_id,
+        "id": p.id,
+        "code": p.code,
+        "sku": p.sku,
+        "name": p.name,
+        "description": p.description,
+        "description_quick": p.description_quick,
+        "unit": p.unit or "PCS",
+        "brand": p.brand,
+        "category_id": p.category_id,
+        "category_name": p.category.name if p.category else None,
         "default_supplier_id": p.default_supplier_id,
+        "supplier_name": p.supplier.name if p.supplier else None,
         "current_stock": float(p.current_stock or 0.0),
+        "min_stock_quantity": float(p.min_stock_quantity or 0.0),
         "unit_cost": float(p.unit_cost) if p.unit_cost is not None and is_acc else None,
         "currency": p.currency or "USD"
     } for p in prods]
