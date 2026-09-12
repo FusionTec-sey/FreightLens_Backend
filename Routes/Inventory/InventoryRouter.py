@@ -36,7 +36,7 @@ class CategoryUpdateSchema(BaseModel):
 
 class ProductCreateSchema(BaseModel):
     code: Optional[str] = None
-    sku: str
+    sku: Optional[str] = None
     name: str
     description: Optional[str] = None
     description_quick: Optional[str] = None
@@ -588,18 +588,19 @@ def create_product(
     org_context: OrgContext = Depends(get_org_context)
 ):
     target_org_id = org_context.org_id or 1
+    sku_val = payload.sku.strip().upper() if payload.sku and payload.sku.strip() else f"SKU-{datetime.utcnow().strftime('%y%m%d%H%M%S')}"
     existing = db.query(Product).filter(
-        Product.org_id == target_org_id, Product.sku == payload.sku.strip().upper(), Product.is_deleted == False
+        Product.org_id == target_org_id, Product.sku == sku_val, Product.is_deleted == False
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"A product with SKU '{payload.sku}' already exists.")
+        raise HTTPException(status_code=400, detail=f"A product with SKU '{sku_val}' already exists.")
 
     new_prod = Product(
         org_id=target_org_id,
         code=payload.code.strip().upper() if payload.code else None,
-        sku=payload.sku.strip().upper(),
+        sku=sku_val,
         name=payload.name.strip(),
-        description=payload.description,
+        description=payload.description or payload.name.strip(),
         description_quick=payload.description_quick,
         status=payload.status or "active",
         category_id=payload.category_id,
