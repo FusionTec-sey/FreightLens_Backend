@@ -45,6 +45,7 @@ DEFAULT_PERMISSIONS = [
     ("Edit_Order",           "Edit an existing purchase order"),
     ("Delete_Order",         "Delete a purchase order"),
     ("Manage_Financials",    "View and edit confidential pricing and payment terms"),
+    ("Approve_Variance",     "Approve price variances exceeding supplier threshold on proforma invoices"),
 
     # ── Payment actions ───────────────────────────────────────────────────────
     ("Add_Payment",          "Record advance, progress, or balance payments"),
@@ -141,6 +142,18 @@ DEFAULT_STATUSES = [
     (6, "Inbound"),
     (7, "Empty"),
     (8, "Unknown")
+]
+
+# ── Enterprise 7-Stage Procurement Lifecycle Pipeline ────────────────────────
+# Distinct from operational statuses. Tracks internal procurement milestone progression.
+LIFECYCLE_STAGES = [
+    {"code": "DRAFT", "name": "Draft PO", "step": 1, "description": "Initial creation and internal authoring"},
+    {"code": "CONFIRMED", "name": "Confirmed Draft", "step": 2, "description": "Internally locked, ready for vendor review"},
+    {"code": "RFQ_SENT", "name": "RFQ Sent", "step": 3, "description": "Sent to vendor(s) for pricing and availability"},
+    {"code": "QUOTE_RECEIVED", "name": "Quote Received", "step": 4, "description": "Vendor response(s) and quotation captured"},
+    {"code": "QUOTE_APPROVED", "name": "Quote Approved", "step": 5, "description": "Internal stakeholders approved vendor terms"},
+    {"code": "PO_ISSUED", "name": "PO Generated", "step": 6, "description": "Official binding purchase order issued"},
+    {"code": "PROFORMA", "name": "Proforma Invoice", "step": 7, "description": "Final billing verification and variance audit"},
 ]
 
 # ── Agreed 14 (+1 Defect/Reopened) Procurement Lifecycle Statuses ─────────────

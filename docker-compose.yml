@@ -39,7 +39,7 @@ services:
     container_name: sahaj_backend_local
     environment:
       - DATABASE_URL=postgresql+psycopg2://postgres:postgres_local@postgres:5432/containermgmt_pg
-      - JWT_SECRET_KEY=change-this-to-a-secure-random-64-char-string-before-production
+      - JWT_SECRET_KEY=f830910ff3d22d6fc544ef7634ae5df3b1c1b676302fb39c0aeb075ba5cabe70
       - JWT_ALGORITHM=HS256
       - ENVIRONMENT=development
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
@@ -50,6 +50,8 @@ services:
       - RUSTFS_SECRET_KEY=rustfs_secret_password_123
       - RUSTFS_BUCKET_NAME=containermgmt-blobs
       - RUSTFS_REGION=us-east-1
+      - MEILISEARCH_URL=http://meilisearch:7700
+      - MEILISEARCH_MASTER_KEY=sahaj_meili_secret_key_123
     ports:
       - "9000:9000"
     volumes:
@@ -59,20 +61,43 @@ services:
         condition: service_healthy
       rustfs:
         condition: service_started
-    command: ["uvicorn", "containerMgmt:app", "--host", "0.0.0.0", "--port", "9000"]
+      meilisearch:
+        condition: service_started
+    command: ["uvicorn", "containerMgmt:app", "--host", "0.0.0.0", "--port", "9000", "--reload"]
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: sahaj_meilisearch_local
+    restart: unless-stopped
+    environment:
+      - MEILI_MASTER_KEY=sahaj_meili_secret_key_123
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_ENV=development
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili_data_local:/meili_data
 
   frontend:
     build:
       context: ../containermgmt
       dockerfile: Dockerfile
     container_name: sahaj_frontend_local
+    stdin_open: true
+    tty: true
     environment:
       - REACT_APP_NETWORK=http://localhost:9000
+      - REACT_APP_MEILISEARCH_URL=http://localhost:7700
+      - WATCHPACK_POLLING=true
     ports:
       - "3000:3000"
+    volumes:
+      - ../containermgmt:/app
+      - /app/node_modules
     depends_on:
       - backend
 
 volumes:
   pgdata_local:
   rustfs_data_local:
+  meili_data_local:

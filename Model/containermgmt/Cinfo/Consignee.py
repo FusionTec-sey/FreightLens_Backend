@@ -9,7 +9,9 @@ class Consignee(AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     consignee_id = Column(Integer, primary_key=True)
-    consignee_name = Column(String(45))
+    consignee_name = Column(String(100))
+    org_id = Column(Integer, nullable=True)
+    code = Column(String(20), nullable=True)
 
     # Optional reverse relation to BLs
     bill_of_landings = relationship("BillOfLanding", back_populates="consignee_rel")

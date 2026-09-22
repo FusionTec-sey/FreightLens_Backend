@@ -11,6 +11,11 @@ from .DefectReport import DefectReport, DefectItem, DefectImage
 from .OrderStatusHistory import OrderStatusHistory
 from .Notification import Notification
 from .OrderTemplate import OrderTemplate, OrderTemplateItem
+from .VendorQuote import VendorQuote
+from .VendorQuoteItem import VendorQuoteItem
+from .POItemHistory import POItemHistory
+from .POStageTransition import POStageTransition
+from .POVersionSnapshot import POVersionSnapshot
 
 __all__ = [
     "OrderStatus",
@@ -31,5 +36,10 @@ __all__ = [
     "OrderStatusHistory",
     "Notification",
     "OrderTemplate",
-    "OrderTemplateItem"
+    "OrderTemplateItem",
+    "VendorQuote",
+    "VendorQuoteItem",
+    "POItemHistory",
+    "POStageTransition",
+    "POVersionSnapshot"
 ]

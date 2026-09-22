@@ -5,6 +5,7 @@ from datetime import datetime
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -69,6 +70,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # ── Background scheduler ──────────────────────────────────────────────────────
 scheduler = create_scheduler()
 scheduler.start()
@@ -111,6 +114,10 @@ async def startup_event():
     ensure_logistics_tracking_schema()
     from Utils.migrate_order_templates import ensure_order_templates_schema
     ensure_order_templates_schema()
+    from Utils.migrate_po_lifecycle import ensure_po_lifecycle_schema
+    ensure_po_lifecycle_schema()
+    from Utils.migrate_master_data import ensure_master_data_schema
+    ensure_master_data_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -206,6 +213,7 @@ app.include_router(SettingRouter)
 app.include_router(OrganisationRouter)
 app.include_router(AdminRouter)
 app.include_router(OrderTemplateRouter, dependencies=[Depends(require_module("ORDERS"))])
+app.include_router(LifecycleRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(OrderRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(StoreRequestRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(PackingListRouter, dependencies=[Depends(require_module("ORDERS"))])
@@ -214,6 +222,9 @@ app.include_router(DefectRouter, dependencies=[Depends(require_module("ORDERS"))
 app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(NotificationRouter)
+from Routes.MasterData.MasterDataRouter import MasterDataRouter
+app.include_router(MasterDataRouter)
+app.include_router(BlobRouter)
 
 
 

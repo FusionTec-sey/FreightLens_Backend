@@ -6,6 +6,7 @@ from .ReceivingRouter import ReceivingRouter
 from .DefectRouter import DefectRouter
 from .DailyWorkRouter import DailyWorkRouter
 from .NotificationRouter import NotificationRouter
+from .LifecycleRouter import LifecycleRouter
 
 __all__ = [
     "OrderRouter",
@@ -15,5 +16,6 @@ __all__ = [
     "ReceivingRouter",
     "DefectRouter",
     "DailyWorkRouter",
-    "NotificationRouter"
+    "NotificationRouter",
+    "LifecycleRouter"
 ]

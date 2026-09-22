@@ -22,9 +22,18 @@ class CinfoAPI:
     
     @Cinfo.get("/suppliers")
     async def getsupplier(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        data = db.query(Supplier.supplier_id, Supplier.name).filter(Supplier.is_deleted != True).all()
-    
-        return json.dumps({ "data": [list(row) for row in data]})
+        suppliers = db.query(Supplier).filter(Supplier.is_deleted != True).order_by(Supplier.name.asc()).all()
+        formatted = [
+            [
+                s.supplier_id,
+                s.name,
+                float(s.variance_threshold_pct) if s.variance_threshold_pct is not None else 2.0,
+                s.default_currency or "USD",
+                s.payment_term.name if s.payment_term else ""
+            ]
+            for s in suppliers
+        ]
+        return json.dumps({"data": formatted})
     
     @Cinfo.get("/container-types")
     async def gettype(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -50,19 +59,19 @@ class CinfoAPI:
 
         org_name = org.name if org else ("noblecon" if org_id == 2 else ("sahajanand" if org_id == 3 else "sahaj"))
 
-        query = db.query(Consignee.consignee_id, Consignee.consignee_name).filter(
+        query = db.query(
+            Consignee.consignee_id,
+            Consignee.consignee_name,
+            Consignee.org_id,
+            Consignee.code
+        ).filter(
             Consignee.is_deleted != True,
             Consignee.consignee_name != None,
             Consignee.consignee_name != ""
         )
 
-        if not is_root:
-            if "noble" in org_name.lower():
-                query = query.filter(Consignee.consignee_name.ilike("%NOBLE%"))
-            elif "sahajanand" in org_name.lower():
-                query = query.filter(Consignee.consignee_name.ilike("%SAHAJANAND%"))
-            else:
-                query = query.filter(Consignee.consignee_name.ilike(f"%{org_name}%"))
+        if not is_root and org_id:
+            query = query.filter(Consignee.org_id == org_id)
 
         data = query.all()
         return json.dumps({"data": [list(row) for row in data]})
@@ -187,12 +196,21 @@ class CinfoAPI:
         if existing:
             raise HTTPException(status_code=400, detail="Supplier with this name already exists")
 
-        new_supplier = Supplier(name=name)
+        var_thresh = supplier_data.get("variance_threshold_pct")
+        if var_thresh is not None:
+            try:
+                var_thresh = float(var_thresh)
+            except (ValueError, TypeError):
+                var_thresh = 2.0
+        else:
+            var_thresh = 2.0
+
+        new_supplier = Supplier(name=name, variance_threshold_pct=var_thresh)
         db.add(new_supplier)
         db.commit()
         db.refresh(new_supplier)
 
-        return {"id": new_supplier.supplier_id, "name": new_supplier.name}
+        return {"id": new_supplier.supplier_id, "name": new_supplier.name, "variance_threshold_pct": float(new_supplier.variance_threshold_pct or 2.0)}
     
     @Cinfo.post("/unload-venues")
     @Cinfo.post("/setUnloadVenue", deprecated=True)
@@ -371,9 +389,14 @@ class CinfoAPI:
             existing = db.query(Supplier).filter(Supplier.name.ilike(new_name), Supplier.supplier_id != item_id, Supplier.is_deleted != True).first()
             if existing: raise HTTPException(status_code=400, detail="Supplier with this name already exists")
             item.name = new_name
+        if "variance_threshold_pct" in data:
+            try:
+                item.variance_threshold_pct = float(data["variance_threshold_pct"])
+            except (ValueError, TypeError):
+                pass
         item.updated_by = current_user.id
         db.commit()
-        return {"id": item.supplier_id, "name": item.name}
+        return {"id": item.supplier_id, "name": item.name, "variance_threshold_pct": float(item.variance_threshold_pct or 2.0)}
 
     @Cinfo.delete("/suppliers/{item_id}")
     async def delete_supplier(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):

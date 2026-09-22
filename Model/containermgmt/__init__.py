@@ -32,6 +32,12 @@ from .Orders.OrderStatusHistory import OrderStatusHistory
 from .Orders.Notification import Notification
 from .Orders.Product import Product, ProductCategory, ProductLink
 from .Orders.OrderTemplate import OrderTemplate, OrderTemplateItem
+from .Orders.VendorQuote import VendorQuote
+from .Orders.VendorQuoteItem import VendorQuoteItem
+from .Orders.POItemHistory import POItemHistory
+from .Orders.POStageTransition import POStageTransition
+from .MasterData.Currency import Currency, CurrencyExchangeRate
+from .MasterData.PaymentTerm import PaymentTerm
 
 __all__ = [
     "ContainerDetails", "ContainerDocs", "DocType", "BillOfLanding",
@@ -43,6 +49,7 @@ __all__ = [
     "OrderPayment", "OrderShipment", "OrderPackingList", "PackingListItem",
     "GoodsReceipt", "ReceiptItem", "DefectReport", "DefectItem", "DefectImage",
     "OrderStatusHistory", "Notification", "Product", "ProductCategory", "ProductLink",
-    "OrderTemplate", "OrderTemplateItem"
+    "OrderTemplate", "OrderTemplateItem",
+    "VendorQuote", "VendorQuoteItem", "POItemHistory", "POStageTransition"
 ]
 

@@ -11,6 +11,12 @@ class PurchaseOrder(OrgMixin, AuditMixin, Base):
     po_number = Column(String(100), nullable=False, unique=True, index=True)
     po_nce = Column(String(100), nullable=True)  # PO Reference (Internal Accounts Reference / NPO)
     
+    # Document classification & lineage: RFQ (pre-award) vs PO (binding order)
+    doc_type = Column(String(20), nullable=False, default="PO", index=True)  # "RFQ" or "PO"
+    parent_rfq_id = Column(Integer, ForeignKey("containermgmt.purchase_orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    origin_rfq_number = Column(String(100), nullable=True)  # e.g. "RFQ-2026-0042"
+    split_index = Column(String(10), nullable=True)  # "A", "B", "C", etc.
+
     # Store request link
     request_id = Column(Integer, ForeignKey("containermgmt.store_requests.id"), nullable=True, index=True)
     
@@ -23,6 +29,14 @@ class PurchaseOrder(OrgMixin, AuditMixin, Base):
     status_id = Column(Integer, ForeignKey("containermgmt.order_status.id"), nullable=True)
     status = Column(String(50), default="DRAFT", index=True)  # DRAFT, SUBMITTED, SOURCING, ORDERED, etc.
     status_label = Column(String(100), default="Draft")
+
+    # ── Procurement Lifecycle Stage (7-stage pipeline) ───────────────────
+    # DRAFT -> CONFIRMED -> RFQ_SENT -> QUOTE_RECEIVED -> QUOTE_APPROVED -> PO_ISSUED -> PROFORMA
+    lifecycle_stage = Column(String(30), nullable=False, default="DRAFT", index=True)
+    stage_version = Column(Integer, nullable=False, default=1) # Version within current stage (e.g., Draft v1, Draft v2, Confirmed v1)
+    lifecycle_version = Column(Integer, nullable=False, default=1) # Sequential concurrency counter
+    lifecycle_locked = Column(Boolean, nullable=False, default=False)
+    selected_quote_id = Column(Integer, ForeignKey("containermgmt.vendor_quotes.id", ondelete="SET NULL"), nullable=True)
 
     # Distinct Tracking Dimensions (preventing single-remark overload)
     payment_status = Column(String(50), default="NONE")       # NONE, ADVANCE_PAID, PART_PAID, FULLY_PAID
@@ -66,3 +80,10 @@ class PurchaseOrder(OrgMixin, AuditMixin, Base):
     receipts = relationship("GoodsReceipt", back_populates="purchase_order")
     defects = relationship("DefectReport", back_populates="purchase_order")
     status_history = relationship("OrderStatusHistory", back_populates="purchase_order", cascade="all, delete-orphan")
+    
+    quotes = relationship("VendorQuote", back_populates="purchase_order", foreign_keys="VendorQuote.po_id", cascade="all, delete-orphan")
+    selected_quote = relationship("VendorQuote", foreign_keys=[selected_quote_id], lazy="joined", post_update=True)
+    stage_transitions = relationship("POStageTransition", back_populates="purchase_order", cascade="all, delete-orphan")
+    version_snapshots = relationship("POVersionSnapshot", back_populates="purchase_order", cascade="all, delete-orphan", order_by="POVersionSnapshot.id.desc()")
+    
+    parent_rfq = relationship("PurchaseOrder", remote_side=[id], foreign_keys=[parent_rfq_id], backref="child_pos")

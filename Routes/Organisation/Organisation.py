@@ -230,3 +230,78 @@ async def update_org_modules(
         "modules": org.modules,
         "plan": org.plan
     }
+
+@AdminRouter.get("/settings")
+async def get_admin_settings(
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    orgs = db.query(Organisation).order_by(Organisation.id.asc()).all()
+    companies = []
+    for o in orgs:
+        code = getattr(o, "code", None) or f"ORG{o.id}"
+        companies.append({
+            "id": o.id,
+            "code": code,
+            "name": o.display_name or o.name,
+            "request_prefix": f"REQ-{code}",
+            "po_prefix": f"PO-{code}",
+            "active": o.is_active,
+        })
+
+    return {
+        "groups": [{"id": 1, "name": "Sahaj Group of Companies"}],
+        "companies": companies,
+    }
+
+@AdminRouter.patch("/companies/{company_id}")
+async def update_company_settings(
+    company_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    if not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Only Root administrators can update company settings.")
+
+    org = db.query(Organisation).filter_by(id=company_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    if "name" in payload and payload["name"]:
+        new_name = payload["name"].strip()
+        org.display_name = new_name
+        # Keep Consignee in sync
+        from Model.containermgmt.Cinfo.Consignee import Consignee
+        consignee = db.query(Consignee).filter_by(org_id=company_id).first()
+        if consignee:
+            consignee.consignee_name = new_name
+
+    if "active" in payload and payload["active"] is not None:
+        org.is_active = bool(payload["active"])
+
+    db.commit()
+    db.refresh(org)
+
+    code = getattr(org, "code", None) or f"ORG{org.id}"
+    return {
+        "id": org.id,
+        "code": code,
+        "name": org.display_name or org.name,
+        "request_prefix": payload.get("request_prefix", f"REQ-{code}"),
+        "po_prefix": payload.get("po_prefix", f"PO-{code}"),
+        "active": org.is_active,
+    }
+
+@AdminRouter.patch("/groups/{group_id}")
+async def update_company_group(
+    group_id: int,
+    payload: dict = Body(...),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    if not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Only Root administrators can update group settings.")
+    return {
+        "id": group_id,
+        "name": payload.get("name", "Sahaj Group of Companies"),
+    }

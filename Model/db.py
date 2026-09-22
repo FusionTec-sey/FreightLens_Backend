@@ -14,8 +14,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # or your actual DB URL
 
 engine = create_engine(
     DATABASE_URL,
+    pool_size=20,         # 20 persistent connections in pool (up from default 5)
+    max_overflow=20,      # Up to 20 additional burst connections (up from default 10)
+    pool_timeout=30,      # Wait up to 30s before timing out
     pool_pre_ping=True,   # Test connection health before use (prevents stale connection errors)
-    pool_recycle=1800,    # Recycle connections every 30 min (before MySQL drops them at 8h)
+    pool_recycle=1800,    # Recycle connections every 30 min
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

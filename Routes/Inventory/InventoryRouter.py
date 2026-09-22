@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Optional, List, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
@@ -12,7 +12,10 @@ from Model.containermgmt.Orders.POItem import POItem
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import is_financial_user, has_permission
 from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.blob_storage import blob_storage
+from Services.search_service import sync_product_document, remove_product_document, search_products
 
 logger = logging.getLogger("containerMgmt.inventory")
 
@@ -75,6 +78,9 @@ class ProductCreateSchema(BaseModel):
     expiry_days: Optional[int] = None
     is_returnable: Optional[bool] = True
     warranty_days: Optional[int] = None
+    images: Optional[List[Any]] = None
+    videos: Optional[List[Any]] = None
+    attachment: Optional[List[Any]] = None
 
 class ProductUpdateSchema(BaseModel):
     code: Optional[str] = None
@@ -116,6 +122,9 @@ class ProductUpdateSchema(BaseModel):
     expiry_days: Optional[int] = None
     is_returnable: Optional[bool] = None
     warranty_days: Optional[int] = None
+    images: Optional[List[Any]] = None
+    videos: Optional[List[Any]] = None
+    attachment: Optional[List[Any]] = None
 
 class ProductLinkSchema(BaseModel):
     child_product_id: int
@@ -137,10 +146,7 @@ class ProductLinkUpdateSchema(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def is_accounts_user(user: User, org_context: OrgContext) -> bool:
-    if org_context.is_root:
-        return True
-    user_roles = [r.name for r in getattr(user, "roles", [])]
-    return any(r in ["Administrator", "Admin", "Account", "Accounts", "Accounts_Finance", "Finance"] for r in user_roles)
+    return is_financial_user(user, org_context)
 
 
 def _get_descendant_category_ids(db: Session, category_id: int) -> List[int]:
@@ -418,7 +424,7 @@ def product_to_dict(p: Product, is_accounts: bool = True, db: Session = None, in
         # Supplier
         "default_supplier_id": p.default_supplier_id, "supplier_name": supplier_name,
         # Media
-        "images": p.images or [], "attachment": p.attachment or [],
+        "images": p.images or [], "videos": getattr(p, "videos", None) or [], "attachment": p.attachment or [],
         # Flags
         "is_consumable": p.is_consumable, "is_hazardous": p.is_hazardous,
         "is_perishable": p.is_perishable, "expiry_days": p.expiry_days,
@@ -472,12 +478,50 @@ def get_inventory_stats(
 def lookup_products(
     q: Optional[str] = Query(None),
     supplier_id: Optional[int] = Query(None),
+    doc_type: Optional[str] = Query(None),
+    is_rfq: Optional[bool] = Query(False),
     limit: int = Query(50, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context)
 ):
-    """Autocomplete for PO / form creation. Returns active products only."""
+    """Autocomplete for PO / form creation powered by Meilisearch with Postgres fallback."""
+    is_acc = is_accounts_user(current_user, org_context)
+    hide_fin = bool(is_rfq or (doc_type and doc_type.upper() == "RFQ") or not is_acc)
+    hide_supplier = bool(is_rfq or (doc_type and doc_type.upper() == "RFQ"))
+
+    # Try fast typo-tolerant Meilisearch first
+    filters = ["status = 'active'", "is_deleted = false"]
+    if org_context and getattr(org_context, "org_id", None):
+        filters.append(f"org_id = {org_context.org_id}")
+    if supplier_id:
+        filters.append(f"default_supplier_id = {supplier_id}")
+
+    try:
+        meili_hits = search_products(q or "", filters=filters, limit=limit)
+        if meili_hits:
+            return [{
+                "id": p["id"],
+                "code": p.get("code") or "",
+                "sku": p.get("sku") or "",
+                "name": p.get("name") or "",
+                "description": p.get("description") or "",
+                "description_quick": p.get("description_quick") or "",
+                "unit": p.get("unit") or "PCS",
+                "brand": p.get("brand") if not hide_supplier else None,
+                "category_id": p.get("category_id"),
+                "category_name": p.get("category_name"),
+                "default_supplier_id": None if hide_supplier else p.get("default_supplier_id"),
+                "supplier_name": None if hide_supplier else p.get("supplier_name"),
+                "current_stock": float(p.get("current_stock") or 0.0),
+                "min_stock_quantity": float(p.get("min_stock_quantity") or 0.0),
+                "unit_cost": None if hide_fin else (float(p["unit_cost"]) if p.get("unit_cost") is not None else None),
+                "currency": p.get("currency") or "USD"
+            } for p in meili_hits]
+    except Exception as e:
+        logger.warning("Meilisearch lookup failed, falling back to PostgreSQL: %s", e)
+
+    # PostgreSQL fallback
     query = (
         db.query(Product)
         .options(joinedload(Product.category), joinedload(Product.supplier))
@@ -494,7 +538,7 @@ def lookup_products(
     if supplier_id:
         query = query.filter(Product.default_supplier_id == supplier_id)
     prods = query.order_by(Product.name.asc()).limit(limit).all()
-    is_acc = is_accounts_user(current_user, org_context)
+
     return [{
         "id": p.id,
         "code": p.code,
@@ -503,14 +547,14 @@ def lookup_products(
         "description": p.description,
         "description_quick": p.description_quick,
         "unit": p.unit or "PCS",
-        "brand": p.brand,
+        "brand": p.brand if not hide_supplier else None,
         "category_id": p.category_id,
         "category_name": p.category.name if p.category else None,
-        "default_supplier_id": p.default_supplier_id,
-        "supplier_name": p.supplier.name if p.supplier else None,
+        "default_supplier_id": None if hide_supplier else p.default_supplier_id,
+        "supplier_name": None if hide_supplier else (p.supplier.name if p.supplier else None),
         "current_stock": float(p.current_stock or 0.0),
         "min_stock_quantity": float(p.min_stock_quantity or 0.0),
-        "unit_cost": float(p.unit_cost) if p.unit_cost is not None and is_acc else None,
+        "unit_cost": None if hide_fin else (float(p.unit_cost) if p.unit_cost is not None else None),
         "currency": p.currency or "USD"
     } for p in prods]
 
@@ -583,6 +627,7 @@ def get_product_detail(
 @InventoryRouter.post("/products")
 def create_product(
     payload: ProductCreateSchema,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context)
@@ -607,7 +652,7 @@ def create_product(
         brand=payload.brand.strip() if payload.brand else None,
         model_number=payload.model_number,
         series=payload.series,
-        country_of_origin=payload.country_of_origin.upper() if payload.country_of_origin else None,
+        country_of_origin=payload.country_of_origin.strip() if payload.country_of_origin else None,
         barcode=payload.barcode,
         hs_code=payload.hs_code,
         duty_rate=payload.duty_rate,
@@ -627,6 +672,9 @@ def create_product(
         min_quantity_order=payload.min_quantity_order,
         lead_time_days=payload.lead_time_days,
         default_supplier_id=payload.default_supplier_id,
+        images=payload.images or [],
+        videos=payload.videos or [],
+        attachment=payload.attachment or [],
         is_consumable=payload.is_consumable or False,
         is_hazardous=payload.is_hazardous or False,
         is_perishable=payload.is_perishable or False,
@@ -638,6 +686,7 @@ def create_product(
     db.add(new_prod)
     db.commit()
     db.refresh(new_prod)
+    background_tasks.add_task(sync_product_document, new_prod)
     is_acc = is_accounts_user(current_user, org_context)
     return product_to_dict(new_prod, is_accounts=is_acc, db=db)
 
@@ -646,6 +695,7 @@ def create_product(
 def update_product(
     product_id: int,
     payload: ProductUpdateSchema,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context)
@@ -666,6 +716,7 @@ def update_product(
         "current_stock", "min_stock_quantity", "max_stock_quantity",
         "order_threshold_qty", "threshold_qty", "min_quantity_order", "lead_time_days",
         "default_supplier_id",
+        "images", "videos", "attachment",
         "is_consumable", "is_hazardous", "is_perishable", "expiry_days",
         "is_returnable", "warranty_days"
     ]
@@ -680,13 +731,57 @@ def update_product(
     prod.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(prod)
+    background_tasks.add_task(sync_product_document, prod)
     is_acc = is_accounts_user(current_user, org_context)
     return product_to_dict(prod, is_accounts=is_acc, db=db)
+
+
+@InventoryRouter.post("/products/{product_id}/media")
+def upload_product_media(
+    product_id: int,
+    file: UploadFile = File(...),
+    media_type: str = Query("image", description="'image' or 'video'"),
+    title: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    prod = apply_org_filter(
+        db.query(Product).filter(Product.id == product_id, Product.is_deleted == False),
+        Product, org_context
+    ).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    folder = "products/videos" if media_type == "video" else "products/images"
+    key = blob_storage.upload_file(file_obj=file, folder=folder, original_filename=file.filename)
+
+    media_obj = {
+        "id": f"media-{int(datetime.utcnow().timestamp() * 1000)}",
+        "file_name": file.filename,
+        "file_url": key,
+        "media_type": media_type,
+        "title": title or file.filename,
+        "uploaded_at": datetime.utcnow().isoformat()
+    }
+
+    if media_type == "video":
+        cur_videos = list(prod.videos or [])
+        cur_videos.append(media_obj)
+        prod.videos = cur_videos
+    else:
+        cur_images = list(prod.images or [])
+        cur_images.append(media_obj)
+        prod.images = cur_images
+
+    db.commit()
+    return {"success": True, "media": media_obj, "message": f"{media_type.capitalize()} uploaded successfully."}
 
 
 @InventoryRouter.delete("/products/{product_id}")
 def delete_product(
     product_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context)
@@ -701,6 +796,7 @@ def delete_product(
     prod.updated_by = current_user.id
     prod.updated_at = datetime.utcnow()
     db.commit()
+    background_tasks.add_task(remove_product_document, product_id)
     return {"message": "Product deleted successfully"}
 
 

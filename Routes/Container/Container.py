@@ -741,7 +741,7 @@ class ContainerAPI:
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=f"Invalid date format for {field}: {e}")
 
-        model_columns = ContainerDetails.__table__.columns.keys()
+        model_columns = list(ContainerDetails.__table__.columns.keys())
         model_columns[-2] = "arrival_on_port"
             
         cleaned_fields = {
@@ -983,11 +983,11 @@ class ContainerAPI:
     
     @ContainerRouter.get("/damage-reports")
     async def get_ContainerReports( 
-                                    report_id: int = Form(None),
+                                    report_id: Optional[int] = Query(None),
                                     offset: int = Query(0, ge=0),
                                     limit: int = Query(500, le=1000),
                                     db: Session = Depends(get_db), 
-                                #    current_user: dict = Depends(get_current_user)
+                                    current_user: dict = Depends(get_current_user)
                                    ):
         base_query = ( 
             db.query(
@@ -1322,11 +1322,11 @@ class ContainerAPI:
         })
     
     @ContainerRouter.get("/arrived")
-    def get_arrived_containers(self,
-        
+    def get_arrived_containers(
+        self,
         db: Session = Depends(get_db),
-       
-        ):
+        current_user: dict = Depends(get_current_user)
+    ):
         containers = (
             db.query(ContainerDetails, UnloadVenue.venue.label("venue"), BillOfLanding.ArrivalDate.label("Arrival_Date"))
             .outerjoin(UnloadVenue, ContainerDetails.emptied_at == UnloadVenue.venue_id)
@@ -1346,11 +1346,11 @@ class ContainerAPI:
         return result
 
     @ContainerRouter.get("/toPickup")
-    def get_toPickup_containers(self, 
-        
+    def get_toPickup_containers(
+        self, 
         db: Session = Depends(get_db),
-       
-        ):
+        current_user: dict = Depends(get_current_user)
+    ):
         containers = (
             db.query(ContainerDetails, UnloadVenue.venue)
             .outerjoin(UnloadVenue, ContainerDetails.emptied_at == UnloadVenue.venue_id)

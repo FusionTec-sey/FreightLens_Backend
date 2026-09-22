@@ -10,6 +10,7 @@ from Model.containermgmt.Orders.Product import Product
 from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import is_financial_user, has_permission
 from Utils.org_filter import OrgContext, apply_org_filter
 
 logger = logging.getLogger("containerMgmt.orders.templates")
@@ -17,12 +18,9 @@ logger = logging.getLogger("containerMgmt.orders.templates")
 OrderTemplateRouter = APIRouter(prefix="/orders/templates", tags=["Order Templates"])
 
 def is_accounts_user(user: User, org_context: OrgContext) -> bool:
-    if org_context.is_root:
-        return True
-    user_roles = [r.name for r in getattr(user, "roles", [])]
-    return any(r in ["Administrator", "Admin", "Account", "Accounts", "Accounts_Finance", "Finance"] for r in user_roles)
+    return is_financial_user(user, org_context)
 
-def template_to_dict(template: OrderTemplate, is_accounts: bool = True) -> dict:
+def template_to_dict(template: OrderTemplate, is_accounts: bool = True, can_view_supplier: bool = True) -> dict:
     supplier_name = template.company
     if template.supplier_rel and template.supplier_rel.name:
         supplier_name = template.supplier_rel.name
@@ -51,8 +49,8 @@ def template_to_dict(template: OrderTemplate, is_accounts: bool = True) -> dict:
         "name": template.name,
         "description": template.description,
         "tags": template.tags or [],
-        "supplier_id": template.supplier_id,
-        "company": supplier_name,
+        "supplier_id": template.supplier_id if can_view_supplier else None,
+        "company": supplier_name if can_view_supplier else None,
         "freight_type": template.freight_type or "Sea Freight",
         "notes": template.notes,
         "visibility": template.visibility or "org",
@@ -69,11 +67,18 @@ async def list_templates(
     search: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
     supplier_id: Optional[int] = Query(None),
+    for_sourcing: Optional[bool] = Query(False),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    if not (has_permission(current_user, "View_OrderTemplate") or has_permission(current_user, "View_Order") or is_accounts):
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing View_OrderTemplate permission")
+
+    has_supplier_perm = has_permission(current_user, "View_Supplier") or has_permission(current_user, "Supplier")
+    can_view_supplier = (has_supplier_perm or is_accounts) and not for_sourcing
+
     query = (
         db.query(OrderTemplate)
         .options(
@@ -83,13 +88,45 @@ async def list_templates(
         .filter(OrderTemplate.is_deleted == False)
     )
 
-    query = apply_org_filter(query, OrderTemplate, org_context)
+    # Multi-tenant and Blueprint Sharing Filter:
+    # 1. Root Org users can view templates in their allowed_org_ids or selected_org_id, plus global/master blueprints.
+    # 2. Sub-Org users (e.g. Noblecon) can view templates belonging to their own org,
+    #    PLUS standard master blueprints from Root Org (org_id=1) that are not private,
+    #    or global templates (visibility='global' or org_id IS NULL).
+    if org_context.is_root:
+        if org_context.selected_org_id:
+            query = query.filter(
+                or_(
+                    OrderTemplate.org_id == org_context.selected_org_id,
+                    OrderTemplate.visibility == "global"
+                )
+            )
+        else:
+            query = query.filter(
+                or_(
+                    OrderTemplate.org_id.in_(org_context.allowed_org_ids),
+                    OrderTemplate.org_id.is_(None),
+                    OrderTemplate.visibility == "global"
+                )
+            )
+    else:
+        query = query.filter(
+            or_(
+                OrderTemplate.org_id.in_(org_context.allowed_org_ids),
+                and_(
+                    OrderTemplate.org_id == 1,
+                    OrderTemplate.visibility.in_(["org", "global"])
+                ),
+                OrderTemplate.org_id.is_(None),
+                OrderTemplate.visibility == "global"
+            )
+        )
 
-    # Visibility filter: org-wide or user's own private templates
+    # Visibility filter: org-wide/global or user's own private templates
     if not is_accounts:
         query = query.filter(
             or_(
-                OrderTemplate.visibility == "org",
+                OrderTemplate.visibility.in_(["org", "global"]),
                 OrderTemplate.created_by == current_user.id
             )
         )
@@ -114,7 +151,7 @@ async def list_templates(
     # Filter by tag in python if requested (since tags is stored in JSON column)
     results = []
     for t in templates:
-        t_dict = template_to_dict(t, is_accounts)
+        t_dict = template_to_dict(t, is_accounts, can_view_supplier)
         if tag:
             t_tags = [str(x).strip().lower() for x in (t_dict.get("tags") or [])]
             if tag.strip().lower() not in t_tags:
@@ -126,11 +163,18 @@ async def list_templates(
 @OrderTemplateRouter.get("/{template_id}")
 async def get_template(
     template_id: int,
+    for_sourcing: Optional[bool] = Query(False),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    if not (has_permission(current_user, "View_OrderTemplate") or has_permission(current_user, "View_Order") or is_accounts):
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing View_OrderTemplate permission")
+
+    has_supplier_perm = has_permission(current_user, "View_Supplier") or has_permission(current_user, "Supplier")
+    can_view_supplier = (has_supplier_perm or is_accounts) and not for_sourcing
+
     template = (
         db.query(OrderTemplate)
         .options(
@@ -146,7 +190,7 @@ async def get_template(
     if template.visibility == "private" and template.created_by != current_user.id and not is_accounts:
         raise HTTPException(status_code=403, detail="Access denied to private template")
 
-    return template_to_dict(template, is_accounts)
+    return template_to_dict(template, is_accounts, can_view_supplier)
 
 @OrderTemplateRouter.post("")
 @OrderTemplateRouter.post("/")
@@ -157,6 +201,9 @@ async def create_template(
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    if not (has_permission(current_user, "Add_OrderTemplate") or has_permission(current_user, "Add_Order") or is_accounts):
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing Add_OrderTemplate permission")
+
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=422, detail="Template name is required")
@@ -219,6 +266,9 @@ async def update_template(
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    if not (has_permission(current_user, "Edit_OrderTemplate") or has_permission(current_user, "Edit_Order") or is_accounts):
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing Edit_OrderTemplate permission")
+
     template = db.query(OrderTemplate).filter(
         OrderTemplate.id == template_id,
         OrderTemplate.is_deleted == False
@@ -290,6 +340,9 @@ async def delete_template(
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    if not (has_permission(current_user, "Delete_OrderTemplate") or has_permission(current_user, "Delete_Order") or is_accounts):
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing Delete_OrderTemplate permission")
+
     template = db.query(OrderTemplate).filter(
         OrderTemplate.id == template_id,
         OrderTemplate.is_deleted == False

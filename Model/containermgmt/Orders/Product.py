@@ -51,7 +51,7 @@ class Product(AuditMixin, Base):
     brand = Column(String(100), nullable=True)
     model_number = Column(String(100), nullable=True)
     series = Column(String(100), nullable=True)
-    country_of_origin = Column(String(2), nullable=True)    # ISO-2 e.g. 'CN', 'IN'
+    country_of_origin = Column(String(100), nullable=True)    # ISO code or Country Name e.g. 'CN', 'China'
     barcode = Column(String(100), nullable=True)
     hs_code = Column(String(20), nullable=True)
     duty_rate = Column(Numeric(5, 2), nullable=True)         # Import duty %
@@ -88,6 +88,7 @@ class Product(AuditMixin, Base):
 
     # ── Media & Documentation ──────────────────────────────────────────────────
     images = Column(JSON, nullable=True)      # [{id, file_name, file_url, file_type, file_size}]
+    videos = Column(JSON, nullable=True)      # [{id, file_name, file_url, file_type, file_size, thumbnail_url}]
     attachment = Column(JSON, nullable=True)  # [{id, file_name, file_url, file_type, file_size}]
 
     # ── Flags ──────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ from fastapi import Query, HTTPException
 from ShippingProvider.Mearsk.mearsk_api import MaerskAPI
 from ShippingProvider.CMACGM.camcgm_api import CMACGMTrackTrace
 from ShippingProvider import track_and_trace
-# from providers.uafl import UAFLProvider
+from auth.config import settings
 
 TrackingRouter = InferringRouter()
 
@@ -19,11 +19,11 @@ class TrackingAPI:
     def __init__(self):
         self.providers = [
             
-            MaerskAPI() , 
+            MaerskAPI(), 
             CMACGMTrackTrace(
-                api_key="X2wG7Gc7In0roXj2u1OG2qp4yMIhHwOm",
-                client_id="beapp-fusiontech",
-                client_secret="T3FefGXrLjQBWCQT98D1VsbKXb1aKGgOWamRUSGWkDmvlNzR1ZsLv0El8XF7RDFS"
+                api_key=settings.CMA_CGM_API_KEY,
+                client_id=settings.CMA_CGM_CLIENT_ID,
+                client_secret=settings.CMA_CGM_SECRET
             )] #UAFLProvider()]  # You can dynamically load these too
 
     # @TrackingRouter.get("/track/bl")

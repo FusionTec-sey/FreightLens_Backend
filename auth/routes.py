@@ -34,7 +34,7 @@ def _hash_token(raw_token: str) -> str:
 from limiter import limiter
 
 @router.post("/token")
-@limiter.limit("5/minute")
+@limiter.limit("60/minute")
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),

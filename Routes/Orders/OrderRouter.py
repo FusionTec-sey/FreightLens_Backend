@@ -1,10 +1,10 @@
 import logging
 import io
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_, and_, desc
 
 from Model.db import get_db
@@ -23,6 +23,12 @@ from Model.containermgmt.Container.BillOfLanding import BillOfLanding
 from Model.containermgmt.Container.ContainerDetails import ContainerDetails
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import (
+    is_financial_user,
+    has_permission,
+    require_permission,
+    require_financial_access,
+)
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 from Utils.reportGenerator import generate_defect_report_pdf
@@ -32,15 +38,25 @@ logger = logging.getLogger("containerMgmt.orders")
 OrderRouter = APIRouter(prefix="/orders", tags=["Purchase Orders"])
 
 def is_accounts_user(user: User, org_context: OrgContext) -> bool:
-    if org_context.is_root:
-        return True
-    user_roles = [r.name for r in getattr(user, "roles", [])]
-    return any(r in ["Administrator", "Admin", "Account", "Accounts", "Accounts_Finance", "Finance"] for r in user_roles)
+    return is_financial_user(user, org_context)
 
 def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
-    supplier_name = order.company if is_accounts else "Authorized Supplier"
-    if is_accounts and order.supplier_rel and order.supplier_rel.name:
-        supplier_name = order.supplier_rel.name
+    doc_type = (getattr(order, "doc_type", "PO") or "PO").upper()
+    is_rfq = (doc_type == "RFQ")
+
+    # Authoritative financial authorization:
+    # 1. RFQ documents NEVER expose purchasing prices, line totals, advance/balance, or payment records to ANY role.
+    # 2. Purchase Orders (PO) only expose financial figures to authorized accounts/financial users.
+    can_view_financials = is_accounts and (not is_rfq)
+
+    is_awarded = (order.lifecycle_stage or "").upper() in ["QUOTE_APPROVED", "PO_ISSUED", "ORDERED", "RECEIVED", "COMPLETED"]
+    supplier_name = None
+    if not is_rfq:
+        supplier_name = order.company if is_accounts else "Authorized Supplier"
+        if is_accounts and order.supplier_rel and order.supplier_rel.name:
+            supplier_name = order.supplier_rel.name
+    elif is_awarded:
+        supplier_name = order.company or (order.supplier_rel.name if order.supplier_rel else "Awarded Supplier")
 
     status_name = order.status_label or order.status
     status_progress = 50
@@ -53,13 +69,26 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
         status_color = order.order_status_rel.color
         badge_color = order.order_status_rel.badge_color or badge_color
 
+    # Calculate authoritative financial values
+    active_payments = [pm for pm in (order.payments or []) if not pm.is_deleted]
+    active_payments_sum = sum(float(pm.amount or 0) for pm in active_payments)
+
+    eff_advance = float(order.advance_amount) if order.advance_amount is not None else (active_payments_sum if active_payments else 0.0)
+    if active_payments and (eff_advance == 0 or eff_advance is None):
+        eff_advance = active_payments_sum
+
+    eff_total = float(order.total_amount) if order.total_amount is not None else None
+    eff_balance = float(order.balance_amount) if order.balance_amount is not None else (
+        max(0.0, eff_total - eff_advance) if eff_total is not None else None
+    )
+
     res = {
         "id": order.id,
         "po_number": order.po_number,
-        "po_nce": order.po_nce if is_accounts else None,
+        "po_nce": order.po_nce if can_view_financials else None,
         "request_id": order.request_id,
         "request_number": order.store_request.request_number if order.store_request else None,
-        "supplier": order.supplier_id if is_accounts else None,
+        "supplier": order.supplier_id if (can_view_financials or (is_rfq and is_awarded)) else None,
         "company": supplier_name,
         "goods_description": order.goods_description,
         "material_ids": order.material_ids or [],
@@ -73,16 +102,43 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
         "status_color": status_color,
         "badge_color": badge_color,
         
+        # Procurement Lifecycle Stage (7-stage pipeline)
+        "lifecycle_stage": order.lifecycle_stage or "DRAFT",
+        "lifecycle_version": order.lifecycle_version or 1,
+        "stage_version": getattr(order, "stage_version", 1) or 1,
+        "lifecycle_locked": bool(order.lifecycle_locked),
+        "selected_quote_id": order.selected_quote_id if can_view_financials else None,
+        
         "payment_status": order.payment_status or "NONE",
         "production_status": order.production_status or "NOT_STARTED",
         "shipment_status": order.shipment_status or "NOT_SHIPPED",
         "receipt_status": order.receipt_status or "PENDING",
 
-        # Financials (Accounts only)
-        "total_amount": float(order.total_amount) if order.total_amount and is_accounts else None,
-        "advance_amount": float(order.advance_amount) if order.advance_amount and is_accounts else None,
-        "balance_amount": float(order.balance_amount) if order.balance_amount and is_accounts else None,
+        # Financials (Accounts on PO only)
+        "total_amount": eff_total if (eff_total is not None and can_view_financials) else None,
+        "advance_amount": eff_advance if can_view_financials else None,
+        "balance_amount": eff_balance if can_view_financials else None,
         "currency": order.currency or "USD",
+
+        # Document classification & lineage: RFQ vs PO
+        "doc_type": doc_type,
+        "parent_rfq_id": getattr(order, "parent_rfq_id", None),
+        "origin_rfq_number": getattr(order, "origin_rfq_number", None),
+        "split_index": getattr(order, "split_index", None),
+        "child_pos": [
+            {
+                "id": c.id,
+                "po_number": c.po_number,
+                "supplier_id": c.supplier_id if is_accounts else None,
+                "company": (c.company or (c.supplier_rel.name if c.supplier_rel else "Supplier")) if is_accounts else "Authorized Supplier",
+                "total_amount": float(c.total_amount or 0) if is_accounts else None,
+                "status": c.status,
+                "lifecycle_stage": c.lifecycle_stage,
+                "currency": c.currency or "USD",
+                "items_count": len([i for i in (c.items or []) if not i.is_deleted])
+            }
+            for c in (order.child_pos or []) if not c.is_deleted
+        ] if hasattr(order, "child_pos") and order.child_pos else [],
 
         # Legacy fields
         "sheet_type": order.sheet_type,
@@ -95,14 +151,14 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
         "quote_sent_date": order.quote_sent_date.isoformat() if order.quote_sent_date else None,
         "quote_received_date": order.quote_received_date.isoformat() if order.quote_received_date else None,
         "pi_confirmed_date": order.pi_confirmed_date.isoformat() if order.pi_confirmed_date else None,
-        "payment_date": order.payment_date.isoformat() if order.payment_date and is_accounts else None,
-        "balance_payment_date": order.balance_payment_date.isoformat() if order.balance_payment_date and is_accounts else None,
+        "payment_date": order.payment_date.isoformat() if order.payment_date and can_view_financials else None,
+        "balance_payment_date": order.balance_payment_date.isoformat() if order.balance_payment_date and can_view_financials else None,
         "eta_date": order.eta_date.isoformat() if order.eta_date else None,
         "freight_type": order.freight_type or "Sea Freight",
         "remark": order.remark,
         "created_at": order.created_at.isoformat() if order.created_at else None,
 
-        # Line items
+        # Line items - prices strictly sanitized for RFQ or non-financial PO
         "items": [
             {
                 "id": it.id,
@@ -113,8 +169,17 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
                 "quantity_packed": float(it.quantity_packed or 0),
                 "quantity_received": float(it.quantity_received or 0),
                 "unit": it.unit,
-                "unit_price": float(it.unit_price) if it.unit_price and is_accounts else None,
-                "total_price": float(it.total_price) if it.total_price and is_accounts else None,
+                "unit_price": float(it.unit_price) if it.unit_price and can_view_financials else None,
+                "total_price": float(it.total_price) if it.total_price and can_view_financials else None,
+                "draft_unit_price": float(it.draft_unit_price) if it.draft_unit_price and can_view_financials else None,
+                "approved_unit_price": float(it.approved_unit_price) if it.approved_unit_price and can_view_financials else None,
+                "po_unit_price": float(it.po_unit_price) if it.po_unit_price and can_view_financials else None,
+                "proforma_unit_price": float(it.proforma_unit_price) if it.proforma_unit_price and can_view_financials else None,
+                "source_rfq_item_id": getattr(it, "source_rfq_item_id", None),
+                "awarded_vendor_id": getattr(it, "awarded_vendor_id", None) if can_view_financials else None,
+                "awarded_quote_id": getattr(it, "awarded_quote_id", None) if can_view_financials else None,
+                "item_status": it.item_status or "ACTIVE",
+                "revision_count": len([h for h in (it.history or []) if not h.is_deleted]),
                 "notes": it.notes,
             }
             for it in (order.items or []) if not it.is_deleted
@@ -134,7 +199,7 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
             for sh in (order.shipments or []) if not sh.is_deleted
         ],
 
-        # Linked payments (Accounts only)
+        # Linked payments (Accounts on PO only)
         "payments": [
             {
                 "id": pm.id,
@@ -144,11 +209,13 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
                 "paid_date": pm.paid_date.isoformat() if pm.paid_date else None,
                 "due_date": pm.due_date.isoformat() if pm.due_date else None,
                 "status": pm.status,
+                "payment_method": pm.payment_method,
                 "reference_number": pm.reference_number,
                 "notes": pm.notes,
+                "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
             }
             for pm in (order.payments or []) if not pm.is_deleted
-        ] if is_accounts else [],
+        ] if can_view_financials else [],
 
         # Documents
         "documents": [
@@ -167,31 +234,55 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
 
 @OrderRouter.get("")
 @OrderRouter.get("/")
-async def list_orders(
+def list_orders(
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    lifecycle_stage: Optional[str] = Query(None),
+    doc_type: Optional[str] = Query(None),
     urgent_only: Optional[bool] = Query(False),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    can_view_rfq = has_permission(current_user, "View_RFQ") or is_accounts
+    can_view_po = has_permission(current_user, "View_Order") or is_accounts
+
+    if not can_view_rfq and not can_view_po:
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing order and RFQ view permissions.")
+
     query = (
         db.query(PurchaseOrder)
         .options(
             joinedload(PurchaseOrder.order_status_rel),
             joinedload(PurchaseOrder.supplier_rel),
             joinedload(PurchaseOrder.store_request),
-            joinedload(PurchaseOrder.items),
-            joinedload(PurchaseOrder.shipments).joinedload(OrderShipment.container),
-            joinedload(PurchaseOrder.shipments).joinedload(OrderShipment.bill_of_lading),
-            joinedload(PurchaseOrder.payments),
-            joinedload(PurchaseOrder.documents)
+            selectinload(PurchaseOrder.items),
+            selectinload(PurchaseOrder.child_pos),
+            selectinload(PurchaseOrder.shipments).joinedload(OrderShipment.container),
+            selectinload(PurchaseOrder.shipments).joinedload(OrderShipment.bill_of_lading),
+            selectinload(PurchaseOrder.payments),
+            selectinload(PurchaseOrder.documents)
         )
         .filter(PurchaseOrder.is_deleted == False)
     )
 
     query = apply_org_filter(query, PurchaseOrder, org_context)
+
+    # Permission constraints on doc_type
+    if can_view_rfq and not can_view_po:
+        query = query.filter(PurchaseOrder.doc_type == "RFQ")
+    elif can_view_po and not can_view_rfq:
+        query = query.filter(PurchaseOrder.doc_type == "PO")
+
+    # Document classification filter (RFQ vs PO)
+    if doc_type and doc_type != "ALL":
+        req_doc = doc_type.upper()
+        if req_doc == "RFQ" and not can_view_rfq:
+            return []
+        if req_doc == "PO" and not can_view_po:
+            return []
+        query = query.filter(PurchaseOrder.doc_type == req_doc)
 
     # Search
     if search:
@@ -205,11 +296,15 @@ async def list_orders(
             search_clauses.append(PurchaseOrder.po_nce.ilike(s_term))
         query = query.filter(or_(*search_clauses))
 
-    # Status filter
+    # Operational Status filter
     if status and status != "ALL":
         query = query.filter(
             or_(PurchaseOrder.status == status, PurchaseOrder.status_label == status)
         )
+
+    # Procurement Lifecycle Stage filter
+    if lifecycle_stage and lifecycle_stage != "ALL":
+        query = query.filter(PurchaseOrder.lifecycle_stage == lifecycle_stage)
 
     # Urgent filter
     if urgent_only:
@@ -567,7 +662,7 @@ async def update_issue_proxy(
     return {"success": True, "id": d.id, "defect_number": d.defect_number, "status": d.status}
 
 @OrderRouter.get("/{order_id}")
-async def get_order(
+def get_order(
     order_id: int,
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
@@ -580,11 +675,12 @@ async def get_order(
             joinedload(PurchaseOrder.order_status_rel),
             joinedload(PurchaseOrder.supplier_rel),
             joinedload(PurchaseOrder.store_request),
-            joinedload(PurchaseOrder.items),
-            joinedload(PurchaseOrder.shipments).joinedload(OrderShipment.container),
-            joinedload(PurchaseOrder.shipments).joinedload(OrderShipment.bill_of_lading),
-            joinedload(PurchaseOrder.payments),
-            joinedload(PurchaseOrder.documents)
+            selectinload(PurchaseOrder.items),
+            selectinload(PurchaseOrder.child_pos),
+            selectinload(PurchaseOrder.shipments).joinedload(OrderShipment.container),
+            selectinload(PurchaseOrder.shipments).joinedload(OrderShipment.bill_of_lading),
+            selectinload(PurchaseOrder.payments),
+            selectinload(PurchaseOrder.documents)
         )
         .filter(PurchaseOrder.id == order_id, PurchaseOrder.is_deleted == False)
     )
@@ -593,11 +689,19 @@ async def get_order(
     if not order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
+    order_doc_type = (getattr(order, "doc_type", "PO") or "PO").upper()
+    if order_doc_type == "RFQ":
+        if not (has_permission(current_user, "View_RFQ") or is_accounts):
+            raise HTTPException(status_code=403, detail="Access forbidden: Missing View_RFQ permission")
+    else:
+        if not (has_permission(current_user, "View_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Access forbidden: Missing View_Order permission")
+
     return order_to_dict(order, is_accounts)
 
 @OrderRouter.post("")
 @OrderRouter.post("/")
-async def create_order(
+def create_order(
     payload: dict,
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
@@ -605,8 +709,24 @@ async def create_order(
 ):
     is_accounts = is_accounts_user(current_user, org_context)
     po_number = payload.get("po_number", "").strip()
+    doc_type = (payload.get("doc_type") or ("RFQ" if payload.get("lifecycle_stage") in ["DRAFT", "CONFIRMED", "RFQ_SENT", "QUOTE_RECEIVED"] else "PO")).upper()
+    is_rfq = (doc_type == "RFQ")
+
+    if is_rfq:
+        if not (has_permission(current_user, "Add_RFQ") or has_permission(current_user, "Add_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Access forbidden: Missing Add_RFQ permission")
+    else:
+        if not (has_permission(current_user, "Add_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Access forbidden: Missing Add_Order permission")
+
+    can_set_financials = is_accounts and (not is_rfq)
+
     if not po_number:
-        raise HTTPException(status_code=422, detail="PO Number is required")
+        # Auto-generate unique sequential number based on doc_type
+        year = datetime.utcnow().year
+        prefix = f"{doc_type}-{year}-"
+        count = db.query(PurchaseOrder).filter(PurchaseOrder.po_number.like(f"{prefix}%")).count()
+        po_number = f"{prefix}{count + 1:04d}"
 
     existing = db.query(PurchaseOrder).filter(
         PurchaseOrder.po_number.ilike(po_number),
@@ -637,19 +757,40 @@ async def create_order(
         if supp:
             company = supp.name
 
-    target_org_id = payload.get("org_id") or org_context.selected_org_id or current_user.org_id or 1
+    target_org_id = payload.get("org_id")
+    if not target_org_id:
+        consignee_val = (payload.get("consignee") or "").upper()
+        sheet_val = (payload.get("sheet_type") or "").upper()
+        if "NOBLE" in consignee_val or "NOBLE" in sheet_val:
+            target_org_id = 2
+        elif "SAHAJANAND" in consignee_val or "SAHAJANAND" in sheet_val:
+            target_org_id = 3
+        elif "SAHAJ" in consignee_val or "SAHAJ" in sheet_val:
+            target_org_id = 1
+        else:
+            target_org_id = org_context.selected_org_id or current_user.org_id or 1
+
     if not org_context.is_root and target_org_id not in org_context.allowed_org_ids:
         target_org_id = current_user.org_id
 
-    # Date parser helper
+    # Helpers
     def parse_d(val):
         if not val: return None
         try: return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
         except: return None
 
+    def parse_numeric(val):
+        if val is None or val == "": return None
+        try: return float(val)
+        except: return None
+
     new_order = PurchaseOrder(
         po_number=po_number,
-        po_nce=payload.get("po_nce", "").strip() or None if is_accounts else None,
+        po_nce=payload.get("po_nce", "").strip() or None if can_set_financials else None,
+        doc_type=doc_type,
+        parent_rfq_id=payload.get("parent_rfq_id"),
+        origin_rfq_number=payload.get("origin_rfq_number"),
+        split_index=payload.get("split_index"),
         request_id=payload.get("request_id"),
         supplier_id=supplier_id or None,
         company=company or None,
@@ -659,15 +800,21 @@ async def create_order(
         status_id=status_obj.id if status_obj else None,
         status=status_obj.code if status_obj else status_val,
         status_label=status_label,
+
+        lifecycle_stage=payload.get("lifecycle_stage") or "DRAFT",
+        lifecycle_version=int(payload.get("lifecycle_version") or 1),
+        stage_version=1,
+        lifecycle_locked=bool(payload.get("lifecycle_locked", False)),
+        selected_quote_id=payload.get("selected_quote_id") if can_set_financials else None,
         
         payment_status=payload.get("payment_status", "NONE"),
         production_status=payload.get("production_status", "NOT_STARTED"),
         shipment_status=payload.get("shipment_status", "NOT_SHIPPED"),
         receipt_status=payload.get("receipt_status", "PENDING"),
 
-        total_amount=payload.get("total_amount") if is_accounts else None,
-        advance_amount=payload.get("advance_amount") if is_accounts else None,
-        balance_amount=payload.get("balance_amount") if is_accounts else None,
+        total_amount=parse_numeric(payload.get("total_amount")) if can_set_financials else None,
+        advance_amount=parse_numeric(payload.get("advance_amount")) if can_set_financials else None,
+        balance_amount=parse_numeric(payload.get("balance_amount")) if can_set_financials else None,
         currency=payload.get("currency", "USD"),
 
         sheet_type=payload.get("sheet_type", "NOBLE"),
@@ -675,12 +822,12 @@ async def create_order(
         year=payload.get("year") or datetime.utcnow().year,
         urgent_action=bool(payload.get("urgent_action", False)),
         
-        order_mail_date=parse_d(payload.get("order_mail_date")),
-        quote_sent_date=parse_d(payload.get("quote_sent_date")),
-        quote_received_date=parse_d(payload.get("quote_received_date")),
-        pi_confirmed_date=parse_d(payload.get("pi_confirmed_date")),
-        payment_date=parse_d(payload.get("payment_date")) if is_accounts else None,
-        balance_payment_date=parse_d(payload.get("balance_payment_date")) if is_accounts else None,
+        order_mail_date=parse_d(payload.get("order_mail_date")) or datetime.utcnow().date(),
+        quote_sent_date=parse_d(payload.get("quote_sent_date")) or (datetime.utcnow().date() if (payload.get("lifecycle_stage") or payload.get("status") or "DRAFT").upper() in ["RFQ_SENT", "SOURCING", "QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"] else None),
+        quote_received_date=parse_d(payload.get("quote_received_date")) or (datetime.utcnow().date() if (payload.get("lifecycle_stage") or payload.get("status") or "DRAFT").upper() in ["QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"] else None),
+        pi_confirmed_date=parse_d(payload.get("pi_confirmed_date")) or (datetime.utcnow().date() if (payload.get("lifecycle_stage") or payload.get("status") or "DRAFT").upper() in ["QUOTE_APPROVED", "PO_ISSUED", "ORDERED"] else None),
+        payment_date=parse_d(payload.get("payment_date")) if can_set_financials else None,
+        balance_payment_date=parse_d(payload.get("balance_payment_date")) if can_set_financials else None,
         eta_date=parse_d(payload.get("eta_date")),
         freight_type=payload.get("freight_type", "Sea Freight"),
         remark=payload.get("remark", "").strip() or None,
@@ -694,16 +841,22 @@ async def create_order(
     for it in payload.get("items", []):
         desc_text = it.get("description", "").strip()
         if not desc_text: continue
+        u_price = parse_numeric(it.get("unit_price")) if can_set_financials else None
+        tot_price = parse_numeric(it.get("total_price")) if can_set_financials else None
+        qty = float(it.get("quantity_ordered") or 1.0)
+        if u_price is not None and tot_price is None:
+            tot_price = qty * u_price
         po_it = POItem(
             po_id=new_order.id,
             request_item_id=it.get("request_item_id"),
             product_id=it.get("product_id"),
             item_code=it.get("item_code", "").strip() or None,
             description=desc_text,
-            quantity_ordered=float(it.get("quantity_ordered") or 1.0),
+            quantity_ordered=qty,
             unit=it.get("unit", "PCS"),
-            unit_price=float(it.get("unit_price")) if it.get("unit_price") and is_accounts else None,
-            total_price=float(it.get("total_price")) if it.get("total_price") and is_accounts else None,
+            unit_price=u_price,
+            draft_unit_price=u_price,
+            total_price=tot_price,
             notes=it.get("notes", "").strip() or None,
             created_by=current_user.id
         )
@@ -728,6 +881,18 @@ async def create_order(
         notes="PO Created"
     )
     db.add(hist)
+    db.flush()
+
+    # Capture initial version snapshot
+    from .LifecycleService import LifecycleService
+    LifecycleService.capture_po_snapshot(
+        po=new_order,
+        db=db,
+        transition_type="INITIAL",
+        change_summary=f"Created PO in {new_order.lifecycle_stage} v1",
+        diff_data={"initial_items_count": len(new_order.items or [])},
+        user_id=current_user.id
+    )
 
     db.commit()
     db.refresh(new_order)
@@ -735,7 +900,7 @@ async def create_order(
     return order_to_dict(new_order, is_accounts)
 
 @OrderRouter.put("/{order_id}")
-async def update_order(
+def update_order(
     order_id: int,
     payload: dict,
     db: Session = Depends(get_db),
@@ -749,15 +914,39 @@ async def update_order(
     if not order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
+    order_doc_type = (getattr(order, "doc_type", "PO") or "PO").upper()
+    if order_doc_type == "RFQ":
+        if not (has_permission(current_user, "Edit_RFQ") or has_permission(current_user, "Edit_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Access forbidden: Missing Edit_RFQ permission")
+    else:
+        if not (has_permission(current_user, "Edit_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Access forbidden: Missing Edit_Order permission")
+
     def parse_d(val):
         if not val: return None
         try: return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
         except: return None
 
+    def parse_numeric(val):
+        if val is None or val == "": return None
+        try: return float(val)
+        except: return None
+
     old_status = order.status
+    old_supplier = order.supplier_id
+    old_company = order.company
+    old_sheet_type = order.sheet_type
+    old_consignee = order.consignee
+    old_freight_type = order.freight_type
+    old_total_amount = float(order.total_amount) if order.total_amount is not None else None
+
+    diff_items_mod = []
+    diff_items_add = []
+    diff_items_rem = []
+    header_changes = {}
 
     if "po_number" in payload:
-        po_num = payload["po_number"].strip()
+        po_num = (payload.get("po_number") or "").strip()
         if po_num:
             existing = db.query(PurchaseOrder).filter(
                 PurchaseOrder.po_number.ilike(po_num),
@@ -769,7 +958,7 @@ async def update_order(
             order.po_number = po_num
 
     if "po_nce" in payload and is_accounts:
-        order.po_nce = payload["po_nce"].strip() or None
+        order.po_nce = (payload.get("po_nce") or "").strip() or None
     if "supplier" in payload and is_accounts:
         order.supplier_id = payload["supplier"] or None
         if order.supplier_id:
@@ -777,9 +966,21 @@ async def update_order(
             if supp:
                 order.company = supp.name
     if "company" in payload and is_accounts and not order.supplier_id:
-        order.company = payload["company"].strip() or None
+        order.company = (payload.get("company") or "").strip() or None
     if "goods_description" in payload:
-        order.goods_description = payload["goods_description"].strip() or None
+        order.goods_description = (payload.get("goods_description") or "").strip() or None
+    if "doc_type" in payload:
+        order.doc_type = payload["doc_type"].upper()
+    if "parent_rfq_id" in payload:
+        order.parent_rfq_id = payload["parent_rfq_id"]
+    if "origin_rfq_number" in payload:
+        order.origin_rfq_number = payload["origin_rfq_number"]
+    if "split_index" in payload:
+        order.split_index = payload["split_index"]
+    if "lifecycle_stage" in payload and payload["lifecycle_stage"]:
+        order.lifecycle_stage = payload["lifecycle_stage"]
+    elif "status" in payload and not order.lifecycle_stage:
+        order.lifecycle_stage = payload["status"]
 
     # Status update
     if "status" in payload or "status_id" in payload:
@@ -815,11 +1016,45 @@ async def update_order(
             )
             db.add(hist)
 
-    if is_accounts:
-        if "total_amount" in payload: order.total_amount = payload["total_amount"]
-        if "advance_amount" in payload: order.advance_amount = payload["advance_amount"]
-        if "balance_amount" in payload: order.balance_amount = payload["balance_amount"]
+            today_date = datetime.utcnow().date()
+            effective_stage = (order.lifecycle_stage or order.status or "").upper()
+            if effective_stage in ["CONFIRMED", "RFQ_SENT", "SOURCING", "QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+                if not order.order_mail_date:
+                    order.order_mail_date = today_date
+            if effective_stage in ["RFQ_SENT", "SOURCING", "QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+                if not order.quote_sent_date:
+                    order.quote_sent_date = today_date
+            if effective_stage in ["QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+                if not order.quote_received_date:
+                    order.quote_received_date = today_date
+            if effective_stage in ["QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+                if not order.pi_confirmed_date:
+                    order.pi_confirmed_date = today_date
+            if effective_stage in ["PART_PAID", "PAID", "ADVANCE_PAID"]:
+                if not order.payment_date:
+                    order.payment_date = today_date
+            if effective_stage in ["PAID", "FULLY_PAID"]:
+                if not order.balance_payment_date:
+                    order.balance_payment_date = today_date
+            if effective_stage == "SHIPPED" and not order.eta_date:
+                order.eta_date = today_date + timedelta(days=21)
+
+    is_rfq = ((order.doc_type or "").upper() == "RFQ")
+    can_set_financials = is_accounts and (not is_rfq)
+
+    if is_rfq:
+        order.total_amount = None
+        order.advance_amount = None
+        order.balance_amount = None
+        order.payment_date = None
+        order.balance_payment_date = None
+    elif can_set_financials:
+        if "total_amount" in payload: order.total_amount = parse_numeric(payload["total_amount"])
+        if "advance_amount" in payload: order.advance_amount = parse_numeric(payload["advance_amount"])
+        if "balance_amount" in payload: order.balance_amount = parse_numeric(payload["balance_amount"])
         if "currency" in payload: order.currency = payload["currency"]
+        if "payment_date" in payload: order.payment_date = parse_d(payload["payment_date"])
+        if "balance_payment_date" in payload: order.balance_payment_date = parse_d(payload["balance_payment_date"])
 
     if "payment_status" in payload: order.payment_status = payload["payment_status"]
     if "production_status" in payload: order.production_status = payload["production_status"]
@@ -830,16 +1065,304 @@ async def update_order(
     if "quote_sent_date" in payload: order.quote_sent_date = parse_d(payload["quote_sent_date"])
     if "quote_received_date" in payload: order.quote_received_date = parse_d(payload["quote_received_date"])
     if "pi_confirmed_date" in payload: order.pi_confirmed_date = parse_d(payload["pi_confirmed_date"])
-    if "payment_date" in payload and is_accounts: order.payment_date = parse_d(payload["payment_date"])
-    if "balance_payment_date" in payload and is_accounts: order.balance_payment_date = parse_d(payload["balance_payment_date"])
     if "eta_date" in payload: order.eta_date = parse_d(payload["eta_date"])
     if "freight_type" in payload: order.freight_type = payload["freight_type"]
-    if "remark" in payload: order.remark = payload["remark"].strip() or None
+    if "remark" in payload: order.remark = (payload.get("remark") or "").strip() or None
     if "urgent_action" in payload: order.urgent_action = bool(payload["urgent_action"])
+
+    if "supplier" in payload and order.supplier_id != old_supplier:
+        header_changes["supplier"] = {"old": old_supplier, "new": order.supplier_id}
+    elif "company" in payload and order.company != old_company:
+        header_changes["company"] = {"old": old_company, "new": order.company}
+    if "sheet_type" in payload and order.sheet_type != old_sheet_type:
+        header_changes["sheet_type"] = {"old": old_sheet_type, "new": order.sheet_type}
+    if "consignee" in payload and order.consignee != old_consignee:
+        header_changes["consignee"] = {"old": old_consignee, "new": order.consignee}
+    if "freight_type" in payload and order.freight_type != old_freight_type:
+        header_changes["freight_type"] = {"old": old_freight_type, "new": order.freight_type}
+    if "total_amount" in payload and (float(order.total_amount) if order.total_amount is not None else None) != old_total_amount:
+        header_changes["total_amount"] = {"old": old_total_amount, "new": float(order.total_amount) if order.total_amount is not None else None}
+
+    if "org_id" in payload and org_context.is_root:
+        order.org_id = payload["org_id"]
+    elif org_context.is_root and ("consignee" in payload or "sheet_type" in payload):
+        consignee_val = (payload.get("consignee") or order.consignee or "").upper()
+        sheet_val = (payload.get("sheet_type") or order.sheet_type or "").upper()
+        if "NOBLE" in consignee_val or "NOBLE" in sheet_val:
+            order.org_id = 2
+        elif "SAHAJANAND" in consignee_val or "SAHAJANAND" in sheet_val:
+            order.org_id = 3
+        elif "SAHAJ" in consignee_val or "SAHAJ" in sheet_val:
+            order.org_id = 1
+
+    # ── Line items update & audit delta tracking ──────────────────────────────
+    items_mutated = False
+    if "items" in payload:
+        from .LifecycleService import LifecycleService
+        incoming_items = payload["items"]
+        revision_reason = (payload.get("revision_reason") or "").strip() or None
+        warning_level = LifecycleService.get_warning_level(order.lifecycle_stage or "DRAFT")
+        
+        existing_items_map = {it.id: it for it in (order.items or []) if not it.is_deleted}
+        seen_ids = set()
+        
+        for item_data in incoming_items:
+            it_id = item_data.get("id")
+            desc_text = (item_data.get("description") or "").strip()
+            if not desc_text:
+                continue
+            
+            qty = parse_numeric(item_data.get("quantity_ordered")) or 1.0
+            u_price = parse_numeric(item_data.get("unit_price")) if can_set_financials else None
+            tot_price = parse_numeric(item_data.get("total_price")) if can_set_financials else None
+            if u_price is not None and tot_price is None:
+                tot_price = qty * u_price
+
+            if it_id and it_id in existing_items_map:
+                existing_item = existing_items_map[it_id]
+                seen_ids.add(it_id)
+                old_qty = float(existing_item.quantity_ordered or 0)
+                old_price = float(existing_item.unit_price) if existing_item.unit_price is not None else None
+                
+                changed = (abs(old_qty - qty) > 0.001) or (can_set_financials and old_price != u_price) or (existing_item.description != desc_text)
+                if changed:
+                    items_mutated = True
+                    diff_items_mod.append({
+                        "item_id": existing_item.id,
+                        "description": desc_text,
+                        "old_qty": old_qty,
+                        "new_qty": qty,
+                        "old_unit_price": old_price,
+                        "new_unit_price": u_price
+                    })
+                    existing_item.description = desc_text
+                    existing_item.quantity_ordered = qty
+                    if is_rfq:
+                        existing_item.unit_price = None
+                        existing_item.total_price = None
+                        existing_item.draft_unit_price = None
+                        existing_item.approved_unit_price = None
+                        existing_item.po_unit_price = None
+                        existing_item.proforma_unit_price = None
+                    elif can_set_financials:
+                        existing_item.unit_price = u_price
+                        existing_item.total_price = tot_price
+                    existing_item.item_code = (item_data.get("item_code") or "").strip() or None
+                    existing_item.unit = item_data.get("unit", "PCS")
+                    existing_item.product_id = item_data.get("product_id")
+                    existing_item.notes = (item_data.get("notes") or "").strip() or None
+                    existing_item.updated_by = current_user.id
+                    
+                    if warning_level in ["WARNING", "CRITICAL"]:
+                        LifecycleService.record_item_history(
+                            po=order,
+                            item=existing_item,
+                            action="UPDATE",
+                            field_name="ALL",
+                            old_value=str(old_price),
+                            new_value=str(u_price),
+                            reason=revision_reason,
+                            user_id=current_user.id,
+                            db=db
+                        )
+            else:
+                items_mutated = True
+                diff_items_add.append({
+                    "description": desc_text,
+                    "quantity": qty,
+                    "unit_price": u_price,
+                    "unit": item_data.get("unit", "PCS")
+                })
+                new_item = POItem(
+                    po_id=order.id,
+                    request_item_id=item_data.get("request_item_id"),
+                    product_id=item_data.get("product_id"),
+                    item_code=(item_data.get("item_code") or "").strip() or None,
+                    description=desc_text,
+                    quantity_ordered=qty,
+                    unit=item_data.get("unit", "PCS"),
+                    unit_price=u_price,
+                    total_price=tot_price,
+                    draft_unit_price=u_price,
+                    item_status="ACTIVE",
+                    notes=(item_data.get("notes") or "").strip() or None,
+                    created_by=current_user.id
+                )
+                db.add(new_item)
+                db.flush()
+                if warning_level in ["WARNING", "CRITICAL"]:
+                    LifecycleService.record_item_history(
+                        po=order,
+                        item=new_item,
+                        action="CREATE",
+                        field_name="ALL",
+                        old_value=None,
+                        new_value=str(u_price),
+                        reason=revision_reason,
+                        user_id=current_user.id,
+                        db=db
+                    )
+
+        # Removed items
+        for old_id, old_item in existing_items_map.items():
+            if old_id not in seen_ids:
+                items_mutated = True
+                diff_items_rem.append({
+                    "item_id": old_id,
+                    "description": old_item.description,
+                    "quantity": float(old_item.quantity_ordered or 0),
+                    "unit_price": float(old_item.unit_price) if old_item.unit_price is not None else None
+                })
+                old_item.is_deleted = True
+                old_item.item_status = "USER_REMOVED"
+                old_item.removed_at_stage = order.lifecycle_stage
+                old_item.deleted_by = current_user.id
+                if warning_level in ["WARNING", "CRITICAL"]:
+                    LifecycleService.record_item_history(
+                        po=order,
+                        item=old_item,
+                        action="REMOVE",
+                        field_name="item_status",
+                        old_value="ACTIVE",
+                        new_value="USER_REMOVED",
+                        reason=revision_reason,
+                        user_id=current_user.id,
+                        db=db
+                    )
+
+    # Stage versioning and version snapshot capture
+    if items_mutated or header_changes:
+        order.stage_version = (getattr(order, "stage_version", 1) or 1) + 1
+        order.lifecycle_version = (order.lifecycle_version or 1) + 1
+
+        parts = []
+        if diff_items_mod:
+            parts.append(f"{len(diff_items_mod)} item(s) modified")
+        if diff_items_add:
+            parts.append(f"{len(diff_items_add)} item(s) added")
+        if diff_items_rem:
+            parts.append(f"{len(diff_items_rem)} item(s) removed")
+        if header_changes:
+            parts.append(f"Header fields changed ({', '.join(header_changes.keys())})")
+
+        change_desc = (payload.get("revision_reason") or "").strip()
+        if not change_desc:
+            change_desc = "; ".join(parts) or "PO Updated"
+
+        db.flush()
+        from .LifecycleService import LifecycleService
+        LifecycleService.capture_po_snapshot(
+            po=order,
+            db=db,
+            transition_type="MUTATION",
+            change_summary=change_desc,
+            diff_data={
+                "items_modified": diff_items_mod,
+                "items_added": diff_items_add,
+                "items_removed": diff_items_rem,
+                "header_changes": header_changes,
+                "revision_reason": (payload.get("revision_reason") or "").strip() or None
+            },
+            user_id=current_user.id
+        )
+
+    # Ensure active payments in OrderPayment ledger are preserved in order advance_amount and balance_amount
+    active_payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).all()
+    if active_payments:
+        total_paid = sum(float(p.amount or 0) for p in active_payments)
+        order.advance_amount = total_paid
+        total_order = float(order.total_amount or 0)
+        order.balance_amount = max(0.0, total_order - total_paid)
 
     order.updated_by = current_user.id
     db.commit()
     db.refresh(order)
+    return order_to_dict(order, is_accounts)
+
+@OrderRouter.patch("/{order_id}/status")
+async def update_order_status_patch(
+    order_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    query = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id, PurchaseOrder.is_deleted == False)
+    query = apply_org_filter(query, PurchaseOrder, org_context)
+    order = query.first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    new_status = payload.get("status")
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Missing status")
+
+    old_status = order.status
+    st_obj = db.query(OrderStatus).filter(
+        or_(OrderStatus.code == new_status, OrderStatus.name == new_status),
+        OrderStatus.is_deleted == False
+    ).first()
+    if st_obj:
+        order.status_id = st_obj.id
+        order.status = st_obj.code
+        order.status_label = st_obj.name
+    else:
+        order.status = new_status
+        order.status_label = new_status
+
+    # Synchronize lifecycle_stage if provided or if new_status maps to lifecycle stages
+    target_lifecycle = payload.get("lifecycle_stage") or new_status
+    if target_lifecycle:
+        canonical_stage = str(target_lifecycle).upper()
+        if canonical_stage in [
+            "DRAFT", "CONFIRMED", "RFQ_SENT", "SOURCING",
+            "QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "PROFORMA", "ORDERED"
+        ]:
+            order.lifecycle_stage = canonical_stage
+
+    if order.status != old_status:
+        hist = OrderStatusHistory(
+            entity_type="PO",
+            entity_id=order.id,
+            po_id=order.id,
+            from_status=old_status,
+            to_status=order.status,
+            to_status_label=order.status_label,
+            changed_by=current_user.id,
+            notes=payload.get("status_note", "Quick status change")
+        )
+        db.add(hist)
+
+        today_date = datetime.utcnow().date()
+        effective_stage = (order.lifecycle_stage or order.status or "").upper()
+        if effective_stage in ["CONFIRMED", "RFQ_SENT", "SOURCING", "QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+            if not order.order_mail_date:
+                order.order_mail_date = today_date
+        if effective_stage in ["RFQ_SENT", "SOURCING", "QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+            if not order.quote_sent_date:
+                order.quote_sent_date = today_date
+        if effective_stage in ["QUOTE_RECEIVED", "QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+            if not order.quote_received_date:
+                order.quote_received_date = today_date
+        if effective_stage in ["QUOTE_APPROVED", "PO_ISSUED", "ORDERED"]:
+            if not order.pi_confirmed_date:
+                order.pi_confirmed_date = today_date
+        if effective_stage in ["PART_PAID", "PAID", "ADVANCE_PAID"]:
+            if not order.payment_date:
+                order.payment_date = today_date
+        if effective_stage in ["PAID", "FULLY_PAID"]:
+            if not order.balance_payment_date:
+                order.balance_payment_date = today_date
+        if effective_stage == "SHIPPED" and not order.eta_date:
+            order.eta_date = today_date + timedelta(days=21)
+
+    order.updated_by = current_user.id
+    db.commit()
+    db.refresh(order)
+    is_accounts = is_accounts_user(current_user, org_context)
     return order_to_dict(order, is_accounts)
 
 # ── Link Shipments (PO ↔ BL / Container) ──────────────────────────────────────
@@ -884,8 +1407,54 @@ async def link_shipment(
     db.commit()
     return {"success": True, "message": f"Linked BL {bl_no} to PO {order.po_number}"}
 
+# ── Get Order Payments Ledger ────────────────────────────────────────────────
+@OrderRouter.get("/{order_id}/payments")
+@OrderRouter.get("/{order_id}/payments/")
+async def get_order_payments(
+    order_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance users can view payments.")
+
+    query = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id, PurchaseOrder.is_deleted == False)
+    query = apply_org_filter(query, PurchaseOrder, org_context)
+    order = query.first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).order_by(OrderPayment.id.desc()).all()
+
+    return {
+        "success": True,
+        "payments": [
+            {
+                "id": pm.id,
+                "payment_type": pm.payment_type,
+                "amount": float(pm.amount or 0),
+                "currency": pm.currency,
+                "paid_date": pm.paid_date.isoformat() if pm.paid_date else None,
+                "payment_method": pm.payment_method,
+                "reference_number": pm.reference_number,
+                "notes": pm.notes,
+                "status": pm.status,
+                "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
+            }
+            for pm in payments
+        ],
+        "advance_amount": float(order.advance_amount or 0),
+        "balance_amount": float(order.balance_amount or 0),
+        "payment_status": order.payment_status
+    }
+
 # ── Record Payments ───────────────────────────────────────────────────────────
 @OrderRouter.post("/{order_id}/payments")
+@OrderRouter.post("/{order_id}/payments/")
 async def record_payment(
     order_id: int,
     payload: dict,
@@ -902,12 +1471,69 @@ async def record_payment(
     if not order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
-    amt = float(payload.get("amount") or 0)
-    p_type = payload.get("payment_type", "ADVANCE")
-    
+    if (order.doc_type or "").upper() == "RFQ":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot record payments on an RFQ document. Payments are only permitted on awarded Purchase Orders (PO)."
+        )
+
+    raw_amt = float(payload.get("amount") or 0)
+    p_type = (payload.get("payment_type") or "ADVANCE").strip().upper()
+
+    # Negative amount validation:
+    # Negative amount indicates a Return Payment (Refund) and is ONLY acceptable when payment type is RETURN
+    if p_type == "RETURN":
+        if raw_amt == 0:
+            raise HTTPException(status_code=400, detail="Return payment amount cannot be zero.")
+        amt = -abs(raw_amt)
+    else:
+        if raw_amt < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Negative amounts are only acceptable when payment type is 'Return Payment'."
+            )
+        if raw_amt <= 0:
+            raise HTTPException(status_code=400, detail="Payment amount must be greater than zero.")
+        amt = raw_amt
+
+    # Check overpayment & refund limits
+    allow_overpayment = bool(payload.get("allow_overpayment", False))
+
+    current_active_payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).all()
+    current_paid = sum(float(p.amount or 0) for p in current_active_payments)
+
+    total_order = float(order.total_amount or 0)
+    if total_order <= 0:
+        items_total = sum(float(it.total_price or 0) for it in (order.items or []) if not getattr(it, 'is_deleted', False))
+        if items_total > 0:
+            total_order = items_total
+            order.total_amount = items_total
+
+    remaining_due = max(0.0, total_order - current_paid)
+
+    if p_type == "RETURN":
+        if abs(amt) > (current_paid + 0.01):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Return payment ({abs(amt):.2f}) cannot exceed the total amount already paid ({current_paid:.2f})."
+            )
+    else:
+        if total_order > 0 and amt > (remaining_due + 0.01):
+            if not allow_overpayment:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Payment amount ({amt:.2f}) exceeds the remaining order due ({remaining_due:.2f}). Overpayment is restricted without explicit authorization."
+                )
+
     paid_d = None
     if payload.get("paid_date"):
-        paid_d = datetime.strptime(payload["paid_date"][:10], "%Y-%m-%d").date()
+        try:
+            paid_d = datetime.strptime(payload["paid_date"][:10], "%Y-%m-%d").date()
+        except Exception:
+            paid_d = date.today()
 
     payment = OrderPayment(
         po_id=order.id,
@@ -915,32 +1541,369 @@ async def record_payment(
         amount=amt,
         currency=payload.get("currency", order.currency or "USD"),
         paid_date=paid_d,
-        status="PAID",
+        status="RETURNED" if p_type == "RETURN" else "PAID",
         payment_method=payload.get("payment_method"),
         reference_number=payload.get("reference_number"),
         notes=payload.get("notes"),
         created_by=current_user.id
     )
     db.add(payment)
+    db.flush()
 
-    # Automatic status update based on payment type
-    if p_type in ["ADVANCE", "PROGRESS"]:
-        order.payment_status = "PART_PAID"
-        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
-        if part_st:
-            order.status_id = part_st.id
-            order.status = "PART_PAID"
-            order.status_label = "Part Paid"
-    elif p_type in ["BALANCE", "FULL"]:
+    # Recalculate accumulated active payments
+    active_payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).order_by(OrderPayment.id.desc()).all()
+    total_paid = sum(float(p.amount or 0) for p in active_payments)
+    total_order = float(order.total_amount or 0)
+
+    order.advance_amount = total_paid
+    order.balance_amount = max(0.0, total_order - total_paid)
+
+    # Auto-fill payment milestone dates
+    if p_type == "ADVANCE" and not order.payment_date and payment.paid_date:
+        order.payment_date = payment.paid_date
+    elif p_type in ["BALANCE", "FINAL"] and not order.balance_payment_date and payment.paid_date:
+        order.balance_payment_date = payment.paid_date
+    elif order.payment_status == "FULLY_PAID" and not order.balance_payment_date and payment.paid_date:
+        order.balance_payment_date = payment.paid_date
+
+    # Automatic status update based on totals and payment type
+    if total_order > 0 and total_paid >= (total_order - 0.01):
         order.payment_status = "FULLY_PAID"
         paid_st = db.query(OrderStatus).filter(OrderStatus.code == "PAID").first()
         if paid_st:
             order.status_id = paid_st.id
             order.status = "PAID"
             order.status_label = "Paid"
+    elif total_paid > 0:
+        order.payment_status = "PART_PAID"
+        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
+        if part_st:
+            order.status_id = part_st.id
+            order.status = "PART_PAID"
+            order.status_label = "Part Paid"
+    else:
+        order.payment_status = "NONE"
+        pend_st = db.query(OrderStatus).filter(OrderStatus.code == "PENDING").first()
+        if pend_st and order.status in ["PAID", "PART_PAID"]:
+            order.status_id = pend_st.id
+            order.status = "PENDING"
+            order.status_label = "Pending"
 
     db.commit()
-    return {"success": True, "message": f"Payment of {amt} recorded for PO {order.po_number}"}
+    db.refresh(payment)
+
+    return {
+        "success": True,
+        "message": f"Payment entry of {amt} recorded for PO {order.po_number}",
+        "payment": {
+            "id": payment.id,
+            "payment_type": payment.payment_type,
+            "amount": float(payment.amount or 0),
+            "currency": payment.currency,
+            "paid_date": payment.paid_date.isoformat() if payment.paid_date else None,
+            "payment_method": payment.payment_method,
+            "reference_number": payment.reference_number,
+            "notes": payment.notes,
+            "status": payment.status,
+            "created_at": payment.created_at.isoformat() if hasattr(payment, 'created_at') and payment.created_at else None,
+        },
+        "advance_amount": float(order.advance_amount or 0),
+        "balance_amount": float(order.balance_amount or 0),
+        "payment_status": order.payment_status,
+        "payments": [
+            {
+                "id": pm.id,
+                "payment_type": pm.payment_type,
+                "amount": float(pm.amount or 0),
+                "currency": pm.currency,
+                "paid_date": pm.paid_date.isoformat() if pm.paid_date else None,
+                "payment_method": pm.payment_method,
+                "reference_number": pm.reference_number,
+                "notes": pm.notes,
+                "status": pm.status,
+                "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
+            }
+            for pm in active_payments
+        ]
+    }
+
+# ── Update Payment ────────────────────────────────────────────────────────────
+@OrderRouter.put("/{order_id}/payments/{payment_id}")
+@OrderRouter.put("/{order_id}/payments/{payment_id}/")
+async def update_payment(
+    order_id: int,
+    payment_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance users can update payments.")
+
+    query = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id, PurchaseOrder.is_deleted == False)
+    query = apply_org_filter(query, PurchaseOrder, org_context)
+    order = query.first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    payment = db.query(OrderPayment).filter(
+        OrderPayment.id == payment_id,
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+
+    raw_amt = float(payload.get("amount") if "amount" in payload else (payment.amount or 0))
+    p_type = (payload.get("payment_type") or payment.payment_type or "ADVANCE").strip().upper()
+
+    if p_type == "RETURN":
+        if raw_amt == 0:
+            raise HTTPException(status_code=400, detail="Return payment amount cannot be zero.")
+        amt = -abs(raw_amt)
+    else:
+        if raw_amt < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Negative amounts are only acceptable when payment type is 'Return Payment'."
+            )
+        if raw_amt <= 0:
+            raise HTTPException(status_code=400, detail="Payment amount must be greater than zero.")
+        amt = raw_amt
+
+    allow_overpayment = bool(payload.get("allow_overpayment", False))
+
+    other_payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.id != payment.id,
+        OrderPayment.is_deleted == False
+    ).all()
+    other_paid = sum(float(p.amount or 0) for p in other_payments)
+
+    total_order = float(order.total_amount or 0)
+    if total_order <= 0:
+        items_total = sum(float(it.total_price or 0) for it in (order.items or []) if not getattr(it, 'is_deleted', False))
+        if items_total > 0:
+            total_order = items_total
+            order.total_amount = items_total
+
+    remaining_due = max(0.0, total_order - other_paid)
+
+    if p_type == "RETURN":
+        if abs(amt) > (other_paid + 0.01):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Return payment ({abs(amt):.2f}) cannot exceed the total amount already paid ({other_paid:.2f})."
+            )
+    else:
+        if total_order > 0 and amt > (remaining_due + 0.01):
+            if not allow_overpayment:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Payment amount ({amt:.2f}) exceeds the remaining order due ({remaining_due:.2f}). Overpayment is restricted without explicit authorization."
+                )
+
+    paid_d = payment.paid_date
+    if "paid_date" in payload and payload["paid_date"]:
+        try:
+            paid_d = datetime.strptime(payload["paid_date"][:10], "%Y-%m-%d").date()
+        except Exception:
+            pass
+
+    payment.payment_type = p_type
+    payment.amount = amt
+    if "currency" in payload and payload["currency"]:
+        payment.currency = payload["currency"]
+    payment.paid_date = paid_d
+    payment.status = "RETURNED" if p_type == "RETURN" else "PAID"
+    if "payment_method" in payload:
+        payment.payment_method = payload["payment_method"]
+    if "reference_number" in payload:
+        payment.reference_number = payload["reference_number"]
+    if "notes" in payload:
+        payment.notes = payload["notes"]
+
+    db.flush()
+
+    # Recalculate accumulated active payments
+    active_payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).order_by(OrderPayment.id.desc()).all()
+    total_paid = sum(float(p.amount or 0) for p in active_payments)
+
+    order.advance_amount = total_paid
+    order.balance_amount = max(0.0, total_order - total_paid)
+
+    # Sync milestone payment dates based on active payments
+    advance_payments = [p for p in active_payments if p.payment_type == "ADVANCE" and p.paid_date]
+    if advance_payments:
+        order.payment_date = min(p.paid_date for p in advance_payments)
+    elif not any(p.paid_date for p in active_payments):
+        order.payment_date = None
+
+    balance_or_final = [p for p in active_payments if p.payment_type in ["BALANCE", "FINAL"] and p.paid_date]
+    if balance_or_final:
+        order.balance_payment_date = max(p.paid_date for p in balance_or_final)
+    elif total_order > 0 and total_paid >= (total_order - 0.01):
+        all_with_dates = [p for p in active_payments if p.paid_date]
+        if all_with_dates:
+            order.balance_payment_date = max(p.paid_date for p in all_with_dates)
+    else:
+        order.balance_payment_date = None
+
+    if total_order > 0 and total_paid >= (total_order - 0.01):
+        order.payment_status = "FULLY_PAID"
+        paid_st = db.query(OrderStatus).filter(OrderStatus.code == "PAID").first()
+        if paid_st:
+            order.status_id = paid_st.id
+            order.status = "PAID"
+            order.status_label = "Paid"
+    elif total_paid > 0:
+        order.payment_status = "PART_PAID"
+        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
+        if part_st:
+            order.status_id = part_st.id
+            order.status = "PART_PAID"
+            order.status_label = "Part Paid"
+    else:
+        order.payment_status = "NONE"
+        pend_st = db.query(OrderStatus).filter(OrderStatus.code == "PENDING").first()
+        if pend_st and order.status in ["PAID", "PART_PAID"]:
+            order.status_id = pend_st.id
+            order.status = "PENDING"
+            order.status_label = "Pending"
+
+    db.commit()
+    db.refresh(payment)
+
+    return {
+        "success": True,
+        "message": f"Payment #{payment.id} updated successfully for PO {order.po_number}",
+        "payment": {
+            "id": payment.id,
+            "payment_type": payment.payment_type,
+            "amount": float(payment.amount or 0),
+            "currency": payment.currency,
+            "paid_date": payment.paid_date.isoformat() if payment.paid_date else None,
+            "payment_method": payment.payment_method,
+            "reference_number": payment.reference_number,
+            "notes": payment.notes,
+            "status": payment.status,
+            "created_at": payment.created_at.isoformat() if hasattr(payment, 'created_at') and payment.created_at else None,
+        },
+        "advance_amount": float(order.advance_amount or 0),
+        "balance_amount": float(order.balance_amount or 0),
+        "payment_status": order.payment_status,
+        "payments": [
+            {
+                "id": pm.id,
+                "payment_type": pm.payment_type,
+                "amount": float(pm.amount or 0),
+                "currency": pm.currency,
+                "paid_date": pm.paid_date.isoformat() if pm.paid_date else None,
+                "payment_method": pm.payment_method,
+                "reference_number": pm.reference_number,
+                "notes": pm.notes,
+                "status": pm.status,
+                "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
+            }
+            for pm in active_payments
+        ]
+    }
+
+# ── Delete / Void Payments ───────────────────────────────────────────────────
+@OrderRouter.delete("/{order_id}/payments/{payment_id}")
+@OrderRouter.delete("/{order_id}/payments/{payment_id}/")
+async def delete_payment(
+    order_id: int,
+    payment_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance users can delete payments.")
+
+    query = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id, PurchaseOrder.is_deleted == False)
+    query = apply_org_filter(query, PurchaseOrder, org_context)
+    order = query.first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    payment = db.query(OrderPayment).filter(
+        OrderPayment.id == payment_id,
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+
+    payment.is_deleted = True
+    payment.status = "CANCELLED"
+    db.flush()
+
+    # Recalculate accumulated active payments
+    active_payments = db.query(OrderPayment).filter(
+        OrderPayment.po_id == order.id,
+        OrderPayment.is_deleted == False
+    ).order_by(OrderPayment.id.desc()).all()
+    total_paid = sum(float(p.amount or 0) for p in active_payments)
+    total_order = float(order.total_amount or 0)
+
+    order.advance_amount = total_paid
+    order.balance_amount = max(0.0, total_order - total_paid)
+
+    if total_order > 0 and total_paid >= (total_order - 0.01):
+        order.payment_status = "FULLY_PAID"
+        paid_st = db.query(OrderStatus).filter(OrderStatus.code == "PAID").first()
+        if paid_st:
+            order.status_id = paid_st.id
+            order.status = "PAID"
+            order.status_label = "Paid"
+    elif total_paid > 0:
+        order.payment_status = "PART_PAID"
+        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
+        if part_st:
+            order.status_id = part_st.id
+            order.status = "PART_PAID"
+            order.status_label = "Part Paid"
+    else:
+        order.payment_status = "NONE"
+        pend_st = db.query(OrderStatus).filter(OrderStatus.code == "PENDING").first()
+        if pend_st and order.status in ["PAID", "PART_PAID"]:
+            order.status_id = pend_st.id
+            order.status = "PENDING"
+            order.status_label = "Pending"
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Payment record deleted successfully",
+        "advance_amount": float(order.advance_amount or 0),
+        "balance_amount": float(order.balance_amount or 0),
+        "payment_status": order.payment_status,
+        "remaining_payments": [
+            {
+                "id": pm.id,
+                "payment_type": pm.payment_type,
+                "amount": float(pm.amount or 0),
+                "currency": pm.currency,
+                "paid_date": pm.paid_date.isoformat() if pm.paid_date else None,
+                "payment_method": pm.payment_method,
+                "reference_number": pm.reference_number,
+                "notes": pm.notes,
+                "status": pm.status,
+                "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
+            }
+            for pm in active_payments
+        ]
+    }
 
 # ── Upload Supporting Documents ───────────────────────────────────────────────
 @OrderRouter.post("/{order_id}/documents")
@@ -999,6 +1962,15 @@ async def delete_order(
     order = query.first()
     if not order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    is_accounts = is_accounts_user(current_user, org_context)
+    order_doc_type = (getattr(order, "doc_type", "PO") or "PO").upper()
+    if order_doc_type == "RFQ":
+        if not (has_permission(current_user, "Delete_RFQ") or has_permission(current_user, "Delete_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Operation forbidden: Missing required permission 'Delete_RFQ'.")
+    else:
+        if not (has_permission(current_user, "Delete_Order") or is_accounts):
+            raise HTTPException(status_code=403, detail="Operation forbidden: Missing required permission 'Delete_Order'.")
 
     order.is_deleted = True
     order.deleted_at = datetime.utcnow()

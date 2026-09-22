@@ -64,34 +64,40 @@ def derive_status_from_dates(container) -> int | None:
 
 # ── Job 1: Refresh ETAs from the shipping provider ────────────────────────────
 def updateArrivalDate():
-    """Fetch the latest ETA from the shipping provider and persist it to the DB."""
+    """Fetch latest ETA from shipping provider without holding DB connections during external calls."""
+    bol_numbers = []
     db = next(get_db())
     try:
         records = (
-            db.query(bl)
+            db.query(bl.BillOfLanding)
             .filter(bl.ArrivalDate > datetime.now())
             .all()
         )
-        for record in records:
-            data = track_and_trace(record.BillOfLanding)
-            logger.info(
-                "[updateArrivalDate] BoL=%s | data=%s",
-                record.BillOfLanding,
-                data,
-            )
-            if data:
-                db.query(bl).filter(bl.BillOfLanding == record.BillOfLanding).update(
-                    {
-                        bl.ArrivalDate: datetime.fromisoformat(
-                            data[0]["eventDateTime"]
-                        ).strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                )
-                db.commit()
+        bol_numbers = [r[0] for r in records if r[0]]
     except Exception as e:
-        logger.exception("[updateArrivalDate] Error: %s", e)
+        logger.exception("[updateArrivalDate] Error querying BoL list: %s", e)
     finally:
         db.close()
+
+    # Query external shipping provider outside database connection transaction
+    for bol in bol_numbers:
+        try:
+            data = track_and_trace(bol)
+            logger.info(
+                "[updateArrivalDate] BoL=%s | data=%s",
+                bol,
+                data,
+            )
+            if data and "eventDateTime" in data[0]:
+                eta_str = datetime.fromisoformat(data[0]["eventDateTime"]).strftime("%Y-%m-%d %H:%M:%S")
+                write_db = next(get_db())
+                try:
+                    write_db.query(bl).filter(bl.BillOfLanding == bol).update({bl.ArrivalDate: eta_str})
+                    write_db.commit()
+                finally:
+                    write_db.close()
+        except Exception as e:
+            logger.exception("[updateArrivalDate] Error updating BoL %s: %s", bol, e)
 
 
 # ── Job 2: Auto-update container status based on ArrivalDate ──────────────────
