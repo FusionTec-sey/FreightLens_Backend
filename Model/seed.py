@@ -346,12 +346,28 @@ def seed_db(db: Session):
 
         db.flush()
 
-        # ── 5. Seed default Admin User if no users exist ─────────────────────
+        # ── 5. Seed default Organisation & Admin User if missing ─────────────
+        from Model.Credentials.organisation import Organisation
+        org1 = db.query(Organisation).filter_by(id=1).first()
+        if not org1:
+            org1 = Organisation(
+                id=1,
+                name="sahaj",
+                display_name="Sahaj Construction",
+                parent_org_id=None,
+                is_active=True
+            )
+            db.add(org1)
+            db.flush()
+            logger.info("Seeded default organisation: id=1 (Sahaj Construction)")
+
         user_count = db.query(User).count()
         if user_count == 0:
             admin_user = User(
                 username="admin",
-                password_hash=hash_password("admin123")
+                password_hash=hash_password("admin123"),
+                org_id=1,
+                allowed_org_ids=[1]
             )
             admin_user.roles = [admin_role]
             db.add(admin_user)

@@ -57,17 +57,25 @@ if RATE_LIMIT_AVAILABLE:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-_cors_origins = list(settings.ALLOWED_ORIGINS or [])
-for _origin in ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]:
+_cors_origins = [o.strip().rstrip("/") for o in list(settings.ALLOWED_ORIGINS or []) if o.strip()]
+for _origin in [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://staging.fusiontech.services",
+]:
     if _origin not in _cors_origins:
         _cors_origins.append(_origin)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"^https?://(.*\.)?fusiontech\.services(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)

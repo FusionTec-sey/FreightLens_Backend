@@ -19,9 +19,10 @@ class Settings:
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
     # ── CORS Allowed Origins ───────────────────────────────────────────────────
-    ALLOWED_ORIGINS = os.getenv(
+    _raw_origins = os.getenv(
         "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"
-    ).split(",")
+    )
+    ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()]
 
     # ── External Shipping APIs ────────────────────────────────────────────────
     CMA_CGM_API_KEY = os.getenv("CMA_CGM_API_KEY", "")

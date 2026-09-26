@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 logger = logging.getLogger("containerMgmt.search")
 
 MEILI_URL = os.getenv("MEILISEARCH_URL", "http://meilisearch:7700")
-MEILI_KEY = os.getenv("MEILISEARCH_MASTER_KEY", "sahaj_meili_secret_key_123")
+MEILI_KEY = os.getenv("MEILISEARCH_MASTER_KEY") or os.getenv("MEILI_MASTER_KEY") or "sahaj_meili_secret_key_123"
 
 _client = None
 
