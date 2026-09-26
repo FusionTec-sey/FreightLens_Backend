@@ -104,7 +104,19 @@ class QuoteComparisonService:
                 "rank": q.rank,
                 "score_notes": q.score_notes,
                 "is_selected": (po.selected_quote_id == q.id),
-                "items_count": len([i for i in (q.items or []) if not i.is_deleted])
+                "items_count": len([i for i in (q.items or []) if not i.is_deleted]),
+                "documents": [
+                    {
+                        "id": str(d.id),
+                        "file_name": d.file_name,
+                        "title": d.title,
+                        "file_path": d.file_path,
+                        "file_size": d.file_size,
+                        "mime_type": d.mime_type,
+                        "created_at": d.created_at.isoformat() if d.created_at else None,
+                    }
+                    for d in (q.documents or []) if not d.is_deleted
+                ]
             })
 
         matrix_rows = []
@@ -292,8 +304,7 @@ class QuoteComparisonService:
             po.quote_sent_date = today_date
         if not po.quote_received_date:
             po.quote_received_date = winning_quote.quote_date or today_date
-        if not po.eta_date and winning_quote.delivery_lead_time_days:
-            po.eta_date = today_date + timedelta(days=int(winning_quote.delivery_lead_time_days))
+        # Note: eta_date is not auto-updated here; shipping schedule is determined manually or via BL/vessel tracking
 
         # Auto-advance stage if in QUOTE_RECEIVED
         if po.lifecycle_stage in ["RFQ_SENT", "QUOTE_RECEIVED"]:
@@ -315,6 +326,11 @@ class QuoteComparisonService:
 
         db.commit()
         db.refresh(po)
+        try:
+            from Services.search_service import sync_order_document
+            sync_order_document(po)
+        except Exception as e:
+            logger.warning("Failed to sync order %s to Meilisearch after award: %s", po.id, e)
         return {
             "message": "Quote successfully awarded and approved.",
             "po_id": po.id,
@@ -568,6 +584,13 @@ class QuoteComparisonService:
         for p in created_pos:
             db.refresh(p)
         db.refresh(rfq)
+        try:
+            from Services.search_service import sync_order_document
+            sync_order_document(rfq)
+            for p in created_pos:
+                sync_order_document(p)
+        except Exception as e:
+            logger.warning("Failed to sync orders to Meilisearch after split award: %s", e)
 
         return {
             "success": True,
@@ -678,6 +701,13 @@ class QuoteComparisonService:
 
         db.commit()
         db.refresh(rfq)
+        try:
+            from Services.search_service import sync_order_document
+            sync_order_document(rfq)
+            for cpo in child_pos:
+                sync_order_document(cpo)
+        except Exception as e:
+            logger.warning("Failed to sync orders to Meilisearch after revoke award: %s", e)
 
         return {
             "success": True,

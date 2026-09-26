@@ -1,6 +1,6 @@
 from fastapi_utils.cbv import cbv
 from fastapi_utils.inferring_router import InferringRouter
-from fastapi import Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from Model.db import get_db
@@ -30,7 +30,13 @@ class CreadentialsInfoAPI:
 
         result = []
         for user in users:
-            selected_ids = [user.org_id] if user.org_id else [1]
+            if user.allowed_org_ids and len(user.allowed_org_ids) > 0:
+                selected_ids = user.allowed_org_ids
+            elif user.org_id:
+                selected_ids = [user.org_id]
+            else:
+                selected_ids = [1]
+
             if 1 in selected_ids:
                 org_names = ["Root / All Tenant Access"]
             else:
@@ -39,9 +45,9 @@ class CreadentialsInfoAPI:
             result.append({
                 "id": user.id, 
                 "username": user.username,
-                "org_id": user.org_id or 1,
+                "org_id": user.org_id or (selected_ids[0] if selected_ids else 1),
                 "org_ids": selected_ids,
-                "org_name": org_names[0],
+                "org_name": org_names[0] if org_names else "Unknown",
                 "org_names": org_names,
                 "roles": [role.name for role in user.roles]
             })
@@ -82,35 +88,65 @@ class CreadentialsInfoAPI:
     
     @CreadentialsInfo.post("/addUser")
     async def addUser(self, payload: UserBase, db: Session = Depends(get_db)):
-        username = payload.username
+        username = payload.username or payload.name
         password = payload.password
         roles = payload.roles or []
         
-        selected_org_ids = payload.org_ids or ([payload.org_id] if payload.org_id else [1])
-        primary_org_id = 1 if 1 in selected_org_ids or not selected_org_ids else selected_org_ids[0]
+        if payload.org_ids is not None and len(payload.org_ids) > 0:
+            selected_org_ids = payload.org_ids
+            primary_org_id = 1 if 1 in selected_org_ids else selected_org_ids[0]
+        elif payload.org_id is not None:
+            primary_org_id = payload.org_id
+            selected_org_ids = [payload.org_id]
+        else:
+            primary_org_id = 1
+            selected_org_ids = [1]
         
         if not username or not password:
             raise HTTPException(status_code=422, detail="Username and password are required")
 
-        new_user = User(username=username, password_hash=hash_password(password), org_id=primary_org_id)
-        role_objs = db.query(Role).filter(Role.id.in_(roles)).all()
-        new_user.roles = role_objs
+        existing = db.query(User).filter(User.username == username, User.is_deleted == False).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        new_user = User(
+            username=username, 
+            password_hash=hash_password(password), 
+            org_id=primary_org_id,
+            allowed_org_ids=selected_org_ids
+        )
+        
+        int_ids = [r for r in roles if isinstance(r, int)]
+        str_names = [r for r in roles if isinstance(r, str)]
+        conditions = []
+        if int_ids:
+            conditions.append(Role.id.in_(int_ids))
+        if str_names:
+            conditions.append(Role.name.in_(str_names))
+        if conditions:
+            new_user.roles = db.query(Role).filter(Role.is_deleted == False).filter(or_(*conditions)).all()
+        else:
+            new_user.roles = []
 
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
 
         all_orgs = {o.id: o.display_name or o.name for o in db.query(Organisation).all()}
-        org_names = ["Root / All Tenant Access"] if primary_org_id == 1 else [all_orgs.get(oid, f"Org #{oid}") for oid in selected_org_ids]
+        returned_org_ids = new_user.allowed_org_ids if new_user.allowed_org_ids else [primary_org_id]
+        if 1 in returned_org_ids:
+            org_names = ["Root / All Tenant Access"]
+        else:
+            org_names = [all_orgs.get(oid, f"Org #{oid}") for oid in returned_org_ids]
 
         return {
             "id": new_user.id,
             "username": new_user.username,
             "org_id": primary_org_id,
-            "org_ids": selected_org_ids,
-            "org_name": org_names[0],
+            "org_ids": returned_org_ids,
+            "org_name": org_names[0] if org_names else "Unknown",
             "org_names": org_names,
-            "roles": [role.name for role in role_objs]
+            "roles": [role.name for role in new_user.roles]
         }
     
     @CreadentialsInfo.delete("/deleteUser/{user_id}")
@@ -132,31 +168,50 @@ class CreadentialsInfoAPI:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        if payload.username:
-            user.username = payload.username
+        username = payload.username or payload.name
+        if username:
+            user.username = username
         if payload.password:
             user.password_hash = hash_password(payload.password)
         
-        selected_org_ids = payload.org_ids or ([payload.org_id] if payload.org_id is not None else [user.org_id or 1])
-        primary_org_id = 1 if 1 in selected_org_ids or not selected_org_ids else selected_org_ids[0]
-        user.org_id = primary_org_id
-        
+        if payload.org_ids is not None and len(payload.org_ids) > 0:
+            selected_org_ids = payload.org_ids
+            primary_org_id = 1 if 1 in selected_org_ids else selected_org_ids[0]
+            user.org_id = primary_org_id
+            user.allowed_org_ids = selected_org_ids
+        elif payload.org_id is not None:
+            user.org_id = payload.org_id
+            user.allowed_org_ids = [payload.org_id]
+            
         if payload.roles is not None:
-            role_objs = db.query(Role).filter(Role.id.in_(payload.roles)).all()
-            user.roles = role_objs
+            int_ids = [r for r in payload.roles if isinstance(r, int)]
+            str_names = [r for r in payload.roles if isinstance(r, str)]
+            conditions = []
+            if int_ids:
+                conditions.append(Role.id.in_(int_ids))
+            if str_names:
+                conditions.append(Role.name.in_(str_names))
+            if conditions:
+                user.roles = db.query(Role).filter(Role.is_deleted == False).filter(or_(*conditions)).all()
+            else:
+                user.roles = []
             
         db.commit()
         db.refresh(user)
 
         all_orgs = {o.id: o.display_name or o.name for o in db.query(Organisation).all()}
-        org_names = ["Root / All Tenant Access"] if primary_org_id == 1 else [all_orgs.get(oid, f"Org #{oid}") for oid in selected_org_ids]
+        returned_org_ids = user.allowed_org_ids if user.allowed_org_ids else ([user.org_id] if user.org_id else [1])
+        if 1 in returned_org_ids:
+            org_names = ["Root / All Tenant Access"]
+        else:
+            org_names = [all_orgs.get(oid, f"Org #{oid}") for oid in returned_org_ids]
 
         return {
             "id": user.id, 
             "username": user.username,
-            "org_id": primary_org_id,
-            "org_ids": selected_org_ids,
-            "org_name": org_names[0],
+            "org_id": user.org_id or (returned_org_ids[0] if returned_org_ids else 1),
+            "org_ids": returned_org_ids,
+            "org_name": org_names[0] if org_names else "Unknown",
             "org_names": org_names,
             "roles": [role.name for role in user.roles]
         }

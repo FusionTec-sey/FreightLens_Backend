@@ -3,7 +3,8 @@ from datetime import datetime, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, asc
+import math
 
 from Model.db import get_db
 from Model.containermgmt.Orders.StoreRequest import StoreRequest, StoreRequestItem
@@ -46,6 +47,18 @@ def format_request(req: StoreRequest, is_accounts: bool = True) -> dict:
                 "image_url": item.image_url,
             }
             for item in req.items if not item.is_deleted
+        ],
+        "purchase_orders": [
+            {
+                "id": po.id,
+                "po_number": po.po_number,
+                "doc_type": po.doc_type,
+                "status": po.status,
+                "status_label": po.status_label,
+                "lifecycle_stage": po.lifecycle_stage,
+                "eta_date": po.eta_date.isoformat() if po.eta_date else None,
+            }
+            for po in (req.purchase_orders or []) if not po.is_deleted
         ]
     }
 
@@ -58,12 +71,17 @@ def generate_request_number(db: Session, org_id: int) -> str:
 @StoreRequestRouter.get("")
 @StoreRequestRouter.get("/")
 async def list_store_requests(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: Optional[str] = Query("desc"),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
+    offset = (page - 1) * limit
     query = (
         db.query(StoreRequest)
         .options(joinedload(StoreRequest.items))
@@ -85,9 +103,30 @@ async def list_store_requests(
             )
         )
 
-    requests = query.order_by(desc(StoreRequest.id)).all()
+    total_count = query.count()
+
+    ALLOWED_SORT = {
+        "id": StoreRequest.id,
+        "request_number": StoreRequest.request_number,
+        "title": StoreRequest.title,
+        "status": StoreRequest.status,
+        "created_at": StoreRequest.created_at,
+    }
+    sort_column = ALLOWED_SORT.get(sort_by, StoreRequest.id)
+    if sort_dir == "asc":
+        query = query.order_by(asc(sort_column))
+    else:
+        query = query.order_by(desc(sort_column))
+
+    requests = query.offset(offset).limit(limit).all()
     is_accounts = org_context.is_root or any(r.name in ["Administrator", "Accounts_Finance", "Admin"] for r in current_user.roles)
-    return [format_request(r, is_accounts) for r in requests]
+    return {
+        "items": [format_request(r, is_accounts) for r in requests],
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total_count / limit) if total_count > 0 else 1
+    }
 
 @StoreRequestRouter.get("/{request_id}")
 async def get_store_request(

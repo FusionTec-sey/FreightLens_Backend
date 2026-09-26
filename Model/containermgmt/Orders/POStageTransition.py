@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from ...db import Base
-from ...mixins import AuditMixin
+from ...mixins import AuditMixin, OrgMixin
 
-class POStageTransition(AuditMixin, Base):
+class POStageTransition(OrgMixin, AuditMixin, Base):
     """
     Audit log of all procurement lifecycle stage transitions.
     """

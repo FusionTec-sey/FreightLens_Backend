@@ -62,6 +62,7 @@ async def login(
     user_roles = [role.name for role in user.roles]
     org = user.organisation
     org_id = user.org_id or 1
+    allowed_org_ids = user.allowed_org_ids if user.allowed_org_ids else [org_id]
     is_root = (org.parent_org_id is None) if org else True
     org_name = org.display_name or org.name if org else "Sahaj Construction"
     modules = list(org.modules) if (org and org.modules) else ["LOGISTICS", "ORDERS"]
@@ -72,6 +73,7 @@ async def login(
             "sub": user.username,
             "roles": user_roles,
             "org_id": org_id,
+            "allowed_org_ids": allowed_org_ids,
             "is_root": is_root,
             "modules": modules,
             "plan": plan,
@@ -120,6 +122,7 @@ async def login(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "org_id": org_id,
+        "allowed_org_ids": allowed_org_ids,
         "org_name": org_name,
         "is_root": is_root,
         "modules": modules,
@@ -215,6 +218,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "username": current_user.username,
         "roles": [r.name for r in current_user.roles],
         "org_id": current_user.org_id or 1,
+        "allowed_org_ids": current_user.allowed_org_ids if current_user.allowed_org_ids else [current_user.org_id or 1],
         "org_name": org.display_name or org.name if org else "Sahaj Construction",
         "is_root": (org.parent_org_id is None) if org else True,
     }

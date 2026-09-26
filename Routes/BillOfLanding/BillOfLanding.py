@@ -12,8 +12,10 @@ from Model import ContainerDetails, Supplier, LogisticsProvider,  Vessal, BillOf
 from Schema import   BillOfLandingInSchema, BillOfLandingWithContainersSchema, ContainerDetailsSchemaWithBl, BillOfLandingUpdateOnlySchema, BillOfLandingListResponse
 from Utils import *
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import can_view_bl_user, can_view_supplier_user
+from Model.Credentials.users import User
 from Utils.org_filter import OrgContext, apply_org_filter
-from fastapi import  Depends, Body
+from fastapi import  Depends, Body, status
 
 # from fastapi.responses import FileResponse, StreamingResponse
 # import asyncio
@@ -149,8 +151,14 @@ class BillOfLandingAPI:
         self,
         data: BillOfLandingInSchema = Body(...),
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
         ):
+        if not can_view_bl_user(current_user, org_context):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access forbidden: You do not have permission to manage Bills of Lading."
+            )
         # 1. Create Bill of Landing
         resolved_consignee_id = resolve_consignee(db, data.Consignee, current_user.id)
         resolved_vessel_id = resolve_vessel(db, data.Vessel, current_user.id)
@@ -244,8 +252,15 @@ class BillOfLandingAPI:
         limit: int = Query(50, le=100),
         sort_by_arrival: bool = Query(True, description="Sort by ArrivalDate descending if True"),
         db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
         org_context: OrgContext = Depends(get_org_context)
         ):
+        if not can_view_bl_user(current_user, org_context):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access forbidden: You do not have permission to view Bills of Lading."
+            )
+        can_see_supplier = can_view_supplier_user(current_user, org_context)
         try:
             query = db.query(BOfL).filter(BOfL.is_deleted == False)
             query = apply_org_filter(query, BOfL, org_context)
@@ -286,9 +301,12 @@ class BillOfLandingAPI:
                 )
 
             if SupplierName:
-                query = query.join(BOfL.supplier_rel).filter(
-                    Supplier.name.ilike(f"%{SupplierName}%")
-                )
+                if not can_see_supplier:
+                    query = query.filter(1 == 0)
+                else:
+                    query = query.join(BOfL.supplier_rel).filter(
+                        Supplier.name.ilike(f"%{SupplierName}%")
+                    )
 
             if Provider:
                 query = query.join(BOfL.provider_rel).filter(
@@ -325,6 +343,8 @@ class BillOfLandingAPI:
                 )
 
                 bl_schema = BillOfLandingWithContainersSchema.from_orm_flat(bl)
+                if not can_see_supplier:
+                    bl_schema.supplier_name = None
                 bl_schema.containers = [ContainerDetailsSchemaWithBl.from_orm_flat(c) for c in containers]
                 response.append(bl_schema)
 
@@ -342,8 +362,14 @@ class BillOfLandingAPI:
         bl_number: str,
         data: BillOfLandingUpdateOnlySchema = Body(...),
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
         ):
+        if not can_view_bl_user(current_user, org_context):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access forbidden: You do not have permission to modify Bills of Lading."
+            )
         
         # 1. Fetch the existing Bill of Landing
         bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
@@ -407,8 +433,14 @@ class BillOfLandingAPI:
     async def delete_bill_of_lading(self, 
         bl_code: str,
         db: Session = Depends(get_db),
-        current_user: dict = Depends(get_current_user),
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
         ):
+        if not can_view_bl_user(current_user, org_context):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access forbidden: You do not have permission to delete Bills of Lading."
+            )
         # Step 1: Fetch the Bill of Lading
         bl = db.query(BillOfLanding).filter(BillOfLanding.BillOfLanding == bl_code).first()
         if not bl:

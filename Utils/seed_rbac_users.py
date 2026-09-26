@@ -101,6 +101,25 @@ ALL_PERMISSIONS = {
     "Delete_Role": "Delete custom roles",
     "View_Setting": "View system settings",
     "Edit_Setting": "Configure system settings",
+    "View_TenantConsole": "Access multi-tenant organization console and company administration",
+    "Manage_TenantConsole": "Configure organizations, tenant subsidiaries, company prefixes, and cross-tenant modules",
+
+    # ── Inventory & Product Master ───────────────────────────────────────────
+    "View_Product": "View product catalog, specifications, stock levels, and category hierarchy",
+    "Add_Product": "Register new products in the master catalog",
+    "Edit_Product": "Modify product specifications, dimensions, classification, and media",
+    "Delete_Product": "Deactivate or permanently delete products from catalog",
+    "Adjust_Stock": "Manually adjust product stock levels with reason tracking (receipt, damage, return)",
+    "View_ProductCategory": "View product category taxonomy tree and hierarchy",
+    "Manage_ProductCategory": "Create, edit, rename, delete, and reorganize product categories",
+
+    # ── Dashboard Personalization & Templates ────────────────────────────────
+    "Customize_Dashboard": "Personalize dashboard layout by pinning, unpinning, and reordering stat widgets",
+    "Manage_DashboardTemplate": "Create, edit, delete, and assign dashboard templates to roles (admin only)",
+
+    # ── Inventory Reporting & Export ─────────────────────────────────────────
+    "View_InventoryReport": "View inventory analytics, stock movement summaries, and reorder reports",
+    "Export_Inventory": "Export product catalog and stock data to CSV or Excel",
 }
 
 # 2. Role Definitions & Exact Permission Sets
@@ -123,9 +142,16 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_GoodsReceipt", "Verify_Receipt", "Edit_Receipt", "Submit_Receipt",
         "Add_Defect", "Edit_Defect", "Resolve_Defect", "Delete_Defect",
         "View_StoreRequest", "Add_StoreRequest", "Edit_StoreRequest", "Submit_StoreRequest", "Withdraw_StoreRequest", "Delete_StoreRequest",
-        "View_MasterData", "Edit_MasterData", "View_Supplier", "Edit_Supplier",
+        "View_MasterData", "Edit_MasterData",
         "View_Report", "Generate_Report", "View_User", "Add_User", "Edit_User", "Delete_User",
-        "View_Role", "Add_Role", "Edit_Role", "Delete_Role"
+        "View_Role", "Add_Role", "Edit_Role", "Delete_Role",
+        "View_TenantConsole", "Manage_TenantConsole",
+        # Inventory Master
+        "View_Product", "Add_Product", "Edit_Product", "Delete_Product",
+        "Adjust_Stock", "View_ProductCategory", "Manage_ProductCategory",
+        # Dashboard & Reports
+        "Customize_Dashboard", "Manage_DashboardTemplate",
+        "View_InventoryReport", "Export_Inventory",
     ],
 
     # ── 3. Procurement Specialist (Buyer / Sourcing) ────────────────────────
@@ -139,7 +165,10 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_Container", "View_BL",
         "View_StoreRequest",
         "View_Supplier", "Edit_Supplier",
-        "View_MasterData", "View_Report", "Generate_Report"
+        "View_MasterData", "View_Report", "Generate_Report",
+        # Inventory & Dashboard
+        "View_Product", "Edit_Product", "View_ProductCategory",
+        "Customize_Dashboard", "Export_Inventory",
     ],
 
     # ── 4. Finance & Accounts Controller ────────────────────────────────────
@@ -152,7 +181,10 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_GoodsReceipt", "View_Defect", "Resolve_Defect",
         "View_MasterData", "Edit_MasterData",
         "View_Supplier",
-        "View_Report", "Generate_Report"
+        "View_Report", "Generate_Report",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory",
+        "Customize_Dashboard", "View_InventoryReport",
     ],
     "Accounts_Finance": [
         "View_Dashboard",
@@ -163,7 +195,10 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_GoodsReceipt", "View_Defect", "Resolve_Defect",
         "View_MasterData", "Edit_MasterData",
         "View_Supplier",
-        "View_Report", "Generate_Report"
+        "View_Report", "Generate_Report",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory",
+        "Customize_Dashboard", "View_InventoryReport",
     ],
 
     # ── 5. Logistics & Freight Coordinator ──────────────────────────────────
@@ -177,7 +212,9 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_Demurrage",
         "View_GoodsReceipt",
         "View_Supplier",
-        "View_Report", "Generate_Report"
+        "View_Report", "Generate_Report",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory", "Customize_Dashboard",
     ],
     "Delivery": [
         "View_Dashboard",
@@ -185,7 +222,9 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_Container", "Edit_Container",
         "View_BL", "Add_PackingList", "Edit_PackingList", "View_Demurrage",
         "View_GoodsReceipt", "Verify_Receipt",
-        "View_Report"
+        "View_Report",
+        # Inventory & Dashboard
+        "View_Product", "Customize_Dashboard",
     ],
 
     # ── 6. Warehouse & Dock Supervisor ──────────────────────────────────────
@@ -196,13 +235,18 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_Container", "View_PackingList",
         "View_GoodsReceipt", "Verify_Receipt", "Edit_Receipt", "Submit_Receipt",
         "Add_Defect", "Edit_Defect", "Resolve_Defect",
-        "View_Report"
+        "View_Report",
+        # Inventory & Dashboard
+        "View_Product", "Adjust_Stock", "View_ProductCategory",
+        "Customize_Dashboard", "View_InventoryReport",
     ],
     "Warehouse_Operator": [
         "View_Dashboard",
         "View_Container", "View_PackingList",
         "View_GoodsReceipt", "Verify_Receipt", "Edit_Receipt", "Submit_Receipt",
-        "Add_Defect", "Edit_Defect"
+        "Add_Defect", "Edit_Defect",
+        # Inventory & Dashboard
+        "View_Product", "Adjust_Stock", "Customize_Dashboard",
     ],
 
     # ── 7. Site Requisitioner / Storekeeper ──────────────────────────────────
@@ -212,14 +256,18 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_StoreRequest", "Add_StoreRequest", "Edit_StoreRequest", "Submit_StoreRequest", "Withdraw_StoreRequest",
         "View_RFQ", "Add_RFQ", "Edit_RFQ", # Sourcing requests only
         "View_OrderTemplate", # Can use templates to draft RFQs
-        "Add_Defect"
+        "Add_Defect",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory", "Customize_Dashboard",
     ],
     "Store_User": [
         "View_Dashboard",
         "View_StoreRequest", "Add_StoreRequest", "Edit_StoreRequest", "Submit_StoreRequest", "Withdraw_StoreRequest",
         "View_RFQ", "Add_RFQ", "Edit_RFQ",
         "View_OrderTemplate",
-        "Add_Defect"
+        "Add_Defect",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory", "Customize_Dashboard",
     ],
 
     # ── 8. Auditor / Management Viewer ──────────────────────────────────────
@@ -231,7 +279,9 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_StoreRequest",
         "View_MasterData", "View_Supplier",
         "View_Report", "Generate_Report",
-        "View_User", "View_Role"
+        "View_User", "View_Role",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory", "View_InventoryReport", "Customize_Dashboard",
     ],
     "viewer": [
         "View_Dashboard",
@@ -239,7 +289,9 @@ ROLE_PERMISSIONS_MATRIX = {
         "View_Container", "View_BL", "View_PackingList",
         "View_GoodsReceipt", "View_Defect",
         "View_StoreRequest",
-        "View_Report"
+        "View_Report",
+        # Inventory & Dashboard
+        "View_Product", "View_ProductCategory", "Customize_Dashboard",
     ],
 }
 

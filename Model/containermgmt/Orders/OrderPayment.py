@@ -1,9 +1,10 @@
 from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from ...db import Base
-from ...mixins import AuditMixin
+from ...mixins import AuditMixin, OrgMixin
 
-class OrderPayment(AuditMixin, Base):
+class OrderPayment(OrgMixin, AuditMixin, Base):
     __tablename__ = "order_payments"
     __table_args__ = {'schema': 'containermgmt'}
 
@@ -27,9 +28,10 @@ class OrderPayment(AuditMixin, Base):
     payment_method = Column(String(100), nullable=True)  # TT / Bank Transfer, LC, Cheque, Cash
     reference_number = Column(String(100), nullable=True)  # Bank ref / transaction ID
     
-    evidence_doc_id = Column(Integer, ForeignKey("containermgmt.order_documents.id"), nullable=True)
+    evidence_doc_id = Column(UUID(as_uuid=False), ForeignKey("containermgmt.order_documents.id", ondelete="SET NULL"), nullable=True)
     notes = Column(Text, nullable=True)
 
     # Relationships
     purchase_order = relationship("PurchaseOrder", back_populates="payments")
     evidence_doc = relationship("OrderDocument", foreign_keys=[evidence_doc_id])
+    documents = relationship("OrderDocument", foreign_keys="[OrderDocument.payment_id]", back_populates="payment", cascade="all, delete-orphan")

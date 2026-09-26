@@ -118,6 +118,24 @@ async def startup_event():
     ensure_po_lifecycle_schema()
     from Utils.migrate_master_data import ensure_master_data_schema
     ensure_master_data_schema()
+    from Utils.migrate_order_documents import ensure_order_documents_schema
+    ensure_order_documents_schema()
+    from Utils.migrate_order_documents_org import ensure_order_documents_org_schema
+    ensure_order_documents_org_schema()
+    from Utils.migrate_master_document_types import ensure_master_document_types_schema
+    ensure_master_document_types_schema()
+    from Utils.migrate_product_suppliers import ensure_product_suppliers_schema
+    ensure_product_suppliers_schema()
+    from Utils.migrate_material_tracking_and_holds import ensure_material_tracking_and_holds_schema
+    ensure_material_tracking_and_holds_schema()
+    from Utils.migrate_decouple_financial_status import ensure_decouple_financial_status
+    ensure_decouple_financial_status()
+    from Utils.migrate_user_allowed_orgs import ensure_user_allowed_orgs_schema
+    ensure_user_allowed_orgs_schema()
+    from Utils.migrate_dashboard_and_inventory_permissions import ensure_dashboard_and_inventory_permissions
+    ensure_dashboard_and_inventory_permissions()
+    from Utils.migrate_product_packaging_and_warehouse import ensure_packaging_and_warehouse_columns
+    ensure_packaging_and_warehouse_columns()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -142,6 +160,17 @@ async def startup_event():
         blob_storage.ensure_bucket_exists()
     except Exception as e:
         logger.error("Failed to initialize RustFS Object Storage: %s", e)
+
+    # ── Initialize Meilisearch Search Engine ─────────────────────────────────
+    logger.info("Initializing Meilisearch Indices (Products & Orders)...")
+    try:
+        from Services.search_service import bulk_index_all_products, bulk_index_all_orders
+        meili_db = SessionLocal()
+        bulk_index_all_products(meili_db)
+        bulk_index_all_orders(meili_db)
+        meili_db.close()
+    except Exception as e:
+        logger.error("Failed to initialize Meilisearch: %s", e)
 
 
 @app.on_event("shutdown")
@@ -223,8 +252,10 @@ app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(NotificationRouter)
 from Routes.MasterData.MasterDataRouter import MasterDataRouter
+from Routes.Dashboard.DashboardRouter import DashboardRouter
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
+app.include_router(DashboardRouter)
 
 
 

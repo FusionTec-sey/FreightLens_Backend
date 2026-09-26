@@ -32,6 +32,8 @@ DEFAULT_PERMISSIONS = [
     ("View_Setting",         "View settings menu and sub-pages"),
     ("View_User",            "View user accounts"),
     ("View_Role",            "View roles and their permissions"),
+    ("View_TenantConsole",   "Access multi-tenant organization console and company administration"),
+    ("Manage_TenantConsole", "Configure organizations, tenant subsidiaries, company prefixes, and cross-tenant modules"),
 
     # ── Store Request actions ─────────────────────────────────────────────────
     ("Add_StoreRequest",     "Create a new store request draft"),
@@ -132,6 +134,23 @@ DEFAULT_PERMISSIONS = [
     ("View_vessel_name",     "View Vessel Name column"),
     ("View_consignee_name",  "View Consignee Name column"),
     ("View_arrivalDate",     "View Arrival Date in BL list"),
+
+    # ── Inventory & Product Master ───────────────────────────────────────────
+    ("View_Product",          "View product catalog, specifications, stock levels"),
+    ("Add_Product",           "Register new products in the master catalog"),
+    ("Edit_Product",          "Modify product specifications, dimensions, classification"),
+    ("Delete_Product",        "Deactivate or permanently delete products from catalog"),
+    ("Adjust_Stock",          "Manually adjust product stock levels with reason tracking"),
+    ("View_ProductCategory",  "View product category taxonomy tree and hierarchy"),
+    ("Manage_ProductCategory","Create, edit, rename, delete product categories"),
+
+    # ── Dashboard Personalization & Templates ────────────────────────────────
+    ("Customize_Dashboard",   "Personalize dashboard layout by pinning and reordering widgets"),
+    ("Manage_DashboardTemplate","Create, edit, delete, and assign dashboard templates to roles"),
+
+    # ── Inventory Reporting & Export ─────────────────────────────────────────
+    ("View_InventoryReport",  "View inventory analytics and reorder reports"),
+    ("Export_Inventory",      "Export product catalog and stock data to CSV or Excel"),
 ]
 
 DEFAULT_STATUSES = [
@@ -156,23 +175,21 @@ LIFECYCLE_STAGES = [
     {"code": "PROFORMA", "name": "Proforma Invoice", "step": 7, "description": "Final billing verification and variance audit"},
 ]
 
-# ── Agreed 14 (+1 Defect/Reopened) Procurement Lifecycle Statuses ─────────────
+# ── Operational Workflow Statuses (Pure physical supply chain stages; Financials decoupled) ──
 DEFAULT_ORDER_STATUSES = [
     (1,  "Draft",             "DRAFT",           1,  5,   "bg-slate-400",  "bg-slate-100 text-slate-700 border-slate-300"),
-    (2,  "Submitted",         "SUBMITTED",       2,  10,  "bg-blue-400",   "bg-blue-100 text-blue-700 border-blue-300"),
-    (3,  "Sourcing",          "SOURCING",        3,  20,  "bg-indigo-400", "bg-indigo-100 text-indigo-700 border-indigo-300"),
-    (4,  "Ordered",           "ORDERED",         4,  30,  "bg-purple-500", "bg-purple-100 text-purple-700 border-purple-300"),
-    (5,  "Part Paid",         "PART_PAID",       5,  40,  "bg-amber-500",  "bg-amber-100 text-amber-800 border-amber-300"),
-    (6,  "Paid",              "PAID",            6,  50,  "bg-teal-500",   "bg-teal-100 text-teal-800 border-teal-300"),
-    (7,  "In Production",     "IN_PRODUCTION",   7,  60,  "bg-orange-500", "bg-orange-100 text-orange-800 border-orange-300"),
-    (8,  "Ready",             "READY",           8,  70,  "bg-yellow-500", "bg-yellow-100 text-yellow-800 border-yellow-300"),
-    (9,  "Packed",            "PACKED",          9,  75,  "bg-lime-500",   "bg-lime-100 text-lime-800 border-lime-300"),
-    (10, "Shipped",           "SHIPPED",         10, 85,  "bg-cyan-500",   "bg-cyan-100 text-cyan-800 border-cyan-300"),
-    (11, "Arrived",           "ARRIVED",         11, 92,  "bg-blue-600",   "bg-blue-100 text-blue-800 border-blue-300"),
-    (12, "Received",          "RECEIVED",        12, 96,  "bg-emerald-500","bg-emerald-100 text-emerald-800 border-emerald-300"),
-    (13, "Completed",         "COMPLETED",       13, 100, "bg-emerald-600","bg-emerald-100 text-emerald-800 border-emerald-300"),
-    (14, "Cancelled",         "CANCELLED",       14, 0,   "bg-red-500",    "bg-red-100 text-red-800 border-red-300"),
-    (15, "Defect / Reopened", "DEFECT_REOPENED", 15, 95,  "bg-rose-500",   "bg-rose-100 text-rose-800 border-rose-300"),
+    (2,  "Submitted",         "SUBMITTED",       2,  15,  "bg-blue-400",   "bg-blue-100 text-blue-700 border-blue-300"),
+    (3,  "Sourcing",          "SOURCING",        3,  25,  "bg-indigo-400", "bg-indigo-100 text-indigo-700 border-indigo-300"),
+    (4,  "Ordered",           "ORDERED",         4,  40,  "bg-purple-500", "bg-purple-100 text-purple-700 border-purple-300"),
+    (5,  "In Production",     "IN_PRODUCTION",   5,  55,  "bg-orange-500", "bg-orange-100 text-orange-800 border-orange-300"),
+    (6,  "Ready",             "READY",           6,  70,  "bg-yellow-500", "bg-yellow-100 text-yellow-800 border-yellow-300"),
+    (7,  "Packed",            "PACKED",          7,  78,  "bg-lime-500",   "bg-lime-100 text-lime-800 border-lime-300"),
+    (8,  "Shipped",           "SHIPPED",         8,  85,  "bg-cyan-500",   "bg-cyan-100 text-cyan-800 border-cyan-300"),
+    (9,  "Arrived",           "ARRIVED",         9,  92,  "bg-blue-600",   "bg-blue-100 text-blue-800 border-blue-300"),
+    (10, "Received",          "RECEIVED",        10, 96,  "bg-emerald-500","bg-emerald-100 text-emerald-800 border-emerald-300"),
+    (11, "Completed",         "COMPLETED",       11, 100, "bg-emerald-600","bg-emerald-100 text-emerald-800 border-emerald-300"),
+    (12, "Cancelled",         "CANCELLED",       12, 0,   "bg-red-500",    "bg-red-100 text-red-800 border-red-300"),
+    (13, "Defect / Reopened", "DEFECT_REOPENED", 13, 95,  "bg-rose-500",   "bg-rose-100 text-rose-800 border-rose-300"),
 ]
 
 def seed_db(db: Session):
@@ -234,6 +251,8 @@ def seed_db(db: Session):
                 order_st.badge_color = badge_color
                 order_st.is_active = True
 
+        # Deactivate financial statuses from workflow stage table
+        db.query(OrderStatus).filter(OrderStatus.code.in_(["PART_PAID", "PAID"])).update({"is_active": False}, synchronize_session=False)
         db.flush()
 
         # ── 4. Seed / sync Roles ──────────────────────────────────────────────

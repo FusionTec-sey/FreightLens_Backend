@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
 from ...db import Base
-from ...mixins import AuditMixin
+from ...mixins import AuditMixin, OrgMixin
 
-class POItem(AuditMixin, Base):
+class POItem(OrgMixin, AuditMixin, Base):
     __tablename__ = "po_items"
     __table_args__ = {'schema': 'containermgmt'}
 

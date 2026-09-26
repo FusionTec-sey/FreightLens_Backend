@@ -1,0 +1,88 @@
+# Coolify Staging Stack for FreightLens
+version: '3.8'
+
+services:
+  postgres-staging:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: containermgmt_pg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - freightlens_staging_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d containermgmt_pg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rustfs-staging:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - RUSTFS_ADDRESS=:9000
+      - RUSTFS_CONSOLE_ADDRESS=:9001
+      - RUSTFS_CONSOLE_ENABLE=false
+    volumes:
+      - freightlens_staging_rustfs:/data
+
+  meilisearch-staging:
+    image: getmeili/meilisearch:v1.6
+    restart: unless-stopped
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_ENV=production
+    volumes:
+      - freightlens_staging_meili:/meili_data
+
+  backend-staging:
+    build:
+      context: https://github.com/vekaria-production/FreightLens_Backend.git#standalone-main
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Password has '@' which is percent-encoded as '%40' for SQLAlchemy URL parsing
+      - DATABASE_URL=postgresql+psycopg2://postgres:Frigh1liner%40Fu5i0n1ech@postgres-staging:5432/containermgmt_pg
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - ENVIRONMENT=production
+      - ALLOWED_ORIGINS=${FRONTEND_URL}
+      - HOST_IP=0.0.0.0
+      - HOST_PORT=8001
+      - RUSTFS_ENDPOINT_URL=http://rustfs-staging:9000
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - RUSTFS_BUCKET_NAME=containermgmt-blobs
+      - RUSTFS_REGION=us-east-1
+      - MEILISEARCH_URL=http://meilisearch-staging:7700
+      - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY}
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      rustfs-staging:
+        condition: service_started
+      meilisearch-staging:
+        condition: service_started
+    labels:
+      - "coolify.managed=true"
+
+  frontend-staging:
+    build:
+      context: https://github.com/vekaria-production/FreightLens_Frontend.git#standalone-main
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_NETWORK=${BACKEND_URL}
+    restart: unless-stopped
+    depends_on:
+      - backend-staging
+    labels:
+      - "coolify.managed=true"
+
+volumes:
+  freightlens_staging_pgdata:
+  freightlens_staging_rustfs:
+  freightlens_staging_meili:

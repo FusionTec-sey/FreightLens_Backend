@@ -1,8 +1,9 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from ...db import Base
+from ...mixins import OrgMixin
 
-class OrderStatusHistory(Base):
+class OrderStatusHistory(OrgMixin, Base):
     __tablename__ = "order_status_history"
     __table_args__ = {'schema': 'containermgmt'}
 

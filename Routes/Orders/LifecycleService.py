@@ -339,8 +339,7 @@ class LifecycleService:
                             target_it = next((i for i in active_items if i.id == q_item.po_item_id), None)
                             if target_it:
                                 target_it.approved_unit_price = q_item.unit_price
-                    if not po.eta_date and quote.delivery_lead_time_days:
-                        po.eta_date = today_date + timedelta(days=int(quote.delivery_lead_time_days))
+                    # Note: eta_date is not auto-updated here; shipping schedule is determined manually or via BL/vessel tracking
 
         elif target_stage == "PO_ISSUED":
             if not po.order_mail_date:
@@ -351,10 +350,7 @@ class LifecycleService:
                 po.quote_received_date = today_date
             if not po.pi_confirmed_date:
                 po.pi_confirmed_date = today_date
-            if not po.eta_date and po.selected_quote_id:
-                quote = db.query(VendorQuote).filter(VendorQuote.id == po.selected_quote_id).first()
-                if quote and quote.delivery_lead_time_days:
-                    po.eta_date = today_date + timedelta(days=int(quote.delivery_lead_time_days))
+            # Note: eta_date is not auto-updated here; shipping schedule is determined manually or via BL/vessel tracking
             # Copy approved unit price to official po_unit_price
             for it in active_items:
                 if it.approved_unit_price is not None:
@@ -380,8 +376,8 @@ class LifecycleService:
                 logger.warning(f"PO #{po.po_number} locked due to proforma variance.")
 
         elif target_stage == "SHIPPED":
-            if not po.eta_date:
-                po.eta_date = today_date + timedelta(days=21)
+            # Note: eta_date is not auto-updated here; shipping schedule is determined manually or via BL/vessel tracking
+            pass
 
         # Log transition
         new_version = po.lifecycle_version + 1
@@ -426,6 +422,11 @@ class LifecycleService:
 
         db.commit()
         db.refresh(po)
+        try:
+            from Services.search_service import sync_order_document
+            sync_order_document(po)
+        except Exception as e:
+            logger.warning("Failed to sync order %s to Meilisearch after transition: %s", po.id, e)
 
         logger.info(f"PO #{po.po_number} transitioned {old_stage} -> {target_stage} (v{new_version}) by user {user_id}")
         return po

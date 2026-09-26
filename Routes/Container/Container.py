@@ -12,6 +12,18 @@ from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, Conta
 from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse, ReportSchema
 from Utils import *
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import (
+    can_view_supplier_user,
+    can_view_bl_user,
+    can_view_documents_user,
+    can_upload_documents_user,
+    can_delete_documents_user,
+    can_view_orders_user,
+    can_view_receipts_user,
+    can_view_defects_user,
+    is_financial_user,
+    has_permission,
+)
 from Model.Credentials.users import User
 from Utils.org_filter import OrgContext, apply_org_filter
 from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
@@ -510,8 +522,13 @@ class ContainerAPI:
             if bill_of_landing and bill_of_landing.strip():
                 base_query = base_query.filter(ContainerDetails.BillOfLanding.ilike(f"%{bill_of_landing.strip()}%"))
 
+            can_see_supplier = can_view_supplier_user(current_user, org_context)
+
             if SupplierName and SupplierName.strip():
-                base_query = base_query.join(BillOfLanding.supplier_rel).filter(Supplier.name.ilike(f"%{SupplierName.strip()}%"))
+                if not can_see_supplier:
+                    base_query = base_query.filter(1 == 0)
+                else:
+                    base_query = base_query.join(BillOfLanding.supplier_rel).filter(Supplier.name.ilike(f"%{SupplierName.strip()}%"))
 
             if ConsigneeName and ConsigneeName.strip():
                 base_query = base_query.join(BillOfLanding.consignee_rel).filter(Consignee.consignee_name.ilike(f"%{ConsigneeName.strip()}%"))
@@ -588,7 +605,7 @@ class ContainerAPI:
                 if container.bill_of_landing:
                     container_dict["bill_of_landing"] = {
                         "consignee_name": container.bill_of_landing.consignee_rel.consignee_name if container.bill_of_landing.consignee_rel else None,
-                        "supplier_name": container.bill_of_landing.supplier_rel.name if container.bill_of_landing.supplier_rel else None,
+                        "supplier_name": (container.bill_of_landing.supplier_rel.name if container.bill_of_landing.supplier_rel else None) if can_see_supplier else None,
                         "ArrivalDate": container.bill_of_landing.ArrivalDate.isoformat() if container.bill_of_landing.ArrivalDate else None,
                         "vessal": container.bill_of_landing.vessel_rel.VessalNo if container.bill_of_landing.vessel_rel else None,
                         "Doc_name": container.bill_of_landing.doc_rel.doc_type if container.bill_of_landing.doc_rel else None,
@@ -684,7 +701,16 @@ class ContainerAPI:
         return {"message": "Container and associated data deleted successfully"}
     
     @ContainerRouter.get("/getDocument/{doc_id}")
-    async def get_document(self, doc_id: int, db: Session = Depends(get_db)):
+    async def get_document(
+        self,
+        doc_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
+    ):
+        if not can_view_documents_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to view documents.")
+
         doc = db.query(ContainerDocs).filter(ContainerDocs.docs_id == doc_id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
@@ -709,12 +735,21 @@ class ContainerAPI:
         inbound_images: Optional[List[UploadFile]] = File([]),
         empty_images: Optional[List[UploadFile]] = File([]),
         remove_doc_ids: List[int] = Form([]),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
         ):
         
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
+
+        if remove_doc_ids and not can_delete_documents_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete documents.")
+
+        has_new_uploads = bool((documents and len(documents) > 0) or (inbound_images and len(inbound_images) > 0) or (empty_images and len(empty_images) > 0))
+        if has_new_uploads and not can_upload_documents_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to upload documents.")
 
         form = await request.form()
         updated_fields = dict(form)
@@ -798,13 +833,27 @@ class ContainerAPI:
         empty_images: Optional[List[UploadFile]] = File([]),
         remove_doc_ids: Optional[List[int]] = Form([]),
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
         ):
         # 🔍 Get the container
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         # print(container)
         if not container:
             raise HTTPException(status_code=404, detail="Container not found.")
+
+        # Guard B/L update
+        if update_data.bill_of_landing and not can_view_bl_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify Bill of Lading records.")
+
+        # Guard document deletions
+        if remove_doc_ids and not can_delete_documents_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete documents.")
+
+        # Guard document uploads
+        has_new_files = bool((new_docs and len(new_docs) > 0) or (inbound_images and len(inbound_images) > 0) or (empty_images and len(empty_images) > 0))
+        if has_new_files and not can_upload_documents_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to upload documents.")
 
         original_status = container.status
 
@@ -1378,7 +1427,10 @@ class ContainerAPI:
         org_context: OrgContext = Depends(get_org_context),
         current_user: User = Depends(get_current_user)
     ):
-        """Returns purchase orders available for linking to containers."""
+        """Returns purchase orders available for linking to containers with RBAC protection."""
+        if not can_view_orders_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: Missing permission to view purchase orders.")
+
         from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
         q = db.query(PurchaseOrder).filter(PurchaseOrder.is_deleted == False)
         q = apply_org_filter(q, PurchaseOrder, org_context)
@@ -1392,13 +1444,17 @@ class ContainerAPI:
                 )
             )
         orders = q.order_by(PurchaseOrder.created_at.desc()).limit(50).all()
+
+        can_view_supp = can_view_supplier_user(current_user, org_context)
+        is_fin = is_financial_user(current_user, org_context)
+
         return [
             {
                 "id": po.id,
                 "po_number": po.po_number,
-                "supplier": po.company or (po.supplier_rel.name if po.supplier_rel else "—"),
+                "supplier": (po.company or (po.supplier_rel.name if po.supplier_rel else "—")) if can_view_supp else "[REDACTED]",
                 "status": po.status,
-                "total_amount": float(po.total_amount or 0),
+                "total_amount": float(po.total_amount or 0) if is_fin else 0.0,
                 "currency": po.currency,
                 "goods_description": po.goods_description,
                 "created_at": po.created_at.isoformat() if po.created_at else None,
@@ -1411,15 +1467,16 @@ class ContainerAPI:
         self,
         container_id: int,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
     ):
         """
-        Returns all cross-module data linked to a container:
-        - Container info
-        - Linked Purchase Orders (via OrderShipment)
-        - Goods Receipts (via GoodsReceipt.container_id)
-        - Defects & Damages (via DefectReport.container_id or receipt_id)
-        - Merged Documents (ContainerDocs + linked PO OrderDocuments)
+        Returns all cross-module data linked to a container with strict RBAC:
+        - Container info (BL redacted if lacking BL permission)
+        - Linked Purchase Orders (empty if lacking order clearance; supplier and financials redacted if lacking permissions)
+        - Goods Receipts (empty if lacking receipt clearance)
+        - Defects & Damages (empty if lacking defect clearance)
+        - Merged Documents (empty if lacking document clearance)
         - Summary metrics
         """
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id, is_deleted=False).first()
@@ -1434,13 +1491,27 @@ class ContainerAPI:
         from Model.containermgmt.Orders.OrderDocument import OrderDocument
 
         user_modules = getattr(current_user, "modules", ["LOGISTICS", "ORDERS"])
+        is_root = getattr(current_user, "is_root", False)
+        orders_module_active = ("ORDERS" in user_modules or is_root)
+
+        can_bl = can_view_bl_user(current_user, org_context)
+        can_supp = can_view_supplier_user(current_user, org_context)
+        is_fin = is_financial_user(current_user, org_context)
+        can_docs = can_view_documents_user(current_user, org_context)
+        can_orders = orders_module_active and can_view_orders_user(current_user, org_context)
+        can_receipts = orders_module_active and can_view_receipts_user(current_user, org_context)
+        can_defects = orders_module_active and can_view_defects_user(current_user, org_context)
 
         orders_data = []
         receipts_data = []
         defects_data = []
         order_docs = []
+        container_docs = []
 
-        if "ORDERS" in user_modules or getattr(current_user, "is_root", False):
+        po_ids = []
+        receipt_ids = []
+
+        if orders_module_active:
             # 1. Orders linked via OrderShipment
             shipments = db.query(OrderShipment).filter_by(container_id=container_id).all()
             po_ids = list({s.po_id for s in shipments if s.po_id})
@@ -1452,18 +1523,18 @@ class ContainerAPI:
                     if lp.id not in po_ids:
                         po_ids.append(lp.id)
 
-            if po_ids:
+            if can_orders and po_ids:
                 pos = db.query(PurchaseOrder).filter(PurchaseOrder.id.in_(po_ids), PurchaseOrder.is_deleted == False).all()
                 for po in pos:
                     pls = db.query(OrderPackingList).filter_by(po_id=po.id).all()
                     orders_data.append({
                         "id": po.id,
                         "po_number": po.po_number,
-                        "supplier": po.company or (po.supplier_rel.name if po.supplier_rel else "—"),
+                        "supplier": (po.company or (po.supplier_rel.name if po.supplier_rel else "—")) if can_supp else "[REDACTED]",
                         "status": po.status,
                         "shipment_status": po.shipment_status,
                         "items_count": len(po.items or []),
-                        "total_amount": float(po.total_amount or 0),
+                        "total_amount": float(po.total_amount or 0) if is_fin else 0.0,
                         "currency": po.currency or "USD",
                         "packing_lists": [
                             {
@@ -1478,6 +1549,8 @@ class ContainerAPI:
                         ]
                     })
 
+            # Order documents if permitted
+            if can_docs and po_ids:
                 odocs = db.query(OrderDocument).filter(
                     OrderDocument.po_id.in_(po_ids),
                     OrderDocument.is_deleted == False
@@ -1493,56 +1566,58 @@ class ContainerAPI:
                     })
 
             # 2. Goods Receipts
-            receipts = db.query(GoodsReceipt).filter_by(container_id=container_id, is_deleted=False).all()
-            receipt_ids = [r.id for r in receipts]
-            for r in receipts:
-                receipts_data.append({
-                    "id": r.id,
-                    "receipt_number": r.receipt_number,
-                    "po_number": r.purchase_order.po_number if r.purchase_order else None,
-                    "received_date": r.received_date.isoformat() if r.received_date else None,
-                    "status": r.status,
-                    "has_discrepancies": r.has_discrepancies,
-                    "items_count": len(r.items or []),
-                    "notes": r.notes
-                })
+            if can_receipts:
+                receipts = db.query(GoodsReceipt).filter_by(container_id=container_id, is_deleted=False).all()
+                receipt_ids = [r.id for r in receipts]
+                for r in receipts:
+                    receipts_data.append({
+                        "id": r.id,
+                        "receipt_number": r.receipt_number,
+                        "po_number": r.purchase_order.po_number if r.purchase_order else None,
+                        "received_date": r.received_date.isoformat() if r.received_date else None,
+                        "status": r.status,
+                        "has_discrepancies": r.has_discrepancies,
+                        "items_count": len(r.items or []),
+                        "notes": r.notes
+                    })
 
             # 3. Defects (Container damage + Goods discrepancies)
-            def_filter = [DefectReport.container_id == container_id]
-            if receipt_ids:
-                def_filter.append(DefectReport.receipt_id.in_(receipt_ids))
-            if po_ids:
-                def_filter.append(DefectReport.po_id.in_(po_ids))
+            if can_defects:
+                def_filter = [DefectReport.container_id == container_id]
+                if receipt_ids:
+                    def_filter.append(DefectReport.receipt_id.in_(receipt_ids))
+                if po_ids:
+                    def_filter.append(DefectReport.po_id.in_(po_ids))
 
-            defects = db.query(DefectReport).filter(
-                or_(*def_filter),
-                DefectReport.is_deleted == False
-            ).all()
+                defects = db.query(DefectReport).filter(
+                    or_(*def_filter),
+                    DefectReport.is_deleted == False
+                ).all()
 
-            for d in defects:
-                defects_data.append({
-                    "id": d.id,
-                    "defect_number": d.defect_number,
-                    "report_type": d.report_type,
-                    "category": d.category,
-                    "title": d.title,
-                    "status": d.status,
-                    "discovery_date": d.discovery_date.isoformat() if d.discovery_date else None,
-                    "items_count": len(d.items or []),
-                    "images_count": len(d.images or [])
-                })
+                for d in defects:
+                    defects_data.append({
+                        "id": d.id,
+                        "defect_number": d.defect_number,
+                        "report_type": d.report_type,
+                        "category": d.category,
+                        "title": d.title,
+                        "status": d.status,
+                        "discovery_date": d.discovery_date.isoformat() if d.discovery_date else None,
+                        "items_count": len(d.items or []),
+                        "images_count": len(d.images or [])
+                    })
 
         # 4. Container Documents
-        container_docs = []
-        for cd in (container.documents or []):
-            container_docs.append({
-                "id": cd.docs_id,
-                "name": cd.path.split("/")[-1] if cd.path else f"doc_{cd.docs_id}",
-                "source": "Container",
-                "type": "Shipping" if cd.Type == "D" else ("Inbound Photo" if cd.Type == "AD" else "Empty Photo"),
-                "file_path": cd.path,
-                "is_order_doc": False,
-            })
+        if can_docs:
+            for cd in (container.documents or []):
+                container_docs.append({
+                    "id": cd.docs_id,
+                    "name": cd.path.split("/")[-1] if cd.path else f"doc_{cd.docs_id}",
+                    "source": "Container",
+                    "type": "Shipping" if cd.Type == "D" else ("Inbound Photo" if cd.Type == "AD" else "Empty Photo"),
+                    "file_path": cd.path,
+                    "is_order_doc": False,
+                })
 
         open_defects = sum(1 for d in defects_data if d["status"] != "RESOLVED" and d["status"] != "CLOSED")
         has_disc = any(r["has_discrepancies"] for r in receipts_data)
@@ -1554,7 +1629,7 @@ class ContainerAPI:
                 "id": container.Container_ID,
                 "container_no": container.container_no,
                 "status": container.status_rel.name if container.status_rel else None,
-                "bill_of_lading": container.BillOfLanding,
+                "bill_of_lading": container.BillOfLanding if can_bl else None,
                 "venue": venue_name,
                 "in_bound": container.in_bound.isoformat() if container.in_bound else None,
                 "empty_date": container.empty_date.isoformat() if container.empty_date else None,
@@ -1580,9 +1655,13 @@ class ContainerAPI:
         container_id: int,
         po_id: int = Body(..., embed=True),
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
     ):
-        """Creates an OrderShipment link between this container and a purchase order."""
+        """Creates an OrderShipment link between this container and a purchase order with RBAC guard."""
+        if not can_view_orders_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: Missing permission to link purchase orders.")
+
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id, is_deleted=False).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
@@ -1618,9 +1697,13 @@ class ContainerAPI:
         container_id: int,
         po_id: int,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
     ):
-        """Removes the OrderShipment link between this container and the purchase order."""
+        """Removes the OrderShipment link between this container and the purchase order with RBAC guard."""
+        if not can_view_orders_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Forbidden: Missing permission to unlink purchase orders.")
+
         from Model.containermgmt.Orders.OrderShipment import OrderShipment
         deleted = db.query(OrderShipment).filter_by(container_id=container_id, po_id=po_id).delete()
         db.commit()

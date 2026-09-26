@@ -19,6 +19,8 @@ class StoreRequest(OrgMixin, AuditMixin, Base):
     
     required_date = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
+    hold_reason = Column(String(500), nullable=True)
+    hold_type = Column(String(50), nullable=True)
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     submitted_by = Column(Integer, ForeignKey("usercredentials.users.id"), nullable=True)
 

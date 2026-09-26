@@ -3,7 +3,8 @@ from datetime import datetime, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, asc
+import math
 
 from Model.db import get_db
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
@@ -61,6 +62,10 @@ def format_receipt(gr: GoodsReceipt) -> dict:
 @ReceivingRouter.get("")
 @ReceivingRouter.get("/")
 async def list_receipts(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: Optional[str] = Query("desc"),
     po_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
@@ -68,6 +73,7 @@ async def list_receipts(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
+    offset = (page - 1) * limit
     query = (
         db.query(GoodsReceipt)
         .options(
@@ -95,8 +101,29 @@ async def list_receipts(
             )
         )
 
-    receipts = query.order_by(desc(GoodsReceipt.id)).all()
-    return [format_receipt(r) for r in receipts]
+    total_count = query.count()
+
+    ALLOWED_SORT = {
+        "id": GoodsReceipt.id,
+        "receipt_number": GoodsReceipt.receipt_number,
+        "receipt_date": GoodsReceipt.receipt_date,
+        "status": GoodsReceipt.status,
+        "created_at": GoodsReceipt.created_at,
+    }
+    sort_column = ALLOWED_SORT.get(sort_by, GoodsReceipt.id)
+    if sort_dir == "asc":
+        query = query.order_by(asc(sort_column))
+    else:
+        query = query.order_by(desc(sort_column))
+
+    receipts = query.offset(offset).limit(limit).all()
+    return {
+        "items": [format_receipt(r) for r in receipts],
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total_count / limit) if total_count > 0 else 1
+    }
 
 @ReceivingRouter.get("/{receipt_id}")
 async def get_receipt(

@@ -103,6 +103,59 @@ def is_financial_user(user: User, org_context: Optional[OrgContext] = None) -> b
 
     return False
 
+def can_view_supplier_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """
+    Authoritative server-side check for whether a user is authorized to view
+    confidential vendor/supplier identities, contacts, and quotes.
+    Allowed for:
+    - Root tenant super admins ('super_admin', 'root')
+    - Explicit procurement & finance roles ('procurement_specialist', 'buyer', 'finance_controller')
+    - Explicit permissions: View_Supplier, Supplier, Edit_Supplier, Add_Supplier
+    Forbidden for: Tenant admins without explicit supplier permissions, floor staff, warehouse, requestors.
+    """
+    if not user:
+        return False
+
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    # Only true global Super Admins bypass explicit permission checks
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+
+    if any(r in ["procurement_specialist", "buyer", "finance_controller", "accounts_finance"] for r in user_roles):
+        return True
+
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["View_Supplier", "Supplier", "Edit_Supplier", "Add_Supplier"]:
+                return True
+
+    return False
+
+def can_view_bl_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """
+    Authoritative server-side check for whether a user is authorized to view
+    Bills of Lading records and details.
+    Allowed for:
+    - Root tenant super admins ('super_admin', 'root')
+    - Explicit permissions: View_BL, Add_BillOfLanding, Edit_BillOfLanding, Delete_BillOfLanding, BillOfLanding
+    Forbidden if access has been withdrawn.
+    """
+    if not user:
+        return False
+
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["View_BL", "Add_BillOfLanding", "Edit_BillOfLanding", "Delete_BillOfLanding", "BillOfLanding"]:
+                return True
+
+    return False
+
 def require_permission(permission_name: str):
     """
     FastAPI dependency that enforces a required permission, raising 403 Forbidden if absent.
@@ -150,3 +203,88 @@ def require_financial_access(
             detail="Access forbidden: Financial and confidential purchasing data requires authorization."
         )
     return current_user
+
+def can_view_documents_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """Check if user has clearance to view container and operational documents/proofs."""
+    if not user:
+        return False
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["View_Document", "Upload_Document", "Edit_Document", "Delete_Document", "View_OrderDocument", "Document"]:
+                return True
+    return False
+
+def can_upload_documents_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """Check if user has clearance to upload container attachments, shipping documents, or photos."""
+    if not user:
+        return False
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["Upload_Document", "Edit_Document", "Add_Document", "Edit_Container"]:
+                return True
+    return False
+
+def can_delete_documents_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """Check if user has clearance to delete documents/proofs."""
+    if not user:
+        return False
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["Delete_Document", "Delete_Container"]:
+                return True
+    return False
+
+def can_view_orders_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """Check if user has clearance to view linked purchase orders."""
+    if not user:
+        return False
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["View_Order", "Order", "Add_Order", "Edit_Order"]:
+                return True
+    return False
+
+def can_view_receipts_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """Check if user has clearance to view goods receiving operations."""
+    if not user:
+        return False
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["View_GoodsReceipt", "Verify_Receipt", "Edit_Receipt", "Submit_Receipt"]:
+                return True
+    return False
+
+def can_view_defects_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
+    """Check if user has clearance to view container and receiving defect reports."""
+    if not user:
+        return False
+    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
+    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+        return True
+    for r in getattr(user, "roles", []):
+        for p in getattr(r, "permissions", []):
+            p_name = getattr(p, "name", "")
+            if p_name in ["View_Defect", "Defect", "Add_Defect", "Edit_Defect", "Resolve_Defect"]:
+                return True
+    return False
+

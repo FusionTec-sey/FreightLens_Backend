@@ -4,15 +4,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from ...db import Base
-from ...mixins import AuditMixin
+from ...mixins import AuditMixin, OrgMixin
 
 
-class ProductCategory(AuditMixin, Base):
+class ProductCategory(OrgMixin, AuditMixin, Base):
     __tablename__ = "product_categories"
     __table_args__ = {'schema': 'containermgmt'}
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    org_id = Column(Integer, ForeignKey("usercredentials.organisations.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
 
@@ -29,12 +28,11 @@ class ProductCategory(AuditMixin, Base):
     products = relationship("Product", back_populates="category")
 
 
-class Product(AuditMixin, Base):
+class Product(OrgMixin, AuditMixin, Base):
     __tablename__ = "products"
     __table_args__ = {'schema': 'containermgmt'}
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    org_id = Column(Integer, ForeignKey("usercredentials.organisations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # ── Core Identity ──────────────────────────────────────────────────────────
     code = Column(String(100), nullable=True, index=True)   # Internal org code e.g. ITEM-CT-001
@@ -70,6 +68,42 @@ class Product(AuditMixin, Base):
     units_per_box = Column(Numeric(12, 4), nullable=True)
     box_weight = Column(Numeric(10, 4), nullable=True)
 
+    # ── Multi-Tier Packaging Specs ─────────────────────────────────────────────
+    # Retail / Primary Packaging
+    retail_packaging_type = Column(String(100), nullable=True)
+    gross_weight_per_unit = Column(Numeric(10, 4), nullable=True)
+
+    # Wholesale / Inner Packaging
+    wholesale_packaging_type = Column(String(100), nullable=True)
+    units_per_inner = Column(Numeric(12, 4), nullable=True)
+    inner_length = Column(Numeric(10, 4), nullable=True)
+    inner_width = Column(Numeric(10, 4), nullable=True)
+    inner_height = Column(Numeric(10, 4), nullable=True)
+    inner_weight = Column(Numeric(10, 4), nullable=True)
+
+    # Import / Master Shipping Packaging
+    import_packaging_type = Column(String(100), nullable=True)
+    master_length = Column(Numeric(10, 4), nullable=True)
+    master_width = Column(Numeric(10, 4), nullable=True)
+    master_height = Column(Numeric(10, 4), nullable=True)
+    master_tare_weight = Column(Numeric(10, 4), nullable=True)
+
+    # Palletization & Container Loading (auto-estimated & user-editable)
+    pallet_type = Column(String(100), nullable=True)
+    cartons_per_layer = Column(Integer, nullable=True)
+    layers_per_pallet = Column(Integer, nullable=True)
+    total_cartons_per_pallet = Column(Integer, nullable=True)
+    max_stacking_layers = Column(Integer, nullable=True)
+    est_qty_20ft = Column(Numeric(12, 2), nullable=True)
+    est_qty_40hc = Column(Numeric(12, 2), nullable=True)
+
+    # Warehouse & Bin Coordinates (WMS Preparation)
+    warehouse_location = Column(String(150), nullable=True)
+    default_bin = Column(String(100), nullable=True)
+
+    # Extensible Packaging JSON
+    packaging_specs = Column(JSON, nullable=True)
+
     # ── Pricing & Costing (role-gated in API) ──────────────────────────────────
     unit_cost = Column(Numeric(14, 2), nullable=True)
     currency = Column(String(10), default="USD")
@@ -102,6 +136,7 @@ class Product(AuditMixin, Base):
     # ── Relationships ──────────────────────────────────────────────────────────
     category = relationship("ProductCategory", back_populates="products")
     supplier = relationship("Supplier")
+    product_suppliers = relationship("ProductSupplier", back_populates="product", cascade="all, delete-orphan", lazy="joined")
     po_items = relationship("POItem", back_populates="product")
 
     # Links where this product is the parent (has variants/related/parts below it)
@@ -120,7 +155,7 @@ class Product(AuditMixin, Base):
     )
 
 
-class ProductLink(AuditMixin, Base):
+class ProductLink(OrgMixin, AuditMixin, Base):
     """
     Unified relationship table for product variants, related items, and BOM parts.
 
@@ -137,7 +172,6 @@ class ProductLink(AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    org_id = Column(Integer, ForeignKey("usercredentials.organisations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     parent_product_id = Column(Integer, ForeignKey("containermgmt.products.id", ondelete="CASCADE"), nullable=False, index=True)
     child_product_id = Column(Integer, ForeignKey("containermgmt.products.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -153,3 +187,31 @@ class ProductLink(AuditMixin, Base):
     # Relationships
     parent_product = relationship("Product", foreign_keys=[parent_product_id], back_populates="parent_links")
     child_product = relationship("Product", foreign_keys=[child_product_id], back_populates="child_links")
+
+
+class ProductSupplier(OrgMixin, AuditMixin, Base):
+    """
+    Mapping table between a Product and its authorized Suppliers/Vendors/Factories.
+    Supports multiple vendors per product, vendor-specific factory codes (SKU/Article No.),
+    vendor unit pricing, MOQ, lead times, and designating one as the default/preferred vendor.
+    """
+    __tablename__ = "product_suppliers"
+    __table_args__ = {'schema': 'containermgmt'}
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("containermgmt.products.id", ondelete="CASCADE"), nullable=False, index=True)
+    supplier_id = Column(Integer, ForeignKey("containermgmt.supplier.supplier_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    factory_code = Column(String(100), nullable=True, index=True)          # Vendor / Factory article number or code
+    vendor_product_name = Column(String(255), nullable=True)               # Vendor's catalog name or description
+    unit_cost = Column(Numeric(14, 2), nullable=True)                      # Quoted price from this vendor
+    currency = Column(String(10), default="USD", nullable=False)
+    min_order_qty = Column(Numeric(12, 2), nullable=True)                  # Vendor MOQ
+    lead_time_days = Column(Integer, nullable=True)                        # Vendor manufacturing/delivery lead time
+    is_default = Column(Boolean, default=False, nullable=False)            # Preferred default supplier flag
+    notes = Column(Text, nullable=True)
+
+    # Relationships
+    product = relationship("Product", back_populates="product_suppliers")
+    supplier = relationship("Supplier", lazy="joined")
+

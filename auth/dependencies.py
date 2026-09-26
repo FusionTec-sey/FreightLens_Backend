@@ -61,11 +61,20 @@ def get_org_context(
             selected_org_id=selected_id
         )
     else:
+        user_allowed = user.allowed_org_ids if user.allowed_org_ids else [user_org_id]
+        selected_id = None
+        if x_active_org and x_active_org.isdigit():
+            val = int(x_active_org)
+            if val in user_allowed:
+                selected_id = val
+        elif len(user_allowed) == 1:
+            selected_id = user_allowed[0]
+
         return OrgContext(
             current_org_id=user_org_id,
-            allowed_org_ids=[user_org_id],
+            allowed_org_ids=user_allowed,
             is_root=False,
-            selected_org_id=user_org_id
+            selected_org_id=selected_id
         )
 
 def require_roles(required_roles: list):

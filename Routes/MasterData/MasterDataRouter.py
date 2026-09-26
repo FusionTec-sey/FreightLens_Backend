@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, asc
+import math
 from typing import Optional, List
 from datetime import date
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 from Model.db import get_db
 from Model.containermgmt.MasterData.Currency import Currency, CurrencyExchangeRate
 from Model.containermgmt.MasterData.PaymentTerm import PaymentTerm
+from Model.containermgmt.MasterData.DocumentType import MasterDocumentType
 from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.Organisation import Organisation
 from auth.dependencies import get_current_user, get_org_context
@@ -453,6 +455,11 @@ def delete_payment_term(
 
 @MasterDataRouter.get("/suppliers")
 def get_suppliers_master(
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: Optional[str] = Query("asc"),
     active_only: bool = False,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
@@ -460,10 +467,33 @@ def get_suppliers_master(
     query = db.query(Supplier).filter(Supplier.is_deleted != True)
     if active_only:
         query = query.filter(Supplier.is_active == True)
-    suppliers = query.order_by(Supplier.name.asc()).all()
 
-    return [
-        {
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Supplier.name.ilike(s),
+                Supplier.code.ilike(s),
+                Supplier.contact_person.ilike(s),
+                Supplier.email.ilike(s),
+                Supplier.phone.ilike(s)
+            )
+        )
+
+    ALLOWED_SORT = {
+        "id": Supplier.supplier_id,
+        "name": Supplier.name,
+        "code": Supplier.code,
+        "country": Supplier.country,
+    }
+    sort_col = ALLOWED_SORT.get(sort_by, Supplier.name)
+    if sort_dir == "desc":
+        query = query.order_by(desc(sort_col))
+    else:
+        query = query.order_by(asc(sort_col))
+
+    def serialize_supplier(s):
+        return {
             "id": s.supplier_id,
             "supplier_id": s.supplier_id,
             "name": s.name,
@@ -488,8 +518,23 @@ def get_suppliers_master(
             "notes": s.notes,
             "is_active": s.is_active if s.is_active is not None else True,
         }
-        for s in suppliers
-    ]
+
+    if page is not None or limit is not None:
+        p = page or 1
+        l = limit or 25
+        offset = (p - 1) * l
+        total_count = query.count()
+        suppliers = query.offset(offset).limit(l).all()
+        return {
+            "items": [serialize_supplier(s) for s in suppliers],
+            "total": total_count,
+            "page": p,
+            "limit": l,
+            "pages": math.ceil(total_count / l) if total_count > 0 else 1
+        }
+
+    suppliers = query.all()
+    return [serialize_supplier(s) for s in suppliers]
 
 @MasterDataRouter.post("/suppliers")
 def create_supplier_master(
@@ -667,3 +712,155 @@ def set_organization_base_currency(
         "success": True,
         "message": f"Base currency for '{org.display_name or org.name}' updated to {new_curr}."
     }
+
+
+# ── Document Types Master Data ───────────────────────────────────────────────
+
+class DocumentTypeSchema(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = None
+    applicable_spaces: List[str] = []
+    is_active: bool = True
+    display_order: int = 0
+
+
+@MasterDataRouter.get("/document-types")
+def list_document_types(
+    space: Optional[str] = Query(None, description="Filter by space: SOURCING, ORDER, PAYMENT, SHIPPING, DEFECTS"),
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Retrieve document types configured in reference data, optionally filtered by stage/space."""
+    query = db.query(MasterDocumentType).filter(MasterDocumentType.is_deleted == False)
+    if active_only:
+        query = query.filter(MasterDocumentType.is_active == True)
+    
+    rows = query.order_by(MasterDocumentType.display_order.asc(), MasterDocumentType.id.asc()).all()
+    
+    if space:
+        target_space = space.strip().upper()
+        # Filter where target_space is in applicable_spaces (or applicable_spaces is empty/all)
+        filtered_rows = []
+        for r in rows:
+            spaces = [str(s).upper() for s in (r.applicable_spaces or [])]
+            if not spaces or target_space in spaces:
+                filtered_rows.append(r)
+        rows = filtered_rows
+
+    return [
+        {
+            "id": r.id,
+            "code": r.code,
+            "name": r.name,
+            "description": r.description,
+            "applicable_spaces": r.applicable_spaces or [],
+            "is_active": r.is_active,
+            "display_order": r.display_order,
+        }
+        for r in rows
+    ]
+
+
+@MasterDataRouter.post("/document-types")
+def create_document_type(
+    payload: DocumentTypeSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can manage document types.")
+
+    cleaned_code = payload.code.strip().lower().replace(" ", "_")
+    existing = db.query(MasterDocumentType).filter(MasterDocumentType.code == cleaned_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Document type with code '{cleaned_code}' already exists.")
+
+    new_doc_type = MasterDocumentType(
+        code=cleaned_code,
+        name=payload.name.strip(),
+        description=payload.description.strip() if payload.description else None,
+        applicable_spaces=[s.strip().upper() for s in payload.applicable_spaces if s],
+        is_active=payload.is_active,
+        display_order=payload.display_order,
+        created_by=getattr(current_user, "username", "Admin"),
+    )
+    db.add(new_doc_type)
+    db.commit()
+    db.refresh(new_doc_type)
+    return {
+        "id": new_doc_type.id,
+        "code": new_doc_type.code,
+        "name": new_doc_type.name,
+        "description": new_doc_type.description,
+        "applicable_spaces": new_doc_type.applicable_spaces,
+        "is_active": new_doc_type.is_active,
+        "display_order": new_doc_type.display_order,
+    }
+
+
+@MasterDataRouter.put("/document-types/{type_id}")
+def update_document_type(
+    type_id: int,
+    payload: DocumentTypeSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can manage document types.")
+
+    doc_type = db.query(MasterDocumentType).filter(MasterDocumentType.id == type_id).first()
+    if not doc_type:
+        raise HTTPException(status_code=404, detail="Document type not found.")
+
+    cleaned_code = payload.code.strip().lower().replace(" ", "_")
+    if cleaned_code != doc_type.code:
+        duplicate = db.query(MasterDocumentType).filter(
+            MasterDocumentType.code == cleaned_code,
+            MasterDocumentType.id != type_id
+        ).first()
+        if duplicate:
+            raise HTTPException(status_code=400, detail=f"Document type with code '{cleaned_code}' already exists.")
+        doc_type.code = cleaned_code
+
+    doc_type.name = payload.name.strip()
+    doc_type.description = payload.description.strip() if payload.description else None
+    doc_type.applicable_spaces = [s.strip().upper() for s in payload.applicable_spaces if s]
+    doc_type.is_active = payload.is_active
+    doc_type.display_order = payload.display_order
+    doc_type.updated_by = getattr(current_user, "username", "Admin")
+
+    db.commit()
+    db.refresh(doc_type)
+    return {
+        "id": doc_type.id,
+        "code": doc_type.code,
+        "name": doc_type.name,
+        "description": doc_type.description,
+        "applicable_spaces": doc_type.applicable_spaces,
+        "is_active": doc_type.is_active,
+        "display_order": doc_type.display_order,
+    }
+
+
+@MasterDataRouter.delete("/document-types/{type_id}")
+def delete_document_type(
+    type_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can manage document types.")
+
+    doc_type = db.query(MasterDocumentType).filter(MasterDocumentType.id == type_id).first()
+    if not doc_type:
+        raise HTTPException(status_code=404, detail="Document type not found.")
+
+    db.delete(doc_type)
+    db.commit()
+    return {"success": True, "message": f"Document type '{doc_type.name}' deleted."}
+

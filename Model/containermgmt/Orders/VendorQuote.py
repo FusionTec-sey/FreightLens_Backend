@@ -28,3 +28,4 @@ class VendorQuote(OrgMixin, AuditMixin, Base):
     purchase_order = relationship("PurchaseOrder", back_populates="quotes", foreign_keys=[po_id])
     supplier = relationship("Supplier", foreign_keys=[supplier_id], lazy="joined")
     items = relationship("VendorQuoteItem", back_populates="vendor_quote", cascade="all, delete-orphan")
+    documents = relationship("OrderDocument", back_populates="vendor_quote", cascade="all, delete-orphan")

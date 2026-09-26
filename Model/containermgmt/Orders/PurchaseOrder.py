@@ -66,6 +66,8 @@ class PurchaseOrder(OrgMixin, AuditMixin, Base):
     eta_date = Column(Date, nullable=True)
     freight_type = Column(String(50), default="Sea Freight")
     remark = Column(Text, nullable=True)
+    hold_reason = Column(String(500), nullable=True)
+    hold_type = Column(String(50), nullable=True)
 
     # Relationships
     supplier_rel = relationship("Supplier", foreign_keys=[supplier_id], lazy="joined")

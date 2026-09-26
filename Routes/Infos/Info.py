@@ -48,17 +48,11 @@ class CinfoAPI:
         return json.dumps({ "data": [list(row) for row in data]})
     
     @Cinfo.get("/consignees")
-    async def getconsignee(self, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-        org = getattr(current_user, "organisation", None)
-        org_id = getattr(current_user, "org_id", None)
-        if isinstance(current_user, dict):
-            org_id = current_user.get("org_id", 1)
-            is_root = current_user.get("is_root", True)
-        else:
-            is_root = (org.parent_org_id is None) if org else (org_id == 1)
-
-        org_name = org.name if org else ("noblecon" if org_id == 2 else ("sahajanand" if org_id == 3 else "sahaj"))
-
+    async def getconsignee(
+        self, 
+        db: Session = Depends(get_db), 
+        org_context: OrgContext = Depends(get_org_context)
+    ):
         query = db.query(
             Consignee.consignee_id,
             Consignee.consignee_name,
@@ -70,10 +64,16 @@ class CinfoAPI:
             Consignee.consignee_name != ""
         )
 
-        if not is_root and org_id:
-            query = query.filter(Consignee.org_id == org_id)
+        if not org_context.is_root:
+            if org_context.selected_org_id:
+                query = query.filter(Consignee.org_id == org_context.selected_org_id)
+            else:
+                query = query.filter(Consignee.org_id.in_(org_context.allowed_org_ids))
+        else:
+            if org_context.selected_org_id:
+                query = query.filter(Consignee.org_id == org_context.selected_org_id)
 
-        data = query.all()
+        data = query.order_by(Consignee.consignee_id.asc()).all()
         return json.dumps({"data": [list(row) for row in data]})
     
     @Cinfo.get("/shipping-documents")
@@ -117,8 +117,9 @@ class CinfoAPI:
             OrderStatus.code,
             OrderStatus.sequence_order,
             OrderStatus.progress,
-            OrderStatus.color
-        ).filter(OrderStatus.is_deleted != True).order_by(OrderStatus.sequence_order.asc(), OrderStatus.id.asc()).all()
+            OrderStatus.color,
+            OrderStatus.badge_color
+        ).filter(OrderStatus.is_deleted != True, OrderStatus.is_active != False).order_by(OrderStatus.sequence_order.asc(), OrderStatus.id.asc()).all()
         return json.dumps({"data": [list(row) for row in data]})
     
     @Cinfo.post("/order-statuses")

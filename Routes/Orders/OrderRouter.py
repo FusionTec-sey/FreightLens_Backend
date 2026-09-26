@@ -5,13 +5,16 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, asc, func
+import math
+from Services.search_service import search_orders_with_total, sync_order_document, remove_order_document
 
 from Model.db import get_db
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.containermgmt.Orders.OrderStatus import OrderStatus
 from Model.containermgmt.Orders.POItem import POItem
 from Model.containermgmt.Orders.OrderDocument import OrderDocument
+from Model.containermgmt.Orders.VendorQuote import VendorQuote
 from Model.containermgmt.Orders.DefectReport import DefectReport, DefectImage
 from Model.containermgmt.Orders.OrderPayment import OrderPayment
 from Model.containermgmt.Orders.OrderShipment import OrderShipment
@@ -25,6 +28,7 @@ from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import (
     is_financial_user,
+    can_view_supplier_user,
     has_permission,
     require_permission,
     require_financial_access,
@@ -40,7 +44,10 @@ OrderRouter = APIRouter(prefix="/orders", tags=["Purchase Orders"])
 def is_accounts_user(user: User, org_context: OrgContext) -> bool:
     return is_financial_user(user, org_context)
 
-def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
+def can_user_view_supplier(user: User, org_context: OrgContext) -> bool:
+    return can_view_supplier_user(user, org_context)
+
+def order_to_dict(order: PurchaseOrder, is_accounts: bool = True, can_view_supplier: bool = True) -> dict:
     doc_type = (getattr(order, "doc_type", "PO") or "PO").upper()
     is_rfq = (doc_type == "RFQ")
 
@@ -50,13 +57,15 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
     can_view_financials = is_accounts and (not is_rfq)
 
     is_awarded = (order.lifecycle_stage or "").upper() in ["QUOTE_APPROVED", "PO_ISSUED", "ORDERED", "RECEIVED", "COMPLETED"]
+
+    # STRICT VENDOR SECURITY:
+    # 1. Sourcing RFQ documents are material requisitions: NEVER expose vendor names, candidate vendors, or supplier IDs.
+    # 2. Purchase Orders (PO) only expose vendor/supplier details to users with verified supplier clearance.
     supplier_name = None
-    if not is_rfq:
-        supplier_name = order.company if is_accounts else "Authorized Supplier"
-        if is_accounts and order.supplier_rel and order.supplier_rel.name:
+    if not is_rfq and can_view_supplier:
+        supplier_name = order.company
+        if order.supplier_rel and order.supplier_rel.name:
             supplier_name = order.supplier_rel.name
-    elif is_awarded:
-        supplier_name = order.company or (order.supplier_rel.name if order.supplier_rel else "Awarded Supplier")
 
     status_name = order.status_label or order.status
     status_progress = 50
@@ -82,13 +91,85 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
         max(0.0, eff_total - eff_advance) if eff_total is not None else None
     )
 
+    # Fulfillment rollup for Sourcing RFQs with child POs
+    active_child_pos = [c for c in (getattr(order, "child_pos", None) or []) if not c.is_deleted]
+    fulfillment_summary = None
+    if is_rfq and is_awarded:
+        STAGE_RANKS = {
+            "COMPLETED": 100,
+            "RECEIVED": 96,
+            "ARRIVED": 92,
+            "SHIPPED": 85,
+            "PACKED": 78,
+            "READY": 70,
+            "IN_PRODUCTION": 55,
+            "ORDERED": 40,
+            "PO_ISSUED": 35,
+            "SOURCING": 25,
+            "SUBMITTED": 15,
+            "DRAFT": 5,
+        }
+        if active_child_pos:
+            sorted_by_progress = sorted(active_child_pos, key=lambda c: STAGE_RANKS.get(str(c.status).upper(), 30), reverse=True)
+            primary_child = sorted_by_progress[0]
+            
+            child_etas = [c.eta_date for c in active_child_pos if c.eta_date]
+            earliest_child_eta = min(child_etas) if child_etas else None
+
+            child_status_counts = {}
+            for c in active_child_pos:
+                lbl = c.status_label or (c.order_status_rel.name if c.order_status_rel else c.status)
+                child_status_counts[lbl] = child_status_counts.get(lbl, 0) + 1
+
+            summary_parts = [f"{cnt} {st}" if len(active_child_pos) > 1 else st for st, cnt in child_status_counts.items()]
+            summary_desc = ", ".join(summary_parts)
+
+            primary_lbl = primary_child.status_label or (primary_child.order_status_rel.name if primary_child.order_status_rel else primary_child.status)
+            fulfillment_summary = {
+                "total_child_pos": len(active_child_pos),
+                "primary_status": primary_child.status,
+                "primary_status_label": primary_lbl,
+                "primary_status_color": primary_child.order_status_rel.color if primary_child.order_status_rel else "bg-indigo-500",
+                "primary_badge_color": primary_child.order_status_rel.badge_color if primary_child.order_status_rel else "bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800",
+                "primary_progress": primary_child.order_status_rel.progress if primary_child.order_status_rel else STAGE_RANKS.get(str(primary_child.status).upper(), 40),
+                "summary_desc": summary_desc,
+                "eta_date": earliest_child_eta.isoformat() if earliest_child_eta else None,
+            }
+        else:
+            fulfillment_summary = {
+                "total_child_pos": 0,
+                "primary_status": "AWAITING_PO",
+                "primary_status_label": "Awarded / Awaiting PO",
+                "primary_status_color": "bg-emerald-500",
+                "primary_badge_color": "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+                "primary_progress": 35,
+                "summary_desc": "Awarded - PO issuance pending",
+                "eta_date": None,
+            }
+
+    raw_payment_status = (order.payment_status or "NONE").upper()
+    payment_label = "Paid" if raw_payment_status in ["FULLY_PAID", "PAID"] else ("Part Paid" if raw_payment_status in ["PART_PAID", "ADVANCE_PAID"] else "Unpaid")
+    payment_badge_color = (
+        "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700"
+        if raw_payment_status in ["FULLY_PAID", "PAID"]
+        else (
+            "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700"
+            if raw_payment_status in ["PART_PAID", "ADVANCE_PAID"]
+            else "bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
+        )
+    )
+
+    effective_eta = order.eta_date.isoformat() if order.eta_date else (
+        fulfillment_summary["eta_date"] if (fulfillment_summary and fulfillment_summary.get("eta_date")) else None
+    )
+
     res = {
         "id": order.id,
         "po_number": order.po_number,
         "po_nce": order.po_nce if can_view_financials else None,
         "request_id": order.request_id,
         "request_number": order.store_request.request_number if order.store_request else None,
-        "supplier": order.supplier_id if (can_view_financials or (is_rfq and is_awarded)) else None,
+        "supplier": order.supplier_id if (can_view_supplier and not is_rfq) else None,
         "company": supplier_name,
         "goods_description": order.goods_description,
         "material_ids": order.material_ids or [],
@@ -109,10 +190,16 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
         "lifecycle_locked": bool(order.lifecycle_locked),
         "selected_quote_id": order.selected_quote_id if can_view_financials else None,
         
-        "payment_status": order.payment_status or "NONE",
+        # Decoupled Operational Dimensions
+        "payment_status": raw_payment_status,
+        "payment_label": payment_label,
+        "payment_badge_color": payment_badge_color,
         "production_status": order.production_status or "NOT_STARTED",
         "shipment_status": order.shipment_status or "NOT_SHIPPED",
         "receipt_status": order.receipt_status or "PENDING",
+
+        # Fulfillment rollup for Sourcing view
+        "fulfillment_summary": fulfillment_summary,
 
         # Financials (Accounts on PO only)
         "total_amount": eff_total if (eff_total is not None and can_view_financials) else None,
@@ -129,16 +216,24 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
             {
                 "id": c.id,
                 "po_number": c.po_number,
-                "supplier_id": c.supplier_id if is_accounts else None,
-                "company": (c.company or (c.supplier_rel.name if c.supplier_rel else "Supplier")) if is_accounts else "Authorized Supplier",
-                "total_amount": float(c.total_amount or 0) if is_accounts else None,
+                "supplier_id": c.supplier_id if (can_view_supplier and not is_rfq) else None,
+                "company": (c.company or (c.supplier_rel.name if c.supplier_rel else None)) if (can_view_supplier and not is_rfq) else None,
+                "total_amount": float(c.total_amount or 0) if can_view_financials else None,
                 "status": c.status,
+                "status_label": c.status_label or (c.order_status_rel.name if c.order_status_rel else c.status),
+                "status_color": c.order_status_rel.color if c.order_status_rel else "bg-blue-500",
+                "badge_color": c.order_status_rel.badge_color if c.order_status_rel else "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
                 "lifecycle_stage": c.lifecycle_stage,
+                "payment_status": (c.payment_status or "NONE").upper(),
+                "production_status": c.production_status or "NOT_STARTED",
+                "shipment_status": c.shipment_status or "NOT_SHIPPED",
+                "receipt_status": c.receipt_status or "PENDING",
+                "eta_date": c.eta_date.isoformat() if c.eta_date else None,
                 "currency": c.currency or "USD",
                 "items_count": len([i for i in (c.items or []) if not i.is_deleted])
             }
-            for c in (order.child_pos or []) if not c.is_deleted
-        ] if hasattr(order, "child_pos") and order.child_pos else [],
+            for c in active_child_pos
+        ],
 
         # Legacy fields
         "sheet_type": order.sheet_type,
@@ -153,7 +248,7 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
         "pi_confirmed_date": order.pi_confirmed_date.isoformat() if order.pi_confirmed_date else None,
         "payment_date": order.payment_date.isoformat() if order.payment_date and can_view_financials else None,
         "balance_payment_date": order.balance_payment_date.isoformat() if order.balance_payment_date and can_view_financials else None,
-        "eta_date": order.eta_date.isoformat() if order.eta_date else None,
+        "eta_date": effective_eta,
         "freight_type": order.freight_type or "Sea Freight",
         "remark": order.remark,
         "created_at": order.created_at.isoformat() if order.created_at else None,
@@ -235,6 +330,10 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True) -> dict:
 @OrderRouter.get("")
 @OrderRouter.get("/")
 def list_orders(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: Optional[str] = Query("desc"),
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     lifecycle_stage: Optional[str] = Query(None),
@@ -245,12 +344,74 @@ def list_orders(
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    can_view_supp = can_user_view_supplier(current_user, org_context)
     can_view_rfq = has_permission(current_user, "View_RFQ") or is_accounts
     can_view_po = has_permission(current_user, "View_Order") or is_accounts
 
     if not can_view_rfq and not can_view_po:
         raise HTTPException(status_code=403, detail="Access forbidden: Missing order and RFQ view permissions.")
 
+    offset = (page - 1) * limit
+
+    # ── High-Performance Meilisearch Integration ──
+    if search and search.strip():
+        meili_filters = ["is_deleted = false"]
+        if org_context and getattr(org_context, "org_id", None):
+            meili_filters.append(f"org_id = {org_context.org_id}")
+
+        if can_view_rfq and not can_view_po:
+            meili_filters.append("doc_type = 'RFQ'")
+        elif can_view_po and not can_view_rfq:
+            meili_filters.append("doc_type = 'PO'")
+        elif doc_type and doc_type != "ALL":
+            req_doc = doc_type.upper()
+            if req_doc in ["RFQ", "PO"]:
+                meili_filters.append(f"doc_type = '{req_doc}'")
+
+        if status and status != "ALL":
+            meili_filters.append(f"(status = '{status}' OR status_label = '{status}')")
+        if lifecycle_stage and lifecycle_stage != "ALL":
+            meili_filters.append(f"lifecycle_stage = '{lifecycle_stage}'")
+        if urgent_only:
+            meili_filters.append("urgent_action = true")
+
+        hits, total_count = search_orders_with_total(
+            query_str=search.strip(),
+            filters=meili_filters,
+            limit=limit,
+            offset=offset
+        )
+
+        if hits:
+            hit_ids = [h["id"] for h in hits]
+            orders = (
+                db.query(PurchaseOrder)
+                .options(
+                    joinedload(PurchaseOrder.order_status_rel),
+                    joinedload(PurchaseOrder.supplier_rel),
+                    joinedload(PurchaseOrder.store_request),
+                    selectinload(PurchaseOrder.items),
+                    selectinload(PurchaseOrder.child_pos),
+                    selectinload(PurchaseOrder.shipments).joinedload(OrderShipment.container),
+                    selectinload(PurchaseOrder.shipments).joinedload(OrderShipment.bill_of_lading),
+                    selectinload(PurchaseOrder.payments),
+                    selectinload(PurchaseOrder.documents)
+                )
+                .filter(PurchaseOrder.id.in_(hit_ids))
+                .all()
+            )
+            order_map = {o.id: o for o in orders}
+            sorted_orders = [order_map[hid] for hid in hit_ids if hid in order_map]
+
+            return {
+                "items": [order_to_dict(o, is_accounts, can_view_supp) for o in sorted_orders],
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "pages": math.ceil(total_count / limit) if total_count > 0 else 1
+            }
+
+    # ── Fallback Database Query with Filters & Sorting ──
     query = (
         db.query(PurchaseOrder)
         .options(
@@ -279,12 +440,12 @@ def list_orders(
     if doc_type and doc_type != "ALL":
         req_doc = doc_type.upper()
         if req_doc == "RFQ" and not can_view_rfq:
-            return []
+            return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 1}
         if req_doc == "PO" and not can_view_po:
-            return []
+            return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 1}
         query = query.filter(PurchaseOrder.doc_type == req_doc)
 
-    # Search
+    # Search (SQL fallback)
     if search:
         s_term = f"%{search.strip()}%"
         search_clauses = [
@@ -310,16 +471,76 @@ def list_orders(
     if urgent_only:
         query = query.filter(PurchaseOrder.urgent_action == True)
 
-    orders = query.order_by(desc(PurchaseOrder.id)).all()
-    return [order_to_dict(o, is_accounts) for o in orders]
+    total_count = query.count()
 
+    ALLOWED_SORT = {
+        "id": PurchaseOrder.id,
+        "po_number": PurchaseOrder.po_number,
+        "company": PurchaseOrder.company,
+        "status": PurchaseOrder.status,
+        "lifecycle_stage": PurchaseOrder.lifecycle_stage,
+        "created_at": PurchaseOrder.created_at,
+        "total_amount": PurchaseOrder.total_amount
+    }
+    sort_column = ALLOWED_SORT.get(sort_by, PurchaseOrder.id)
+    if sort_dir == "asc":
+        query = query.order_by(asc(sort_column))
+    else:
+        query = query.order_by(desc(sort_column))
+
+    orders = query.offset(offset).limit(limit).all()
+    return {
+        "items": [order_to_dict(o, is_accounts, can_view_supp) for o in orders],
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total_count / limit) if total_count > 0 else 1
+    }
+
+# ── Document Endpoints (Must be before /{order_id}) ───────────────────────────
 # ── Document Endpoints (Must be before /{order_id}) ───────────────────────────
 @OrderRouter.get("/documents/config")
 async def get_document_config(
+    space: Optional[str] = Query(None, description="Stage / space filter: SOURCING, ORDER, PAYMENT, SHIPPING, DEFECTS"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    try:
+        from Model.containermgmt.MasterData.DocumentType import MasterDocumentType
+        q = db.query(MasterDocumentType).filter(
+            MasterDocumentType.is_active == True,
+            MasterDocumentType.is_deleted == False
+        )
+        rows = q.order_by(MasterDocumentType.display_order.asc(), MasterDocumentType.id.asc()).all()
+        if space:
+            target_space = space.strip().upper()
+            filtered = []
+            for r in rows:
+                spaces = [str(s).upper() for s in (r.applicable_spaces or [])]
+                if not spaces or target_space in spaces:
+                    filtered.append(r)
+            rows = filtered
+
+        if rows:
+            return {
+                "document_types": [
+                    {
+                        "value": r.code,
+                        "label": r.name,
+                        "description": r.description,
+                        "applicable_spaces": r.applicable_spaces or [],
+                        "can_upload": True
+                    }
+                    for r in rows
+                ]
+            }
+    except Exception as e:
+        logger.warning(f"Failed to query master_document_types, falling back to defaults: {e}")
+
     return {
         "document_types": [
+            {"value": "payment_proof", "label": "Bank TT / Swift Slip / Payment Proof", "can_upload": True},
+            {"value": "quotation", "label": "Vendor Quotation / Proforma Invoice", "can_upload": True},
             {"value": "defect_evidence", "label": "Defect Evidence / Photo", "can_upload": True},
             {"value": "defect_resolution", "label": "Resolution Document", "can_upload": True},
             {"value": "credit_note", "label": "Credit Note", "can_upload": True},
@@ -336,11 +557,53 @@ async def list_documents(
     defect_report_id: Optional[int] = Query(None),
     purchase_order_id: Optional[int] = Query(None),
     request_id: Optional[int] = Query(None),
+    payment_id: Optional[int] = Query(None),
+    vendor_quote_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
     results = []
+    if payment_id:
+        doc_q = db.query(OrderDocument).filter(
+            ((OrderDocument.payment_id == payment_id) | 
+             ((OrderDocument.entity_type == "PAYMENT") & (OrderDocument.entity_id == payment_id))),
+            OrderDocument.is_deleted == False
+        ).order_by(OrderDocument.created_at.desc())
+        for doc in doc_q.all():
+            results.append({
+                "id": str(doc.id),
+                "original_name": doc.title or doc.file_name or f"payment_proof_{doc.id}",
+                "document_type": doc.doc_type,
+                "document_label": "Payment Proof",
+                "file_path": doc.file_path,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+                "uploaded_by": "Accounts",
+                "uploaded_at": doc.created_at.isoformat() if doc.created_at else datetime.utcnow().isoformat(),
+            })
+        return results
+
+    if vendor_quote_id:
+        doc_q = db.query(OrderDocument).filter(
+            ((OrderDocument.vendor_quote_id == vendor_quote_id) |
+             ((OrderDocument.entity_type == "VENDOR_QUOTE") & (OrderDocument.entity_id == vendor_quote_id))),
+            OrderDocument.is_deleted == False
+        ).order_by(OrderDocument.created_at.desc())
+        for doc in doc_q.all():
+            results.append({
+                "id": str(doc.id),
+                "original_name": doc.title or doc.file_name or f"quote_doc_{doc.id}",
+                "document_type": doc.doc_type,
+                "document_label": "Vendor Quote Attachment",
+                "file_path": doc.file_path,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+                "uploaded_by": "Buyer",
+                "uploaded_at": doc.created_at.isoformat() if doc.created_at else datetime.utcnow().isoformat(),
+            })
+        return results
+
     if defect_report_id:
         def_q = db.query(DefectReport).filter(DefectReport.id == defect_report_id, DefectReport.is_deleted == False)
         def_q = apply_org_filter(def_q, DefectReport, org_context)
@@ -349,7 +612,7 @@ async def list_documents(
             for img in (report.images or []):
                 if not img.is_deleted:
                     results.append({
-                        "id": img.id,
+                        "id": str(img.id),
                         "original_name": img.caption or (img.file_path.split("/")[-1] if img.file_path else f"evidence_{img.id}.jpg"),
                         "document_type": "defect_evidence",
                         "document_label": img.caption or "Defect Evidence",
@@ -361,11 +624,13 @@ async def list_documents(
         doc_q = db.query(OrderDocument).filter(OrderDocument.po_id == purchase_order_id, OrderDocument.is_deleted == False)
         for doc in doc_q.all():
             results.append({
-                "id": doc.id,
+                "id": str(doc.id),
                 "original_name": doc.title or doc.file_name or f"document_{doc.id}",
                 "document_type": doc.doc_type,
                 "document_label": doc.doc_type,
                 "file_path": doc.file_path,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
                 "uploaded_by": "System",
                 "uploaded_at": doc.created_at.isoformat() if doc.created_at else datetime.utcnow().isoformat(),
             })
@@ -377,23 +642,27 @@ async def list_documents(
         )
         for doc in doc_q.all():
             results.append({
-                "id": doc.id,
+                "id": str(doc.id),
                 "original_name": doc.title or doc.file_name or f"document_{doc.id}",
                 "document_type": doc.doc_type,
                 "document_label": doc.doc_type,
                 "file_path": doc.file_path,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
                 "uploaded_by": "System",
                 "uploaded_at": doc.created_at.isoformat() if doc.created_at else datetime.utcnow().isoformat(),
             })
-    if not defect_report_id and not purchase_order_id and not request_id:
+    if not defect_report_id and not purchase_order_id and not request_id and not payment_id and not vendor_quote_id:
         doc_q = db.query(OrderDocument).filter(OrderDocument.is_deleted == False).order_by(OrderDocument.created_at.desc()).limit(100)
         for doc in doc_q.all():
             results.append({
-                "id": doc.id,
+                "id": str(doc.id),
                 "original_name": doc.title or doc.file_name or f"document_{doc.id}",
                 "document_type": doc.doc_type,
                 "document_label": doc.doc_type,
                 "file_path": doc.file_path,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
                 "uploaded_by": "System",
                 "uploaded_at": doc.created_at.isoformat() if doc.created_at else datetime.utcnow().isoformat(),
             })
@@ -406,11 +675,95 @@ async def upload_general_document(
     defect_report_id: Optional[int] = Form(None),
     purchase_order_id: Optional[int] = Form(None),
     request_id: Optional[int] = Form(None),
+    payment_id: Optional[int] = Form(None),
+    vendor_quote_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
     file_bytes = await file.read()
+
+    # 1. Payment Proof Upload
+    if payment_id:
+        pm = db.query(OrderPayment).filter(OrderPayment.id == payment_id, OrderPayment.is_deleted == False).first()
+        if not pm:
+            raise HTTPException(status_code=404, detail="Payment record not found")
+        order = db.query(PurchaseOrder).filter(PurchaseOrder.id == pm.po_id, PurchaseOrder.is_deleted == False).first()
+        po_number = (order.po_number if order and order.po_number else f"PO-{pm.po_id}").strip().replace("/", "-")
+        
+        folder = f"orders/{po_number}/payments/pay_{pm.id}_{pm.payment_type}"
+        key = blob_storage.upload_file(
+            file_obj=file_bytes,
+            original_filename=file.filename,
+            folder=folder
+        )
+        doc = OrderDocument(
+            entity_type="PAYMENT",
+            entity_id=pm.id,
+            po_id=order.id if order else None,
+            payment_id=pm.id,
+            doc_type=document_type.upper() if document_type and document_type != "other" else f"{pm.payment_type}_PAYMENT_PROOF",
+            title=file.filename,
+            file_name=file.filename,
+            file_path=key,
+            file_size=len(file_bytes),
+            mime_type=file.content_type,
+            created_by=current_user.id
+        )
+        db.add(doc)
+        db.flush()
+        pm.evidence_doc_id = doc.id
+        db.commit()
+        db.refresh(doc)
+        return {
+            "success": True,
+            "id": str(doc.id),
+            "file_path": key,
+            "file_name": doc.file_name,
+            "doc_type": doc.doc_type,
+            "payment_id": pm.id
+        }
+
+    # 2. Vendor Quote Attachment Upload
+    if vendor_quote_id:
+        quote = db.query(VendorQuote).filter(VendorQuote.id == vendor_quote_id, VendorQuote.is_deleted == False).first()
+        if not quote:
+            raise HTTPException(status_code=404, detail="Vendor quote record not found")
+        order = db.query(PurchaseOrder).filter(PurchaseOrder.id == quote.po_id, PurchaseOrder.is_deleted == False).first()
+        rfq_number = (order.po_number if order and order.po_number else f"RFQ-{quote.po_id}").strip().replace("/", "-")
+
+        folder = f"rfqs/{rfq_number}/vendor_quotes/v{quote.supplier_id}"
+        key = blob_storage.upload_file(
+            file_obj=file_bytes,
+            original_filename=file.filename,
+            folder=folder
+        )
+        doc = OrderDocument(
+            entity_type="VENDOR_QUOTE",
+            entity_id=quote.id,
+            po_id=order.id if order else None,
+            vendor_quote_id=quote.id,
+            doc_type=document_type.upper() if document_type and document_type != "other" else "QUOTATION",
+            title=file.filename,
+            file_name=file.filename,
+            file_path=key,
+            file_size=len(file_bytes),
+            mime_type=file.content_type,
+            created_by=current_user.id
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        return {
+            "success": True,
+            "id": str(doc.id),
+            "file_path": key,
+            "file_name": doc.file_name,
+            "doc_type": doc.doc_type,
+            "vendor_quote_id": quote.id
+        }
+
+    # 3. Defect Report Upload
     if defect_report_id:
         def_q = db.query(DefectReport).filter(DefectReport.id == defect_report_id, DefectReport.is_deleted == False)
         def_q = apply_org_filter(def_q, DefectReport, org_context)
@@ -431,18 +784,20 @@ async def upload_general_document(
         db.add(img)
         db.commit()
         db.refresh(img)
-        return {"success": True, "id": img.id, "file_path": key}
+        return {"success": True, "id": str(img.id), "file_path": key}
 
+    # 4. Purchase Order Attachment Upload
     if purchase_order_id:
         po_q = db.query(PurchaseOrder).filter(PurchaseOrder.id == purchase_order_id, PurchaseOrder.is_deleted == False)
         po_q = apply_org_filter(po_q, PurchaseOrder, org_context)
         order = po_q.first()
         if not order:
             raise HTTPException(status_code=404, detail="Purchase order not found")
+        folder_po = (order.po_number or f"PO-{order.id}").strip().replace("/", "-")
         key = blob_storage.upload_file(
             file_obj=file_bytes,
             original_filename=file.filename,
-            folder=f"orders/{order.po_number}"
+            folder=f"orders/{folder_po}/po_documents"
         )
         doc = OrderDocument(
             entity_type="PO",
@@ -459,17 +814,18 @@ async def upload_general_document(
         db.add(doc)
         db.commit()
         db.refresh(doc)
-        return {"success": True, "id": doc.id, "file_path": key}
+        return {"success": True, "id": str(doc.id), "file_path": key}
 
+    # 5. Store Request Attachment Upload
     if request_id:
         from Model.containermgmt.Orders.StoreRequest import StoreRequest
         req_q = db.query(StoreRequest).filter(StoreRequest.id == request_id, StoreRequest.is_deleted == False)
         req = req_q.first()
-        folder_name = req.request_number if req and req.request_number else f"request_{request_id}"
+        folder_name = (req.request_number if req and req.request_number else f"request_{request_id}").strip().replace("/", "-")
         key = blob_storage.upload_file(
             file_obj=file_bytes,
             original_filename=file.filename,
-            folder=f"requests/{folder_name}"
+            folder=f"sourcing/requests/{folder_name}/specs"
         )
         doc = OrderDocument(
             entity_type="STORE_REQUEST",
@@ -486,9 +842,9 @@ async def upload_general_document(
         db.add(doc)
         db.commit()
         db.refresh(doc)
-        return {"success": True, "id": doc.id, "file_path": key}
+        return {"success": True, "id": str(doc.id), "file_path": key}
 
-    # General upload when not linked to a specific entity
+    # 6. General upload when not linked to a specific entity
     key = blob_storage.upload_file(
         file_obj=file_bytes,
         original_filename=file.filename,
@@ -509,11 +865,11 @@ async def upload_general_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
-    return {"success": True, "id": doc.id, "file_path": key}
+    return {"success": True, "id": str(doc.id), "file_path": key}
 
 @OrderRouter.get("/documents/{document_id}/download")
 async def download_order_document(
-    document_id: int,
+    document_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -521,23 +877,29 @@ async def download_order_document(
     if doc and doc.file_path:
         body, ctype, fname = blob_storage.get_file(doc.file_path)
         if body:
-            return StreamingResponse(body, media_type=ctype, headers={"Content-Disposition": f'attachment; filename="{doc.file_name or fname}"'})
-    img = db.query(DefectImage).filter(DefectImage.id == document_id, DefectImage.is_deleted == False).first()
-    if img and img.file_path:
-        body, ctype, fname = blob_storage.get_file(img.file_path)
-        if body:
-            return StreamingResponse(body, media_type=ctype, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+            return StreamingResponse(body, media_type=ctype or doc.mime_type or "application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{doc.file_name or fname}"'})
+    if document_id.isdigit():
+        img = db.query(DefectImage).filter(DefectImage.id == int(document_id), DefectImage.is_deleted == False).first()
+        if img and img.file_path:
+            body, ctype, fname = blob_storage.get_file(img.file_path)
+            if body:
+                return StreamingResponse(body, media_type=ctype or "image/jpeg", headers={"Content-Disposition": f'attachment; filename="{fname}"'})
     raise HTTPException(status_code=404, detail="Document file not found")
 
 @OrderRouter.delete("/documents/{document_id}")
 async def delete_order_document(
-    document_id: int,
+    document_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     doc = db.query(OrderDocument).filter(OrderDocument.id == document_id).first()
     if doc:
         doc.is_deleted = True
+        # Clear evidence_doc_id on linked payment if matching
+        if doc.payment_id:
+            pm = db.query(OrderPayment).filter(OrderPayment.id == doc.payment_id).first()
+            if pm and str(pm.evidence_doc_id) == str(doc.id):
+                pm.evidence_doc_id = None
         if doc.file_path:
             try:
                 blob_storage.delete_file(doc.file_path)
@@ -545,17 +907,18 @@ async def delete_order_document(
                 logger.warning("Could not delete blob %s: %s", doc.file_path, del_err)
         db.commit()
         return {"success": True}
-    img = db.query(DefectImage).filter(DefectImage.id == document_id).first()
-    if img:
-        img.is_deleted = True
-        if img.file_path:
-            try:
-                blob_storage.delete_file(img.file_path)
-            except Exception as del_err:
-                logger.warning("Could not delete defect blob %s: %s", img.file_path, del_err)
-        db.commit()
-        return {"success": True}
-    return {"success": True}
+    if document_id.isdigit():
+        img = db.query(DefectImage).filter(DefectImage.id == int(document_id)).first()
+        if img:
+            img.is_deleted = True
+            if img.file_path:
+                try:
+                    blob_storage.delete_file(img.file_path)
+                except Exception as del_err:
+                    logger.warning("Could not delete defect blob %s: %s", img.file_path, del_err)
+            db.commit()
+            return {"success": True}
+    raise HTTPException(status_code=404, detail="Document not found")
 
 @OrderRouter.get("/issues/{issue_id}/pdf")
 async def get_issue_pdf_proxy(
@@ -669,6 +1032,7 @@ def get_order(
     current_user: User = Depends(get_current_user)
 ):
     is_accounts = is_accounts_user(current_user, org_context)
+    can_view_supp = can_user_view_supplier(current_user, org_context)
     query = (
         db.query(PurchaseOrder)
         .options(
@@ -697,7 +1061,7 @@ def get_order(
         if not (has_permission(current_user, "View_Order") or is_accounts):
             raise HTTPException(status_code=403, detail="Access forbidden: Missing View_Order permission")
 
-    return order_to_dict(order, is_accounts)
+    return order_to_dict(order, is_accounts, can_view_supp)
 
 @OrderRouter.post("")
 @OrderRouter.post("/")
@@ -874,6 +1238,7 @@ def create_order(
         entity_type="PO",
         entity_id=new_order.id,
         po_id=new_order.id,
+        org_id=new_order.org_id,
         from_status=None,
         to_status=new_order.status,
         to_status_label=new_order.status_label,
@@ -896,8 +1261,10 @@ def create_order(
 
     db.commit()
     db.refresh(new_order)
+    sync_order_document(new_order)
     logger.info("Created PO %s by %s", new_order.po_number, current_user.username)
-    return order_to_dict(new_order, is_accounts)
+    can_view_supp = can_user_view_supplier(current_user, org_context)
+    return order_to_dict(new_order, is_accounts, can_view_supp)
 
 @OrderRouter.put("/{order_id}")
 def update_order(
@@ -986,6 +1353,13 @@ def update_order(
     if "status" in payload or "status_id" in payload:
         s_val = payload.get("status")
         s_id = payload.get("status_id")
+
+        # Financial status decoupling guard:
+        if s_val and str(s_val).upper() in ["PART_PAID", "PAID"]:
+            order.payment_status = "FULLY_PAID" if str(s_val).upper() == "PAID" else "PART_PAID"
+            s_val = None
+            s_id = None
+
         st_obj = None
         if s_id:
             st_obj = db.query(OrderStatus).filter(OrderStatus.id == s_id, OrderStatus.is_deleted == False).first()
@@ -1008,6 +1382,7 @@ def update_order(
                 entity_type="PO",
                 entity_id=order.id,
                 po_id=order.id,
+                org_id=order.org_id,
                 from_status=old_status,
                 to_status=order.status,
                 to_status_label=order.status_label,
@@ -1036,8 +1411,7 @@ def update_order(
             if effective_stage in ["PAID", "FULLY_PAID"]:
                 if not order.balance_payment_date:
                     order.balance_payment_date = today_date
-            if effective_stage == "SHIPPED" and not order.eta_date:
-                order.eta_date = today_date + timedelta(days=21)
+            # Note: eta_date is not auto-updated here; shipping schedule is determined manually or via BL/vessel tracking
 
     is_rfq = ((order.doc_type or "").upper() == "RFQ")
     can_set_financials = is_accounts and (not is_rfq)
@@ -1280,7 +1654,9 @@ def update_order(
     order.updated_by = current_user.id
     db.commit()
     db.refresh(order)
-    return order_to_dict(order, is_accounts)
+    sync_order_document(order)
+    can_view_supp = can_user_view_supplier(current_user, org_context)
+    return order_to_dict(order, is_accounts, can_view_supp)
 
 @OrderRouter.patch("/{order_id}/status")
 async def update_order_status_patch(
@@ -1299,6 +1675,21 @@ async def update_order_status_patch(
     new_status = payload.get("status")
     if not new_status:
         raise HTTPException(status_code=400, detail="Missing status")
+
+    # Financial status decoupling guard:
+    if str(new_status).upper() in ["PART_PAID", "PAID"]:
+        order.payment_status = "FULLY_PAID" if str(new_status).upper() == "PAID" else "PART_PAID"
+        if not order.payment_date and str(new_status).upper() in ["PART_PAID", "PAID"]:
+            order.payment_date = datetime.utcnow().date()
+        if not order.balance_payment_date and str(new_status).upper() == "PAID":
+            order.balance_payment_date = datetime.utcnow().date()
+        order.updated_by = current_user.id
+        db.commit()
+        db.refresh(order)
+        sync_order_document(order)
+        is_accounts = is_accounts_user(current_user, org_context)
+        can_view_supp = can_user_view_supplier(current_user, org_context)
+        return order_to_dict(order, is_accounts, can_view_supp)
 
     old_status = order.status
     st_obj = db.query(OrderStatus).filter(
@@ -1328,6 +1719,7 @@ async def update_order_status_patch(
             entity_type="PO",
             entity_id=order.id,
             po_id=order.id,
+            org_id=order.org_id,
             from_status=old_status,
             to_status=order.status,
             to_status_label=order.status_label,
@@ -1356,14 +1748,15 @@ async def update_order_status_patch(
         if effective_stage in ["PAID", "FULLY_PAID"]:
             if not order.balance_payment_date:
                 order.balance_payment_date = today_date
-        if effective_stage == "SHIPPED" and not order.eta_date:
-            order.eta_date = today_date + timedelta(days=21)
+        # Note: eta_date is not auto-updated here; shipping schedule is determined manually or via BL/vessel tracking
 
     order.updated_by = current_user.id
     db.commit()
     db.refresh(order)
+    sync_order_document(order)
     is_accounts = is_accounts_user(current_user, org_context)
-    return order_to_dict(order, is_accounts)
+    can_view_supp = can_user_view_supplier(current_user, org_context)
+    return order_to_dict(order, is_accounts, can_view_supp)
 
 # ── Link Shipments (PO ↔ BL / Container) ──────────────────────────────────────
 @OrderRouter.post("/{order_id}/shipments")
@@ -1425,7 +1818,10 @@ async def get_order_payments(
     if not order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
-    payments = db.query(OrderPayment).filter(
+    payments = db.query(OrderPayment).options(
+        joinedload(OrderPayment.evidence_doc),
+        selectinload(OrderPayment.documents)
+    ).filter(
         OrderPayment.po_id == order.id,
         OrderPayment.is_deleted == False
     ).order_by(OrderPayment.id.desc()).all()
@@ -1444,6 +1840,27 @@ async def get_order_payments(
                 "notes": pm.notes,
                 "status": pm.status,
                 "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
+                "evidence_doc_id": str(pm.evidence_doc_id) if pm.evidence_doc_id else None,
+                "evidence_doc": {
+                    "id": str(pm.evidence_doc.id),
+                    "file_name": pm.evidence_doc.file_name,
+                    "title": pm.evidence_doc.title,
+                    "file_path": pm.evidence_doc.file_path,
+                    "file_size": pm.evidence_doc.file_size,
+                    "mime_type": pm.evidence_doc.mime_type,
+                } if pm.evidence_doc and not pm.evidence_doc.is_deleted else None,
+                "documents": [
+                    {
+                        "id": str(d.id),
+                        "file_name": d.file_name,
+                        "title": d.title,
+                        "file_path": d.file_path,
+                        "file_size": d.file_size,
+                        "mime_type": d.mime_type,
+                        "created_at": d.created_at.isoformat() if d.created_at else None,
+                    }
+                    for d in (pm.documents or []) if not d.is_deleted
+                ]
             }
             for pm in payments
         ],
@@ -1569,28 +1986,13 @@ async def record_payment(
     elif order.payment_status == "FULLY_PAID" and not order.balance_payment_date and payment.paid_date:
         order.balance_payment_date = payment.paid_date
 
-    # Automatic status update based on totals and payment type
+    # Automatic payment status update based on totals and payment type
     if total_order > 0 and total_paid >= (total_order - 0.01):
         order.payment_status = "FULLY_PAID"
-        paid_st = db.query(OrderStatus).filter(OrderStatus.code == "PAID").first()
-        if paid_st:
-            order.status_id = paid_st.id
-            order.status = "PAID"
-            order.status_label = "Paid"
     elif total_paid > 0:
         order.payment_status = "PART_PAID"
-        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
-        if part_st:
-            order.status_id = part_st.id
-            order.status = "PART_PAID"
-            order.status_label = "Part Paid"
     else:
         order.payment_status = "NONE"
-        pend_st = db.query(OrderStatus).filter(OrderStatus.code == "PENDING").first()
-        if pend_st and order.status in ["PAID", "PART_PAID"]:
-            order.status_id = pend_st.id
-            order.status = "PENDING"
-            order.status_label = "Pending"
 
     db.commit()
     db.refresh(payment)
@@ -1758,25 +2160,10 @@ async def update_payment(
 
     if total_order > 0 and total_paid >= (total_order - 0.01):
         order.payment_status = "FULLY_PAID"
-        paid_st = db.query(OrderStatus).filter(OrderStatus.code == "PAID").first()
-        if paid_st:
-            order.status_id = paid_st.id
-            order.status = "PAID"
-            order.status_label = "Paid"
     elif total_paid > 0:
         order.payment_status = "PART_PAID"
-        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
-        if part_st:
-            order.status_id = part_st.id
-            order.status = "PART_PAID"
-            order.status_label = "Part Paid"
     else:
         order.payment_status = "NONE"
-        pend_st = db.query(OrderStatus).filter(OrderStatus.code == "PENDING").first()
-        if pend_st and order.status in ["PAID", "PART_PAID"]:
-            order.status_id = pend_st.id
-            order.status = "PENDING"
-            order.status_label = "Pending"
 
     db.commit()
     db.refresh(payment)
@@ -1860,27 +2247,13 @@ async def delete_payment(
 
     if total_order > 0 and total_paid >= (total_order - 0.01):
         order.payment_status = "FULLY_PAID"
-        paid_st = db.query(OrderStatus).filter(OrderStatus.code == "PAID").first()
-        if paid_st:
-            order.status_id = paid_st.id
-            order.status = "PAID"
-            order.status_label = "Paid"
     elif total_paid > 0:
         order.payment_status = "PART_PAID"
-        part_st = db.query(OrderStatus).filter(OrderStatus.code == "PART_PAID").first()
-        if part_st:
-            order.status_id = part_st.id
-            order.status = "PART_PAID"
-            order.status_label = "Part Paid"
     else:
         order.payment_status = "NONE"
-        pend_st = db.query(OrderStatus).filter(OrderStatus.code == "PENDING").first()
-        if pend_st and order.status in ["PAID", "PART_PAID"]:
-            order.status_id = pend_st.id
-            order.status = "PENDING"
-            order.status_label = "Pending"
 
     db.commit()
+    sync_order_document(order)
 
     return {
         "success": True,
@@ -1976,5 +2349,6 @@ async def delete_order(
     order.deleted_at = datetime.utcnow()
     order.deleted_by = current_user.id
     db.commit()
+    remove_order_document(order.id)
     logger.info("Deleted PO %s by %s", order.po_number, current_user.username)
     return {"success": True, "message": f"Order {order.po_number} deleted successfully"}

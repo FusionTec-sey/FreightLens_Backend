@@ -84,3 +84,5 @@ Thumbs.db
 # Scratch and temp
 scratch/
 BLOB/
+*.mp4
+*.webm

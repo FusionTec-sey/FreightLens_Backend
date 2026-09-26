@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from ...db import Base
-from ...mixins import AuditMixin
+from ...mixins import AuditMixin, OrgMixin
 
-class OrderShipment(AuditMixin, Base):
+class OrderShipment(OrgMixin, AuditMixin, Base):
     __tablename__ = "order_shipments"
     __table_args__ = {'schema': 'containermgmt'}
 
