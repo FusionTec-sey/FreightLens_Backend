@@ -4,6 +4,7 @@ version: '3.8'
 services:
   postgres-staging:
     image: postgres:16-alpine
+    container_name: postgres-staging
     restart: unless-stopped
     environment:
       POSTGRES_DB: containermgmt_pg
@@ -16,9 +17,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - coolify
 
   rustfs-staging:
     image: rustfs/rustfs:latest
+    container_name: rustfs-staging
     restart: unless-stopped
     environment:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
@@ -28,9 +32,12 @@ services:
       - RUSTFS_CONSOLE_ENABLE=false
     volumes:
       - freightlens_staging_rustfs:/data
+    networks:
+      - coolify
 
   meilisearch-staging:
     image: getmeili/meilisearch:v1.6
+    container_name: meilisearch-staging
     restart: unless-stopped
     environment:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
@@ -38,6 +45,8 @@ services:
       - MEILI_ENV=production
     volumes:
       - freightlens_staging_meili:/meili_data
+    networks:
+      - coolify
 
   backend-staging:
     build:
@@ -86,3 +95,8 @@ volumes:
   freightlens_staging_pgdata:
   freightlens_staging_rustfs:
   freightlens_staging_meili:
+
+networks:
+  coolify:
+    name: coolify
+    external: true
