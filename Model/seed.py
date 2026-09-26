@@ -347,7 +347,7 @@ def seed_db(db: Session):
         db.flush()
 
         # ── 5. Seed default Organisation & Admin User if missing ─────────────
-        from Model.Credentials.organisation import Organisation
+        from Model.Credentials.Organisation import Organisation
         org1 = db.query(Organisation).filter_by(id=1).first()
         if not org1:
             org1 = Organisation(
