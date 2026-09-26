@@ -4,10 +4,13 @@ FastAPI router for the Customer-Configurable Report & Print Template System.
 Handles template CRUD, versioning, sandboxed Jinja2 rendering, WeasyPrint PDF compilation,
 and AI Context File downloads.
 """
+import io
 import math
 import logging
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from Model.db import get_db
@@ -15,8 +18,21 @@ from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
-from auth.security_guards import require_permission, has_permission
+from auth.security_guards import require_permission, has_permission, is_financial_user, can_view_supplier_user
 from Utils.org_filter import OrgContext
+
+from Schema.ReportDatasetSchema import (
+    DatasetQuerySpec,
+    DatasetResult,
+    DatasetCatalogItem,
+)
+from Services.report_dataset_service import (
+    list_dataset_catalog,
+    get_dataset_resolver,
+    run_dataset_query,
+    export_dataset_excel,
+    render_dataset_pdf,
+)
 
 from Schema.ReportSchema import (
     ReportTemplateCreate,
@@ -417,3 +433,95 @@ def download_ai_context_file(
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── Dataset & Tabular Operational Registers ──────────────────────────────────
+
+@ReportRouter.get("/datasets", response_model=List[DatasetCatalogItem])
+def get_dataset_reports_catalog(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Lists all operational dataset reports and registers available to the user."""
+    return list_dataset_catalog(current_user, org_context)
+
+
+@ReportRouter.get("/datasets/{report_key}/schema", response_model=DatasetCatalogItem)
+def get_dataset_report_schema(
+    report_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Returns the filter definitions, columns, and sort/group options for a dataset report."""
+    resolver = get_dataset_resolver(report_key)
+    can_financial = is_financial_user(current_user, org_context)
+    can_vendor = can_view_supplier_user(current_user, org_context)
+
+    filtered_cols = [
+        c for c in resolver.columns
+        if not (c.restricted_permission == "View_Financials" and not can_financial)
+        and not (c.restricted_permission == "View_Supplier" and not can_vendor)
+    ]
+    return DatasetCatalogItem(
+        key=resolver.key,
+        name=resolver.name,
+        category=resolver.category,
+        description=resolver.description,
+        default_orientation=resolver.default_orientation,
+        default_page_size=resolver.default_page_size,
+        supported_filters=resolver.filters,
+        supported_sort_fields=resolver.sort_fields,
+        supported_group_fields=resolver.group_fields,
+        columns=filtered_cols,
+    )
+
+
+@ReportRouter.post("/datasets/{report_key}/run", response_model=DatasetResult)
+def run_dataset_report_query(
+    report_key: str,
+    spec: DatasetQuerySpec,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Executes a parametric query for an operational report and returns paginated records with subtotals."""
+    return run_dataset_query(report_key, spec, db, org_context, current_user)
+
+
+@ReportRouter.post("/datasets/{report_key}/render")
+def render_dataset_report_pdf(
+    report_key: str,
+    spec: DatasetQuerySpec,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Compiles the operational register into an enterprise landscape PDF with repeating headers."""
+    pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, current_user)
+    filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@ReportRouter.post("/datasets/{report_key}/export")
+def export_dataset_report_excel(
+    report_key: str,
+    spec: DatasetQuerySpec,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Generates and streams a styled Excel (.xlsx) spreadsheet with subtotals and auto-fitted columns."""
+    excel_bytes = export_dataset_excel(report_key, spec, db, org_context, current_user)
+    filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
