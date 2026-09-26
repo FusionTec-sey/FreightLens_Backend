@@ -1,0 +1,419 @@
+"""
+Routes/Reports/ReportRouter.py
+FastAPI router for the Customer-Configurable Report & Print Template System.
+Handles template CRUD, versioning, sandboxed Jinja2 rendering, WeasyPrint PDF compilation,
+and AI Context File downloads.
+"""
+import math
+import logging
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.orm import Session
+
+from Model.db import get_db
+from Model.containermgmt.Report.ReportTemplate import ReportTemplate
+from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
+from Model.Credentials.users import User
+from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import require_permission, has_permission
+from Utils.org_filter import OrgContext
+
+from Schema.ReportSchema import (
+    ReportTemplateCreate,
+    ReportTemplateUpdate,
+    ReportTemplateClone,
+    ReportTemplateOut,
+    ReportTemplateDetailOut,
+    ReportTemplatePaginatedResponse,
+    ReportTemplateVersionCreate,
+    ReportTemplateVersionOut,
+    ReportRenderRequest,
+    ReportPreviewRequest,
+    ReportValidateRequest,
+    ReportValidateResponse,
+    ResolverSchemaOut,
+)
+from Services.report_template_service import (
+    list_templates,
+    get_template,
+    get_active_version_data,
+    create_custom_template,
+    clone_template,
+    update_template_metadata,
+    delete_template,
+    create_template_version,
+    publish_template_version,
+)
+from Services.report_data_resolvers import (
+    list_resolvers,
+    get_resolver,
+    resolve_report_data,
+)
+from Services.report_template_validator import validate_template
+from Services.report_render_engine import render_html_document, compile_pdf_from_html
+from Services.report_context_generator import generate_context_file
+
+logger = logging.getLogger("containerMgmt.report_router")
+
+ReportRouter = APIRouter(prefix="/reports", tags=["Report Templates & Print Engine"])
+
+
+# ── Template Catalog & CRUD Endpoints ────────────────────────────────────────
+
+@ReportRouter.get("/templates", response_model=ReportTemplatePaginatedResponse)
+def get_templates_catalog(
+    category: Optional[str] = Query(None, description="Filter by category: LOGISTICS, ORDERS, CROSS_MODULE"),
+    is_active: Optional[bool] = Query(None, description="Filter active status"),
+    search: Optional[str] = Query(None, description="Search term for name or slug"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(25, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Lists accessible report templates (both system defaults and tenant-customized templates)."""
+    skip = (page - 1) * limit
+    items, total = list_templates(
+        db=db,
+        org_context=org_context,
+        category=category,
+        is_active=is_active,
+        search=search,
+        skip=skip,
+        limit=limit,
+    )
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "limit": limit,
+    }
+
+
+@ReportRouter.get("/templates/{template_id}", response_model=ReportTemplateDetailOut)
+def get_template_detail(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Retrieves full details of a template including active version content and version list."""
+    template = get_template(db, template_id, org_context)
+    active_ver = get_active_version_data(db, template)
+
+    versions = (
+        db.query(ReportTemplateVersion)
+        .filter(
+            ReportTemplateVersion.template_id == template.id,
+            ReportTemplateVersion.is_deleted == False,
+        )
+        .order_by(ReportTemplateVersion.version_number.desc())
+        .all()
+    )
+
+    detail = ReportTemplateDetailOut.model_validate(template)
+    detail.active_version_data = ReportTemplateVersionOut.model_validate(active_ver) if active_ver else None
+    detail.versions = [ReportTemplateVersionOut.model_validate(v) for v in versions]
+    return detail
+
+
+@ReportRouter.post("/templates", response_model=ReportTemplateOut, status_code=status.HTTP_201_CREATED)
+def create_template(
+    payload: ReportTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Creates a new customer-defined report template."""
+    return create_custom_template(db, payload, current_user, org_context)
+
+
+@ReportRouter.post("/templates/{template_id}/clone", response_model=ReportTemplateOut)
+def clone_existing_template(
+    template_id: int,
+    payload: ReportTemplateClone,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Clones a system template into a tenant-owned copy for customer customization."""
+    return clone_template(db, template_id, payload, current_user, org_context)
+
+
+@ReportRouter.put("/templates/{template_id}", response_model=ReportTemplateOut)
+def update_template(
+    template_id: int,
+    payload: ReportTemplateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Updates metadata on a tenant-owned template."""
+    return update_template_metadata(db, template_id, payload, current_user, org_context)
+
+
+@ReportRouter.delete("/templates/{template_id}")
+def delete_existing_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Soft-deletes a tenant-owned template."""
+    delete_template(db, template_id, current_user, org_context)
+    return {"message": "Report template deleted successfully."}
+
+
+# ── Version Management Endpoints ─────────────────────────────────────────────
+
+@ReportRouter.get("/templates/{template_id}/versions", response_model=List[ReportTemplateVersionOut])
+def list_template_versions(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Lists all versions belonging to a template."""
+    template = get_template(db, template_id, org_context)
+    versions = (
+        db.query(ReportTemplateVersion)
+        .filter(
+            ReportTemplateVersion.template_id == template.id,
+            ReportTemplateVersion.is_deleted == False,
+        )
+        .order_by(ReportTemplateVersion.version_number.desc())
+        .all()
+    )
+    return versions
+
+
+@ReportRouter.post("/templates/{template_id}/versions", response_model=ReportTemplateVersionOut, status_code=status.HTTP_201_CREATED)
+def create_new_template_version(
+    template_id: int,
+    payload: ReportTemplateVersionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Creates a new draft version for a tenant-owned template."""
+    return create_template_version(db, template_id, payload, current_user, org_context)
+
+
+@ReportRouter.put("/templates/{template_id}/versions/{version_id}/publish", response_model=ReportTemplateOut)
+def publish_version(
+    template_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Activates and publishes a specific version of a template."""
+    return publish_template_version(db, template_id, version_id, current_user, org_context)
+
+
+@ReportRouter.post("/templates/validate", response_model=ReportValidateResponse)
+def validate_template_code(
+    payload: ReportValidateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Pre-save syntax and security validation for HTML and CSS templates."""
+    is_valid, errors, warnings = validate_template(
+        html_content=payload.html_content,
+        css_content=payload.css_content,
+        header_html=payload.header_html,
+        footer_html=payload.footer_html,
+        resolver_key=payload.resolver_key,
+    )
+    return {"is_valid": is_valid, "errors": errors, "warnings": warnings}
+
+
+# ── Report Rendering Pipeline ────────────────────────────────────────────────
+
+@ReportRouter.post("/render")
+def render_report_pdf(
+    req: ReportRenderRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """
+    Renders a report to a binary PDF stream using sandboxed Jinja2 and WeasyPrint.
+    Returns: application/pdf binary stream.
+    """
+    template = None
+    if req.template_id:
+        template = get_template(db, req.template_id, org_context)
+    elif req.template_slug:
+        # Search tenant template first, then system template
+        template = (
+            db.query(ReportTemplate)
+            .filter(
+                ReportTemplate.slug == req.template_slug,
+                ReportTemplate.org_id.in_(org_context.allowed_org_ids),
+                ReportTemplate.is_deleted == False,
+            )
+            .first()
+        )
+        if not template:
+            template = (
+                db.query(ReportTemplate)
+                .filter(
+                    ReportTemplate.slug == req.template_slug,
+                    ReportTemplate.is_system == True,
+                    ReportTemplate.is_deleted == False,
+                )
+                .first()
+            )
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Requested report template was not found.")
+
+    version = get_active_version_data(db, template)
+    if not version:
+        raise HTTPException(status_code=400, detail="The specified report template has no published version to render.")
+
+    # Resolve context data
+    context = resolve_report_data(
+        resolver_key=template.resolver_key,
+        entity_id=req.entity_id,
+        db=db,
+        org_context=org_context,
+        user=current_user,
+        params=req.params,
+    )
+
+    # Render HTML
+    full_html = render_html_document(
+        html_template=version.html_content,
+        context=context,
+        css_content=version.css_content,
+        header_template=version.header_html,
+        footer_template=version.footer_html,
+        page_size=template.page_size or "A4",
+        orientation=template.orientation or "portrait",
+    )
+
+    # If requested format is html, return rendered HTML directly
+    if req.format and req.format.lower() == "html":
+        return Response(content=full_html, media_type="text/html; charset=utf-8")
+
+    # Compile PDF via WeasyPrint
+    pdf_bytes = compile_pdf_from_html(full_html)
+    filename = f"{template.slug}_{req.entity_id}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@ReportRouter.post("/render/preview")
+def render_report_preview(
+    req: ReportPreviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """
+    Renders an HTML preview of a report. Supports both saved templates and unsaved
+    live editor snippets with realistic sample data.
+    """
+    html_content = req.html_content
+    css_content = req.css_content
+    header_html = req.header_html
+    footer_html = req.footer_html
+    resolver_key = req.resolver_key
+    page_size = "A4"
+    orientation = "portrait"
+
+    if req.template_id:
+        template = get_template(db, req.template_id, org_context)
+        resolver_key = template.resolver_key
+        page_size = template.page_size or "A4"
+        orientation = template.orientation or "portrait"
+        
+        # If user did not pass code override, use template's active version
+        if not html_content:
+            version = get_active_version_data(db, template)
+            if version:
+                html_content = version.html_content
+                css_content = version.css_content
+                header_html = version.header_html
+                footer_html = version.footer_html
+
+    if not html_content:
+        raise HTTPException(status_code=400, detail="No HTML template content provided for preview.")
+
+    if not resolver_key:
+        raise HTTPException(status_code=400, detail="resolver_key is required to resolve preview context data.")
+
+    context = resolve_report_data(
+        resolver_key=resolver_key,
+        entity_id=req.entity_id,
+        db=db,
+        org_context=org_context,
+        user=current_user,
+        params=req.params,
+    )
+
+    full_html = render_html_document(
+        html_template=html_content,
+        context=context,
+        css_content=css_content,
+        header_template=header_html,
+        footer_template=footer_html,
+        page_size=page_size,
+        orientation=orientation,
+    )
+
+    return {"html": full_html}
+
+
+# ── Resolvers & AI Context File System ───────────────────────────────────────
+
+@ReportRouter.get("/resolvers", summary="List all registered data resolvers")
+def get_registered_resolvers(
+    category: Optional[str] = Query(None, description="Filter resolvers by category"),
+    current_user: User = Depends(get_current_user),
+):
+    """Lists available data resolvers and high-level descriptions."""
+    return {"resolvers": list_resolvers(category)}
+
+
+@ReportRouter.get("/resolvers/{resolver_key}/schema", response_model=ResolverSchemaOut)
+def get_resolver_schema(
+    resolver_key: str,
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+):
+    """Returns field definitions and sample context for a resolver."""
+    resolver = get_resolver(resolver_key)
+    return {
+        "resolver_key": resolver.key,
+        "name": resolver.name,
+        "entity_type": resolver.entity_type,
+        "category": resolver.category,
+        "description": resolver.description,
+        "fields": resolver.schema_meta,
+        "sample_context": resolver.sample_context,
+    }
+
+
+@ReportRouter.get("/resolvers/{resolver_key}/context-file")
+def download_ai_context_file(
+    resolver_key: str,
+    current_user: User = Depends(require_permission("Manage_Report_Template")),
+):
+    """
+    Downloads an AI Developer Context Markdown file (.md).
+    Users can paste this file into external LLMs (ChatGPT, Claude, Cursor) to generate templates.
+    """
+    md_content = generate_context_file(resolver_key)
+    filename = f"freightlens_context_{resolver_key}.md"
+    return Response(
+        content=md_content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -144,6 +144,8 @@ async def startup_event():
     ensure_dashboard_and_inventory_permissions()
     from Utils.migrate_product_packaging_and_warehouse import ensure_packaging_and_warehouse_columns
     ensure_packaging_and_warehouse_columns()
+    from Utils.migrate_report_templates import ensure_report_templates_schema
+    ensure_report_templates_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -261,9 +263,11 @@ app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENT
 app.include_router(NotificationRouter)
 from Routes.MasterData.MasterDataRouter import MasterDataRouter
 from Routes.Dashboard.DashboardRouter import DashboardRouter
+from Routes.Reports.ReportRouter import ReportRouter
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter)
+app.include_router(ReportRouter)
 
 
 

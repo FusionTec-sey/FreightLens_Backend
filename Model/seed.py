@@ -21,6 +21,7 @@ DEFAULT_PERMISSIONS = [
     ("View_Container",       "View containers list and sections"),
     ("View_BL",              "View Bills of Lading list"),
     ("View_Report",          "View reports list"),
+    ("Manage_Report_Template", "Create, edit, version, and publish customer report templates"),
     ("View_Order",           "View Purchase Orders list and tracking"),
     ("View_StoreRequest",    "View Store Requests list"),
     ("View_PackingList",     "View Packing Lists"),

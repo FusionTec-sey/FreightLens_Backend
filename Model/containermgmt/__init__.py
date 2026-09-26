@@ -38,6 +38,9 @@ from .Orders.POItemHistory import POItemHistory
 from .Orders.POStageTransition import POStageTransition
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
+from .Report.ReportTemplate import ReportTemplate
+from .Report.ReportTemplateVersion import ReportTemplateVersion
+from .Report.ReportRenderJob import ReportRenderJob
 
 __all__ = [
     "ContainerDetails", "ContainerDocs", "DocType", "BillOfLanding",
@@ -50,6 +53,7 @@ __all__ = [
     "GoodsReceipt", "ReceiptItem", "DefectReport", "DefectItem", "DefectImage",
     "OrderStatusHistory", "Notification", "Product", "ProductCategory", "ProductLink",
     "OrderTemplate", "OrderTemplateItem",
-    "VendorQuote", "VendorQuoteItem", "POItemHistory", "POStageTransition"
+    "VendorQuote", "VendorQuoteItem", "POItemHistory", "POStageTransition",
+    "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob"
 ]
 
