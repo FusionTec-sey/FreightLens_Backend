@@ -240,7 +240,12 @@ from auth.module_guard import require_module
 
 from LogisticsAPI import logistics_router, logistics_webhook_router
 
+from Routes.Reports.ReportRouter import ReportRouter
+from Routes.MasterData.MasterDataRouter import MasterDataRouter
+from Routes.Dashboard.DashboardRouter import DashboardRouter
+
 app.include_router(auth_router)
+app.include_router(ReportRouter)
 app.include_router(Cinfo)
 app.include_router(ContainerRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(CreadentialsInfo)
@@ -261,13 +266,9 @@ app.include_router(DefectRouter, dependencies=[Depends(require_module("ORDERS"))
 app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(NotificationRouter)
-from Routes.MasterData.MasterDataRouter import MasterDataRouter
-from Routes.Dashboard.DashboardRouter import DashboardRouter
-from Routes.Reports.ReportRouter import ReportRouter
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter)
-app.include_router(ReportRouter)
 
 
 

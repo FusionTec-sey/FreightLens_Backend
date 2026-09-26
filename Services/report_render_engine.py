@@ -9,6 +9,7 @@ from datetime import datetime, date
 from decimal import Decimal
 import weasyprint
 from jinja2.sandbox import SandboxedEnvironment
+from jinja2 import Undefined
 
 logger = logging.getLogger("containerMgmt.report_render_engine")
 
@@ -16,7 +17,7 @@ logger = logging.getLogger("containerMgmt.report_render_engine")
 # ── Helper filters & formatters ──────────────────────────────────────────────
 
 def format_date_filter(val: Any, fmt: str = "%d %b %Y") -> str:
-    if not val:
+    if not val or isinstance(val, Undefined):
         return "-"
     if isinstance(val, (datetime, date)):
         return val.strftime(fmt)
@@ -32,27 +33,27 @@ def format_date_filter(val: Any, fmt: str = "%d %b %Y") -> str:
 
 
 def format_number_filter(val: Any, decimals: int = 2) -> str:
-    if val is None or val == "":
+    if val is None or val == "" or isinstance(val, Undefined):
         return "-"
     try:
         num = float(val)
         return f"{num:,.{decimals}f}"
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, Exception):
         return str(val)
 
 
 def format_currency_filter(val: Any, currency: str = "USD", decimals: int = 2) -> str:
-    if val is None or val == "":
+    if val is None or val == "" or isinstance(val, Undefined):
         return "-"
     try:
         num = float(val)
         return f"{currency} {num:,.{decimals}f}"
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, Exception):
         return str(val)
 
 
 def default_na_filter(val: Any, placeholder: str = "-") -> str:
-    if val is None or val == "" or str(val).strip() == "":
+    if val is None or val == "" or isinstance(val, Undefined) or str(val).strip() == "":
         return placeholder
     return str(val)
 

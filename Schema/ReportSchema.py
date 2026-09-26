@@ -93,7 +93,7 @@ class ReportRenderRequest(BaseModel):
     template_id: Optional[int] = None
     template_slug: Optional[str] = None
     entity_type: Optional[str] = None
-    entity_id: int
+    entity_id: Optional[int] = None
     format: Optional[str] = Field("pdf", description="'pdf' or 'html'")
     params: Optional[Dict[str, Any]] = None
 
