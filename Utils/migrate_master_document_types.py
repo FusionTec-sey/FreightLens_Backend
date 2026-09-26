@@ -202,6 +202,8 @@ def ensure_master_document_types_schema():
             ALTER TABLE containermgmt.master_document_types 
                 ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
             ALTER TABLE containermgmt.master_document_types 
+                ALTER COLUMN is_deleted SET DEFAULT FALSE;
+            ALTER TABLE containermgmt.master_document_types 
                 ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITHOUT TIME ZONE;
             ALTER TABLE containermgmt.master_document_types 
                 ADD COLUMN IF NOT EXISTS deleted_by INTEGER;
@@ -225,8 +227,8 @@ def ensure_master_document_types_schema():
                 conn.execute(
                     text("""
                         INSERT INTO containermgmt.master_document_types 
-                        (code, name, description, applicable_spaces, is_active, display_order, created_by)
-                        VALUES (:code, :name, :description, CAST(:applicable_spaces AS jsonb), TRUE, :display_order, NULL)
+                        (code, name, description, applicable_spaces, is_active, display_order, is_deleted, created_by)
+                        VALUES (:code, :name, :description, CAST(:applicable_spaces AS jsonb), TRUE, :display_order, FALSE, NULL)
                     """),
                     {
                         "code": item["code"],
