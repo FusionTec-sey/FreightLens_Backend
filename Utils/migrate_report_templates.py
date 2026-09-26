@@ -501,7 +501,7 @@ def ensure_report_templates_schema():
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS containermgmt.report_template_versions (
                 id SERIAL PRIMARY KEY,
-                template_id INTEGER REFERENCES containermgmt.report_templates(id) ONDELETE CASCADE NOT NULL,
+                template_id INTEGER REFERENCES containermgmt.report_templates(id) ON DELETE CASCADE NOT NULL,
                 version_number INTEGER NOT NULL DEFAULT 1,
                 status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
                 html_content TEXT NOT NULL,

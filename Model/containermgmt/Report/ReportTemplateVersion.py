@@ -27,3 +27,12 @@ class ReportTemplateVersion(AuditMixin, Base):
 
     # Relationships
     template = relationship("ReportTemplate", back_populates="versions")
+
+    @property
+    def changelog(self):
+        return self.change_notes
+
+    @changelog.setter
+    def changelog(self, value):
+        self.change_notes = value
+

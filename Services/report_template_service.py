@@ -84,13 +84,20 @@ def get_template(db: Session, template_id: int, org_context: OrgContext) -> Repo
 
 def get_active_version_data(db: Session, template: ReportTemplate) -> Optional[ReportTemplateVersion]:
     """Gets the active version record for a template."""
-    if not template.active_version:
-        return None
-    return db.query(ReportTemplateVersion).filter(
-        ReportTemplateVersion.template_id == template.id,
-        ReportTemplateVersion.version_number == template.active_version,
-        ReportTemplateVersion.is_deleted == False,
-    ).first()
+    if template.active_version_id:
+        v = db.query(ReportTemplateVersion).filter(
+            ReportTemplateVersion.id == template.active_version_id,
+            ReportTemplateVersion.is_deleted == False,
+        ).first()
+        if v:
+            return v
+    if template.active_version:
+        return db.query(ReportTemplateVersion).filter(
+            ReportTemplateVersion.template_id == template.id,
+            ReportTemplateVersion.version_number == template.active_version,
+            ReportTemplateVersion.is_deleted == False,
+        ).first()
+    return None
 
 
 def create_custom_template(
@@ -134,7 +141,6 @@ def create_custom_template(
         page_size=data.page_size or "A4",
         orientation=data.orientation or "portrait",
         org_id=org_context.current_org_id,
-        active_version=1 if initial_ver else None,
         created_by=user.id,
     )
     db.add(template)
@@ -149,10 +155,12 @@ def create_custom_template(
             header_html=initial_ver.header_html,
             footer_html=initial_ver.footer_html,
             status="PUBLISHED",
-            changelog=initial_ver.changelog or "Initial template version",
+            change_notes=initial_ver.changelog or "Initial template version",
             created_by=user.id,
         )
         db.add(ver)
+        db.flush()
+        template.active_version_id = ver.id
 
     db.commit()
     db.refresh(template)
@@ -197,7 +205,6 @@ def clone_template(
         page_size=source.page_size,
         orientation=source.orientation,
         org_id=org_context.current_org_id,
-        active_version=1,
         created_by=user.id,
     )
     db.add(new_template)
@@ -211,10 +218,13 @@ def clone_template(
         header_html=source_ver.header_html,
         footer_html=source_ver.footer_html,
         status="PUBLISHED",
-        changelog=f"Cloned from '{source.name}' v{source_ver.version_number}",
+        change_notes=f"Cloned from '{source.name}' v{source_ver.version_number}",
         created_by=user.id,
     )
     db.add(new_version)
+    db.flush()
+    new_template.active_version_id = new_version.id
+
     db.commit()
     db.refresh(new_template)
     return new_template
@@ -294,7 +304,7 @@ def create_template_version(
         header_html=data.header_html,
         footer_html=data.footer_html,
         status="DRAFT",
-        changelog=data.changelog or f"Version {new_version_num}",
+        change_notes=data.changelog or f"Version {new_version_num}",
         created_by=user.id,
     )
     db.add(ver)
@@ -333,7 +343,7 @@ def publish_template_version(
     ).update({"status": "ARCHIVED"})
 
     target_ver.status = "PUBLISHED"
-    template.active_version = target_ver.version_number
+    template.active_version_id = target_ver.id
     template.updated_by = user.id
 
     db.commit()
