@@ -361,17 +361,45 @@ def seed_db(db: Session):
             db.flush()
             logger.info("Seeded default organisation: id=1 (Sahaj Construction)")
 
-        user_count = db.query(User).count()
-        if user_count == 0:
+        # Guarantee admin user exists with known credentials: admin / admin123
+        admin_user = db.query(User).filter_by(username="admin").first()
+        if not admin_user:
             admin_user = User(
                 username="admin",
                 password_hash=hash_password("admin123"),
                 org_id=1,
-                allowed_org_ids=[1]
+                allowed_org_ids=[1],
+                is_deleted=False
             )
             admin_user.roles = [admin_role]
             db.add(admin_user)
             logger.info("Seeded default admin user: admin / admin123")
+        else:
+            admin_user.password_hash = hash_password("admin123")
+            admin_user.is_deleted = False
+            admin_user.org_id = 1
+            if admin_role not in admin_user.roles:
+                admin_user.roles.append(admin_role)
+            logger.info("Ensured admin user credentials: admin / admin123")
+
+        # Guarantee admin_sahaj user exists: admin_sahaj / Password@123
+        admin_sahaj = db.query(User).filter_by(username="admin_sahaj").first()
+        if not admin_sahaj:
+            admin_sahaj = User(
+                username="admin_sahaj",
+                password_hash=hash_password("Password@123"),
+                org_id=1,
+                allowed_org_ids=[1],
+                is_deleted=False
+            )
+            admin_sahaj.roles = [admin_role]
+            db.add(admin_sahaj)
+            logger.info("Seeded admin_sahaj user: admin_sahaj / Password@123")
+        else:
+            admin_sahaj.password_hash = hash_password("Password@123")
+            admin_sahaj.is_deleted = False
+            if admin_role not in admin_sahaj.roles:
+                admin_sahaj.roles.append(admin_role)
 
         db.commit()
         logger.info("Database seeding checked and completed successfully.")

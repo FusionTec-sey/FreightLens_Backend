@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import jwt
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from Model.Credentials.users import User
@@ -40,13 +41,21 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.username == form_data.username).first()
+    req_username = (form_data.username or "").strip()
+    user = db.query(User).filter(func.lower(User.username) == req_username.lower()).first()
     if not user or not verify_password(form_data.password, user.password_hash):
-        logger.warning(
-            "Failed login attempt | username=%s | ip=%s",
-            form_data.username,
-            request.client.host if request.client else "unknown",
-        )
+        if not user:
+            logger.warning(
+                "Failed login attempt: User not found | username=%s | ip=%s",
+                req_username,
+                request.client.host if request.client else "unknown",
+            )
+        else:
+            logger.warning(
+                "Failed login attempt: Incorrect password | username=%s | ip=%s",
+                req_username,
+                request.client.host if request.client else "unknown",
+            )
         # Audit failed login
         audit = SessionAudit(
             login_time=datetime.utcnow(),
