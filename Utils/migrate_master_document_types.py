@@ -226,7 +226,7 @@ def ensure_master_document_types_schema():
                     text("""
                         INSERT INTO containermgmt.master_document_types 
                         (code, name, description, applicable_spaces, is_active, display_order, created_by)
-                        VALUES (:code, :name, :description, CAST(:applicable_spaces AS jsonb), TRUE, :display_order, 'System')
+                        VALUES (:code, :name, :description, CAST(:applicable_spaces AS jsonb), TRUE, :display_order, NULL)
                     """),
                     {
                         "code": item["code"],
