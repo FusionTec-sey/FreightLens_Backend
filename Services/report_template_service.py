@@ -63,6 +63,11 @@ def list_templates(
 
     total = query.count()
     items = query.order_by(ReportTemplate.is_system.desc(), ReportTemplate.name.asc()).offset(skip).limit(limit).all()
+    for t in items:
+        if t.is_system:
+            t.is_active_for_org = bool(org_context.current_org_id in (t.active_org_ids or []))
+        else:
+            t.is_active_for_org = bool(t.is_active)
     return items, total
 
 
@@ -78,6 +83,11 @@ def get_template(db: Session, template_id: int, org_context: OrgContext) -> Repo
 
     if not template.is_system and template.org_id not in org_context.allowed_org_ids:
         raise HTTPException(status_code=403, detail="Access denied to this report template.")
+
+    if template.is_system:
+        template.is_active_for_org = bool(org_context.current_org_id in (template.active_org_ids or []))
+    else:
+        template.is_active_for_org = bool(template.is_active)
 
     return template
 
@@ -136,6 +146,9 @@ def create_custom_template(
         category=data.category.upper(),
         resolver_key=data.resolver_key,
         entity_type=data.entity_type,
+        template_type=data.template_type or "DOCUMENT",
+        table_config=data.table_config,
+        paper_settings=data.paper_settings,
         is_system=False,
         is_active=data.is_active if data.is_active is not None else True,
         page_size=data.page_size or "A4",
@@ -200,6 +213,9 @@ def clone_template(
         category=source.category,
         resolver_key=source.resolver_key,
         entity_type=source.entity_type,
+        template_type=source.template_type or "DOCUMENT",
+        table_config=source.table_config,
+        paper_settings=source.paper_settings,
         is_system=False,
         is_active=True,
         page_size=source.page_size,
@@ -349,3 +365,100 @@ def publish_template_version(
     db.commit()
     db.refresh(template)
     return template
+
+
+def list_active_templates_for_entity(
+    db: Session,
+    org_context: OrgContext,
+    entity_type: str,
+    template_type: str = "DOCUMENT",
+) -> List[ReportTemplate]:
+    """
+    Returns active templates assigned to a specific entity type for the current organization.
+    Enforces user's rule:
+    - System Default templates appear ONLY if activated in active_org_ids for current_org_id.
+    - Custom organization templates appear if owned by current_org_id and is_active is True.
+    """
+    current_org_id = org_context.current_org_id
+
+    # Condition:
+    # 1. System templates activated for current_org_id
+    # 2. Org custom templates owned by current_org_id and is_active is True
+    active_condition = or_(
+        and_(
+            ReportTemplate.is_system == True,
+            ReportTemplate.active_org_ids.any(current_org_id),
+        ),
+        and_(
+            ReportTemplate.is_system == False,
+            ReportTemplate.org_id == current_org_id,
+            ReportTemplate.is_active == True,
+        ),
+    )
+
+    query = (
+        db.query(ReportTemplate)
+        .filter(
+            ReportTemplate.is_deleted == False,
+            ReportTemplate.entity_type == entity_type,
+            ReportTemplate.template_type == template_type,
+            active_condition,
+        )
+        .order_by(ReportTemplate.is_system.desc(), ReportTemplate.name.asc())
+    )
+
+    templates = query.all()
+    for t in templates:
+        t.is_active_for_org = True
+    return templates
+
+
+def toggle_template_activation(
+    db: Session,
+    org_context: OrgContext,
+    template_id: int,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Toggles activation of a template for the current organization.
+    - If system template: adds or removes current_org_id from active_org_ids.
+    - If custom template: toggles is_active flag.
+    """
+    template = db.query(ReportTemplate).filter(
+        ReportTemplate.id == template_id,
+        ReportTemplate.is_deleted == False,
+    ).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found.")
+
+    current_org_id = org_context.current_org_id
+
+    if template.is_system:
+        active_list = list(template.active_org_ids or [])
+        if current_org_id in active_list:
+            active_list.remove(current_org_id)
+            is_now_active = False
+        else:
+            active_list.append(current_org_id)
+            is_now_active = True
+        template.active_org_ids = active_list
+    else:
+        # Check ownership
+        if template.org_id != current_org_id and not getattr(user, "is_root", False):
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot toggle status of templates owned by another organization."
+            )
+        template.is_active = not bool(template.is_active)
+        is_now_active = template.is_active
+
+    template.updated_by = user.id
+    db.commit()
+    db.refresh(template)
+    return {
+        "id": template.id,
+        "name": template.name,
+        "is_system": template.is_system,
+        "is_active_for_org": is_now_active,
+    }
+

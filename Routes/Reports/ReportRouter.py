@@ -59,6 +59,8 @@ from Services.report_template_service import (
     delete_template,
     create_template_version,
     publish_template_version,
+    list_active_templates_for_entity,
+    toggle_template_activation,
 )
 from Services.report_data_resolvers import (
     list_resolvers,
@@ -106,6 +108,46 @@ def get_templates_catalog(
         "pages": pages,
         "limit": limit,
     }
+
+
+@ReportRouter.get("/templates/by-entity", response_model=List[ReportTemplateOut])
+def get_templates_by_entity(
+    entity_type: str = Query(..., description="Target entity type: PurchaseOrder, ContainerDetails, BillOfLanding, etc."),
+    template_type: str = Query("DOCUMENT", description="DOCUMENT or OPERATIONAL_TABULAR"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """
+    Returns active templates for a given entity type in the current organization.
+    Enforces user's rule: default system templates appear ONLY if activated in the Template Library.
+    """
+    return list_active_templates_for_entity(
+        db=db,
+        org_context=org_context,
+        entity_type=entity_type,
+        template_type=template_type,
+    )
+
+
+@ReportRouter.post("/templates/{template_id}/toggle-active")
+def toggle_active_status(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """
+    Toggles activation of a template for the current organization.
+    For system templates: adds/removes org_id from active_org_ids.
+    For custom templates: toggles is_active.
+    """
+    return toggle_template_activation(
+        db=db,
+        org_context=org_context,
+        template_id=template_id,
+        user=current_user,
+    )
 
 
 @ReportRouter.get("/templates/{template_id}", response_model=ReportTemplateDetailOut)

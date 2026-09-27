@@ -37,6 +37,9 @@ class ReportTemplateBase(BaseModel):
     category: str = Field(..., max_length=50, description="LOGISTICS, ORDERS, CROSS_MODULE, etc.")
     resolver_key: str = Field(..., max_length=60)
     entity_type: Optional[str] = Field(None, max_length=60)
+    template_type: Optional[str] = Field("DOCUMENT", max_length=30, description="DOCUMENT or OPERATIONAL_TABULAR")
+    table_config: Optional[Dict[str, Any]] = None
+    paper_settings: Optional[Dict[str, Any]] = None
     page_size: Optional[str] = Field("A4", max_length=20)
     orientation: Optional[str] = Field("portrait", max_length=20)
     is_active: Optional[bool] = True
@@ -59,6 +62,9 @@ class ReportTemplateUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=50)
     resolver_key: Optional[str] = Field(None, max_length=60)
     entity_type: Optional[str] = Field(None, max_length=60)
+    template_type: Optional[str] = Field(None, max_length=30)
+    table_config: Optional[Dict[str, Any]] = None
+    paper_settings: Optional[Dict[str, Any]] = None
     page_size: Optional[str] = Field(None, max_length=20)
     orientation: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
@@ -72,6 +78,11 @@ class ReportTemplateOut(ReportTemplateBase):
     is_system: bool
     active_version: Optional[int] = None
     org_id: Optional[int] = None
+    template_type: Optional[str] = "DOCUMENT"
+    active_org_ids: Optional[List[int]] = None
+    is_active_for_org: Optional[bool] = None
+    table_config: Optional[Dict[str, Any]] = None
+    paper_settings: Optional[Dict[str, Any]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

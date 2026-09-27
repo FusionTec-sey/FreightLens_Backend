@@ -146,6 +146,8 @@ async def startup_event():
     ensure_packaging_and_warehouse_columns()
     from Utils.migrate_report_templates import ensure_report_templates_schema
     ensure_report_templates_schema()
+    from Utils.migrate_template_activation_and_tabular import ensure_template_activation_and_tabular_schema
+    ensure_template_activation_and_tabular_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
