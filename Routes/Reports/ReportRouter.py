@@ -81,6 +81,7 @@ ReportRouter = APIRouter(prefix="/reports", tags=["Report Templates & Print Engi
 @ReportRouter.get("/templates", response_model=ReportTemplatePaginatedResponse)
 def get_templates_catalog(
     category: Optional[str] = Query(None, description="Filter by category: LOGISTICS, ORDERS, CROSS_MODULE"),
+    template_type: Optional[str] = Query(None, description="Filter by template_type: DOCUMENT or OPERATIONAL_TABULAR"),
     is_active: Optional[bool] = Query(None, description="Filter active status"),
     search: Optional[str] = Query(None, description="Search term for name or slug"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -97,6 +98,7 @@ def get_templates_catalog(
         category=category,
         is_active=is_active,
         search=search,
+        template_type=template_type,
         skip=skip,
         limit=limit,
     )
@@ -142,6 +144,15 @@ def toggle_active_status(
     For system templates: adds/removes org_id from active_org_ids.
     For custom templates: toggles is_active.
     """
+    if not (
+        has_permission(current_user, "Toggle_Report_Template")
+        or has_permission(current_user, "Manage_Report_Template")
+        or has_permission(current_user, "Manage_Operational_Template")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Toggle_Report_Template'."
+        )
     return toggle_template_activation(
         db=db,
         org_context=org_context,
@@ -181,10 +192,25 @@ def get_template_detail(
 def create_template(
     payload: ReportTemplateCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Creates a new customer-defined report template."""
+    if payload.template_type == "OPERATIONAL_TABULAR":
+        if not (
+            has_permission(current_user, "Manage_Operational_Template")
+            or has_permission(current_user, "Manage_Report_Template")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Missing required permission 'Manage_Operational_Template'."
+            )
+    else:
+        if not has_permission(current_user, "Manage_Report_Template"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Missing required permission 'Manage_Report_Template'."
+            )
     return create_custom_template(db, payload, current_user, org_context)
 
 
@@ -193,10 +219,18 @@ def clone_existing_template(
     template_id: int,
     payload: ReportTemplateClone,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Clones a system template into a tenant-owned copy for customer customization."""
+    if not (
+        has_permission(current_user, "Manage_Report_Template")
+        or has_permission(current_user, "Manage_Operational_Template")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Manage_Report_Template'."
+        )
     return clone_template(db, template_id, payload, current_user, org_context)
 
 
@@ -205,10 +239,18 @@ def update_template(
     template_id: int,
     payload: ReportTemplateUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Updates metadata on a tenant-owned template."""
+    if not (
+        has_permission(current_user, "Manage_Report_Template")
+        or has_permission(current_user, "Manage_Operational_Template")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Manage_Report_Template' or 'Manage_Operational_Template'."
+        )
     return update_template_metadata(db, template_id, payload, current_user, org_context)
 
 
@@ -216,10 +258,18 @@ def update_template(
 def delete_existing_template(
     template_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Soft-deletes a tenant-owned template."""
+    if not (
+        has_permission(current_user, "Manage_Report_Template")
+        or has_permission(current_user, "Manage_Operational_Template")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Manage_Report_Template' or 'Manage_Operational_Template'."
+        )
     delete_template(db, template_id, current_user, org_context)
     return {"message": "Report template deleted successfully."}
 
@@ -327,6 +377,18 @@ def render_report_pdf(
     
     if not template:
         raise HTTPException(status_code=404, detail="Requested report template was not found.")
+
+    # Contextual entity print permission check
+    entity_type = template.entity_type or req.entity_type
+    if entity_type == "PurchaseOrder":
+        if not (has_permission(current_user, "Print_PurchaseOrder") or has_permission(current_user, "View_Order")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_PurchaseOrder'.")
+    elif entity_type == "ContainerDetails":
+        if not (has_permission(current_user, "Print_Container") or has_permission(current_user, "View_Container")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_Container'.")
+    elif entity_type == "BillOfLanding":
+        if not (has_permission(current_user, "Print_BillOfLanding") or has_permission(current_user, "View_BL")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_BillOfLanding'.")
 
     version = get_active_version_data(db, template)
     if not version:
@@ -486,6 +548,14 @@ def get_dataset_reports_catalog(
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Lists all operational dataset reports and registers available to the user."""
+    if not (
+        has_permission(current_user, "View_Operational_Register")
+        or has_permission(current_user, "View_Report")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'View_Operational_Register'."
+        )
     return list_dataset_catalog(current_user, org_context)
 
 
@@ -497,6 +567,14 @@ def get_dataset_report_schema(
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Returns the filter definitions, columns, and sort/group options for a dataset report."""
+    if not (
+        has_permission(current_user, "View_Operational_Register")
+        or has_permission(current_user, "View_Report")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'View_Operational_Register'."
+        )
     resolver = get_dataset_resolver(report_key)
     can_financial = is_financial_user(current_user, org_context)
     can_vendor = can_view_supplier_user(current_user, org_context)
@@ -529,6 +607,14 @@ def run_dataset_report_query(
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Executes a parametric query for an operational report and returns paginated records with subtotals."""
+    if not (
+        has_permission(current_user, "Run_Operational_Register")
+        or has_permission(current_user, "View_Report")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Run_Operational_Register'."
+        )
     return run_dataset_query(report_key, spec, db, org_context, current_user)
 
 
@@ -541,6 +627,14 @@ def render_dataset_report_pdf(
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Compiles the operational register into an enterprise landscape PDF with repeating headers."""
+    if not (
+        has_permission(current_user, "Run_Operational_Register")
+        or has_permission(current_user, "View_Report")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Run_Operational_Register'."
+        )
     pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, current_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
@@ -559,6 +653,14 @@ def export_dataset_report_excel(
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Generates and streams a styled Excel (.xlsx) spreadsheet with subtotals and auto-fitted columns."""
+    if not (
+        has_permission(current_user, "Run_Operational_Register")
+        or has_permission(current_user, "View_Report")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing required permission 'Run_Operational_Register'."
+        )
     excel_bytes = export_dataset_excel(report_key, spec, db, org_context, current_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(

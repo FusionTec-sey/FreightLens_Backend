@@ -30,6 +30,7 @@ def list_templates(
     category: Optional[str] = None,
     is_active: Optional[bool] = None,
     search: Optional[str] = None,
+    template_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
 ) -> Tuple[List[ReportTemplate], int]:
@@ -47,6 +48,9 @@ def list_templates(
 
     if category:
         query = query.filter(ReportTemplate.category == category.upper())
+
+    if template_type:
+        query = query.filter(ReportTemplate.template_type == template_type.upper())
 
     if is_active is not None:
         query = query.filter(ReportTemplate.is_active == is_active)

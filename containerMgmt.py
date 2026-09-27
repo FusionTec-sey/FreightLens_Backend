@@ -154,6 +154,8 @@ async def startup_event():
     db_session = SessionLocal()
     try:
         seed_db(db_session)
+        from Utils.migrate_reporting_permissions import run_reporting_permissions_migration
+        run_reporting_permissions_migration(db_session)
     except Exception as e:
         logger.error("Database seeding failed: %s", e)
     finally:
