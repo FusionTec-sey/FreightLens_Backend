@@ -209,3 +209,13 @@ Use `react-router-dom` `useNavigate` for programmatic navigation.
 Use `useParams` to read route parameters.
 
 Never hardcode path strings in multiple places — use constants or named routes.
+
+
+---
+
+## Browser DOM Interaction & Automation Protocol
+
+- **Mandatory User Confirmation**: Never trigger automated browser subagents, DOM manipulations, or automated browser testing without explicit user approval.
+- **Always Ask First**: Before executing any tool or subagent that interacts with the browser DOM or navigates live pages:
+  1. Clearly inform the user what pages/URLs will be visited and what actions/verifications will be performed.
+  2. Ask for user confirmation and await their explicit response before launching browser automation.

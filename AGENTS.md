@@ -96,6 +96,10 @@ Design accordingly from day one.
 - **Genuine Need Only**: Do not propose rule changes arbitrarily or create unnecessary overhead on every task. Changes should only be suggested when there is a concrete, tangible advantage.
 - **Mandatory Approval Gate**: Never unilaterally alter rules, deviate from core conventions, or modify `.agents/rules/` without prior discussion. Always submit the proposal to the user and obtain explicit approval before updating.
 
+### 13. Always Ask Before Proceeding with DOM / Browser Interactions
+- Before initiating any automated browser interaction, navigating URLs, manipulating web pages, or inspecting/modifying DOM elements in the browser via subagents or automated tools, the assistant must always ask the user for explicit confirmation.
+- Clearly explain the planned verification steps and target URLs, and await user approval before launching browser automation.
+
 ---
 
 ## Rule Evolution & Modification Workflow
