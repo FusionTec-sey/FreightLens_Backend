@@ -406,6 +406,130 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial
 .manifest-footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 11px; color: #64748b; }
 """
 
+CONTAINER_TEMPLATE_HTML = """
+<div class="container-doc">
+    <div class="header">
+        <div class="header-left">
+            <h1>CONTAINER OPERATIONAL SLIP</h1>
+            <p class="doc-subtitle">Logistics Status & Cargo Notice</p>
+        </div>
+        <div class="header-right">
+            <div class="container-badge">{{ container_no }}</div>
+            <p class="status-text">Status: <strong>{{ status_name }}</strong></p>
+        </div>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-card">
+            <h3>CONTAINER SPECIFICATIONS</h3>
+            <table class="card-table">
+                <tr><td>Container No:</td><td><strong>{{ container_no }}</strong></td></tr>
+                <tr><td>Size / Type:</td><td>{{ container_type or '40 HC' }}</td></tr>
+                <tr><td>Seal Number:</td><td>{{ seal_number or '—' }}</td></tr>
+                <tr><td>Gross Weight:</td><td>{{ gross_weight_kg or '—' }} KG</td></tr>
+                <tr><td>Related PO:</td><td>{{ po_number or '—' }}</td></tr>
+            </table>
+        </div>
+
+        <div class="info-card">
+            <h3>OCEAN & VOYAGE DETAILS</h3>
+            <table class="card-table">
+                <tr><td>Bill of Lading:</td><td><strong>{{ bl_number or '—' }}</strong></td></tr>
+                <tr><td>Vessel Name:</td><td>{{ vessel_name or '—' }}</td></tr>
+                <tr><td>Carrier / Line:</td><td>{{ carrier_name or '—' }}</td></tr>
+                <tr><td>Arrival Date:</td><td>{{ arrival_date or '—' }}</td></tr>
+                <tr><td>Free Days Allowed:</td><td><strong>{{ free_days or 14 }} Days</strong></td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="timeline-box">
+        <h3>TRACKING & HANDLING MILESTONES</h3>
+        <div class="timeline-items">
+            <div class="timeline-item">
+                <span class="milestone-label">Port Discharge:</span>
+                <span class="milestone-val">{{ unloaded_at_port or 'Pending' }}</span>
+            </div>
+            <div class="timeline-item">
+                <span class="milestone-label">Gate-In / In-Bound:</span>
+                <span class="milestone-val">{{ in_bound_date or 'Pending' }}</span>
+            </div>
+            <div class="timeline-item">
+                <span class="milestone-label">De-Stuffed / Empty Date:</span>
+                <span class="milestone-val">{{ empty_date or 'Pending' }}</span>
+            </div>
+            <div class="timeline-item">
+                <span class="milestone-label">De-Stuff Location:</span>
+                <span class="milestone-val">{{ emptied_at or '—' }}</span>
+            </div>
+        </div>
+    </div>
+
+    {% if materials and materials|length > 0 %}
+    <div class="cargo-section">
+        <h3>ASSIGNED CARGO / COMMODITIES</h3>
+        <table class="cargo-table">
+            <thead>
+                <tr>
+                    <th style="width: 10%;">#</th>
+                    <th style="width: 90%;">Commodity / Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in materials %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ m.name }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if note %}
+    <div class="notes-box">
+        <h4>Operational Notes:</h4>
+        <p>{{ note }}</p>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>FreightLens Logistics Platform &nbsp;|&nbsp; Generated on {{ report_date or 'Today' }}</p>
+    </div>
+</div>
+"""
+
+CONTAINER_TEMPLATE_CSS = """
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; font-size: 12px; line-height: 1.5; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 18px; }
+.header h1 { margin: 0; font-size: 20px; color: #4338ca; }
+.doc-subtitle { margin: 3px 0 0 0; color: #64748b; font-size: 12px; font-weight: 500; }
+.container-badge { display: inline-block; font-family: monospace; font-size: 16px; font-weight: 700; color: #3730a3; background: #e0e7ff; padding: 4px 10px; border-radius: 6px; }
+.status-text { margin: 4px 0 0 0; font-size: 12px; text-align: right; }
+.info-grid { display: flex; justify-content: space-between; margin-bottom: 18px; }
+.info-card { width: 48%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+.info-card h3 { margin: 0 0 8px 0; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+.card-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.card-table td { padding: 4px 0; }
+.card-table td:first-child { color: #64748b; width: 45%; }
+.timeline-box { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 18px; }
+.timeline-box h3 { margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase; color: #475569; }
+.timeline-items { display: flex; justify-content: space-between; }
+.timeline-item { text-align: center; width: 24%; }
+.milestone-label { display: block; font-size: 10px; color: #64748b; text-transform: uppercase; }
+.milestone-val { font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+.cargo-section { margin-bottom: 18px; }
+.cargo-section h3 { margin: 0 0 8px 0; font-size: 11px; text-transform: uppercase; color: #64748b; }
+.cargo-table { width: 100%; border-collapse: collapse; }
+.cargo-table th { background: #eef2ff; color: #3730a3; padding: 6px 10px; text-align: left; font-size: 11px; }
+.cargo-table td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+.notes-box { background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 10px; margin-bottom: 18px; }
+.notes-box h4 { margin: 0 0 4px 0; font-size: 11px; color: #b45309; }
+.notes-box p { margin: 0; font-size: 11px; color: #78350f; }
+.footer { margin-top: 25px; border-top: 1px solid #cbd5e1; padding-top: 8px; font-size: 11px; color: #94a3b8; text-align: center; }
+"""
+
 DEFAULT_SYSTEM_TEMPLATES = [
     {
         "slug": "purchase_order",
@@ -445,6 +569,19 @@ DEFAULT_SYSTEM_TEMPLATES = [
         "output_format": "pdf",
         "html_content": BL_TEMPLATE_HTML.strip(),
         "css_content": BL_TEMPLATE_CSS.strip(),
+    },
+    {
+        "slug": "container_status_notice",
+        "name": "Container Operational & Demurrage Slip",
+        "description": "Operational tracking slip for sea containers, including port discharge, free days allowance, demurrage calculation, and cargo summary.",
+        "category": "LOGISTICS",
+        "resolver_key": "container_details",
+        "entity_type": "ContainerDetails",
+        "page_size": "A4",
+        "orientation": "portrait",
+        "output_format": "pdf",
+        "html_content": CONTAINER_TEMPLATE_HTML.strip(),
+        "css_content": CONTAINER_TEMPLATE_CSS.strip(),
     },
 ]
 

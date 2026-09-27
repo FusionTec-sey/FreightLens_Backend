@@ -659,6 +659,146 @@ def resolve_bl_summary(
     }
 
 
+# -------------------------------------------------------------------------
+# Container Operational Details & Demurrage Slip
+# -------------------------------------------------------------------------
+
+CONTAINER_SCHEMA_META = {
+    "container_no": {"type": "string", "example": "MSKU9021884"},
+    "container_type": {"type": "string", "example": "40HC"},
+    "status_name": {"type": "string", "example": "On Port"},
+    "bl_number": {"type": "string", "example": "MEDU992144"},
+    "vessel_name": {"type": "string", "example": "MSC AGATHA"},
+    "carrier_name": {"type": "string", "example": "Mediterranean Shipping Company"},
+    "arrival_date": {"type": "string", "example": "2026-03-22"},
+    "in_bound_date": {"type": "string", "example": "2026-03-24"},
+    "empty_date": {"type": "string", "example": "2026-03-28"},
+    "unloaded_at_port": {"type": "string", "example": "2026-03-23"},
+    "emptied_at": {"type": "string", "example": "Providence Depot"},
+    "free_days": {"type": "number", "example": 14},
+    "seal_number": {"type": "string", "example": "SL-991205"},
+    "gross_weight_kg": {"type": "number", "example": 24500.0},
+    "gross_volume_cbm": {"type": "number", "example": 68.5},
+    "note": {"type": "string", "example": "Cleared customs with priority green channel."},
+    "po_number": {"type": "string", "example": "PO-2026-0042"},
+    "materials": {
+        "type": "array",
+        "description": "Materials assigned to this container",
+        "item_fields": {
+            "name": {"type": "string", "example": "Ceramic Tiles 60x60"},
+        },
+    },
+    "consignee_name": {"type": "string", "example": "Sahajanand Enterprises Pty Ltd"},
+    "supplier_name": {"type": "string", "example": "Global Ceramics India"},
+}
+
+CONTAINER_SAMPLE_CONTEXT = {
+    "container_no": "MSKU9021884",
+    "container_type": "40HC",
+    "status_name": "On Port",
+    "bl_number": "MEDU992144",
+    "vessel_name": "MSC AGATHA",
+    "carrier_name": "Mediterranean Shipping Company",
+    "arrival_date": "2026-03-22",
+    "in_bound_date": "2026-03-24",
+    "empty_date": None,
+    "unloaded_at_port": "2026-03-23",
+    "emptied_at": "Providence Yard",
+    "free_days": 14,
+    "seal_number": "SL-991205",
+    "gross_weight_kg": 24500.0,
+    "gross_volume_cbm": 68.5,
+    "note": "Container cleared customs and is ready for yard de-stuffing.",
+    "po_number": "PO-2026-0042",
+    "materials": [
+        {"name": "Vitrified Porcelain Floor Tiles 60x60cm"},
+        {"name": "Waterproof Tile Adhesive 25kg bags"},
+    ],
+    "consignee_name": "Sahajanand Enterprises Pty Ltd",
+    "supplier_name": "Global Ceramics India",
+}
+
+
+@register_resolver(
+    key="container_details",
+    name="Container Operational Notice",
+    category="LOGISTICS",
+    entity_type="ContainerDetails",
+    description="Resolves container tracking status, associated bill of lading, vessel, arrival date, free days, and cargo details.",
+    schema_meta=CONTAINER_SCHEMA_META,
+    sample_context=CONTAINER_SAMPLE_CONTEXT,
+)
+def resolve_container_details(
+    entity_id: Any,
+    db: Session,
+    org_context: OrgContext,
+    user: User,
+    params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    from Model.containermgmt.Container.ContainerDetails import ContainerDetails
+
+    query = db.query(ContainerDetails).filter(ContainerDetails.is_deleted == False)
+    if str(entity_id).isdigit():
+        query = query.filter((ContainerDetails.Container_ID == int(entity_id)) | (ContainerDetails.container_no == str(entity_id)))
+    else:
+        query = query.filter(ContainerDetails.container_no == str(entity_id))
+
+    container = apply_org_filter(query, ContainerDetails, org_context).first()
+    if not container:
+        raise HTTPException(status_code=404, detail=f"Container '{entity_id}' not found or access denied.")
+
+    bl = container.bill_of_landing
+    status_name = "In Transit"
+    if container.status_rel:
+        status_name = getattr(container.status_rel, "Status", None) or getattr(container.status_rel, "name", None) or "In Transit"
+
+    type_name = "40HC"
+    if container.type_rel:
+        type_name = getattr(container.type_rel, "type", None) or getattr(container.type_rel, "name", None) or "40HC"
+
+    venue_name = None
+    if container.emptied_at_rel:
+        venue_name = getattr(container.emptied_at_rel, "venue", None) or getattr(container.emptied_at_rel, "name", None)
+
+    mat_list = []
+    if hasattr(container, "materials") and container.materials:
+        for m in container.materials:
+            m_name = getattr(m, "Material", None) or getattr(m, "material_name", None) or str(m)
+            mat_list.append({"name": m_name})
+
+    can_vendor = can_view_supplier_user(user, org_context)
+    supplier = "[REDACTED]"
+    if can_vendor and bl and bl.supplier_rel:
+        supplier = bl.supplier_rel.Supplier
+
+    consignee = None
+    if bl and bl.consignee_rel:
+        consignee = bl.consignee_rel.Consignee
+
+    return {
+        "container_no": container.container_no,
+        "container_type": type_name,
+        "status_name": status_name,
+        "bl_number": container.BillOfLanding or (bl.BillOfLanding if bl else None),
+        "vessel_name": bl.vessel_rel.VessalName if (bl and bl.vessel_rel) else None,
+        "carrier_name": bl.carrier_name if bl else None,
+        "arrival_date": _clean_val(bl.ArrivalDate) if bl else None,
+        "in_bound_date": _clean_val(container.in_bound),
+        "empty_date": _clean_val(container.empty_date),
+        "unloaded_at_port": _clean_val(container.unloaded_at_port),
+        "emptied_at": venue_name,
+        "free_days": container.FreeDays or (bl.FreeDays if bl else 14),
+        "seal_number": container.seal_number,
+        "gross_weight_kg": float(container.gross_weight_kg) if container.gross_weight_kg is not None else None,
+        "gross_volume_cbm": float(container.gross_volume_cbm) if container.gross_volume_cbm is not None else None,
+        "note": container.note,
+        "po_number": container.PONo,
+        "materials": mat_list,
+        "consignee_name": consignee,
+        "supplier_name": supplier,
+    }
+
+
 def resolve_report_data(
     resolver_key: str,
     entity_id: Optional[Any],
