@@ -190,11 +190,20 @@ async def refresh_token_endpoint(
         },
         timedelta(hours=ACCESS_TOKEN_EXPIRE_HOUR),
     )
+    permissions = (
+        db.query(Permission.name)
+        .join(Role.permissions)
+        .join(Role.users)
+        .filter(User.id == user.id)
+        .distinct()
+        .all()
+    )
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "modules": modules,
         "plan": plan,
+        "permissions": [p[0] for p in permissions],
     }
 
 

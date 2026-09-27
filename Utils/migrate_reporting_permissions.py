@@ -47,7 +47,7 @@ def run_reporting_permissions_migration(db: Session):
 
     # Link to admin roles
     admin_roles = db.query(Role).filter(
-        (sqlfunc.lower(Role.name).in_(["admin", "administrator"])) &
+        (sqlfunc.lower(Role.name).in_(["admin", "administrator", "super_admin"])) &
         (Role.is_deleted == False)
     ).all()
 
