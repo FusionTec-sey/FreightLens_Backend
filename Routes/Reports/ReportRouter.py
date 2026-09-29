@@ -82,6 +82,7 @@ ReportRouter = APIRouter(prefix="/reports", tags=["Report Templates & Print Engi
 def get_templates_catalog(
     category: Optional[str] = Query(None, description="Filter by category: LOGISTICS, ORDERS, CROSS_MODULE"),
     template_type: Optional[str] = Query(None, description="Filter by template_type: DOCUMENT or OPERATIONAL_TABULAR"),
+    entity_type: Optional[str] = Query(None, description="Filter by target entity_type: RFQ, PurchaseOrder, QuoteComparison, etc."),
     is_active: Optional[bool] = Query(None, description="Filter active status"),
     search: Optional[str] = Query(None, description="Search term for name or slug"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -99,6 +100,7 @@ def get_templates_catalog(
         is_active=is_active,
         search=search,
         template_type=template_type,
+        entity_type=entity_type,
         skip=skip,
         limit=limit,
     )
@@ -380,9 +382,12 @@ def render_report_pdf(
 
     # Contextual entity print permission check
     entity_type = template.entity_type or req.entity_type
-    if entity_type == "PurchaseOrder":
-        if not (has_permission(current_user, "Print_PurchaseOrder") or has_permission(current_user, "View_Order")):
+    if entity_type in ("PurchaseOrder", "RFQ"):
+        if not (has_permission(current_user, "Print_PurchaseOrder") or has_permission(current_user, "View_Order") or has_permission(current_user, "Send_RFQ")):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_PurchaseOrder'.")
+    elif entity_type == "QuoteComparison":
+        if not (has_permission(current_user, "Compare_Quote") or has_permission(current_user, "View_VendorQuote") or has_permission(current_user, "Print_PurchaseOrder") or has_permission(current_user, "View_Order")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Compare_Quote'.")
     elif entity_type == "ContainerDetails":
         if not (has_permission(current_user, "Print_Container") or has_permission(current_user, "View_Container")):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_Container'.")

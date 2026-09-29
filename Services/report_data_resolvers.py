@@ -799,6 +799,799 @@ def resolve_container_details(
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Sourcing & Requisition RFQ Resolver
+# ─────────────────────────────────────────────────────────────────────────────
+
+RFQ_SCHEMA_META = {
+    "rfq_number": {"type": "string", "description": "RFQ / Requisition reference number", "example": "RFQ-2026-0089"},
+    "po_nce": {"type": "string", "description": "Internal procurement requisition code", "example": "REQ-4011"},
+    "doc_type": {"type": "string", "description": "Document type", "example": "RFQ"},
+    "status": {"type": "string", "description": "Procurement status code", "example": "SOURCING"},
+    "status_label": {"type": "string", "description": "Status label", "example": "Sourcing / RFQ Open"},
+    "lifecycle_stage": {"type": "string", "description": "Requisition stage", "example": "SOURCING"},
+    "issue_date": {"type": "string", "description": "RFQ issuance date", "example": "2026-03-20"},
+    "due_date": {"type": "string", "description": "Quotation submission deadline", "example": "2026-04-05"},
+    "currency": {"type": "string", "description": "Requested quote currency", "example": "USD"},
+    "consignee": {"type": "string", "description": "Consignee destination name", "example": "Noble Construction Ltd"},
+    "consignee_name": {"type": "string", "description": "Consignee destination name", "example": "Noble Construction Ltd"},
+    "destination_port": {"type": "string", "description": "Delivery destination port or site", "example": "Port Victoria, Seychelles"},
+    "freight_type": {"type": "string", "description": "Requested shipping mode", "example": "Sea Freight"},
+    "remark": {"type": "string", "description": "Scope notes and special bidding conditions", "example": "Technical datasheets and test certificates required with quote submission."},
+    "buyer_contact": {"type": "string", "description": "Direct email for quote submission", "example": "procurement@sahaj.sc"},
+    "show_budget": {"type": "boolean", "description": "Whether estimated budget amounts are visible (internal use only)"},
+    "company": {
+        "type": "object",
+        "description": "Issuing company / organization details",
+        "item_fields": {
+            "name": {"type": "string", "example": "Sahaj Holding Corp"},
+            "address": {"type": "string", "example": "Victoria Commercial Center, Mahe, Seychelles"},
+            "tax_id": {"type": "string", "example": "TAX-SEY-99201"},
+            "phone": {"type": "string", "example": "+248 4 123 456"},
+            "email": {"type": "string", "example": "procurement@sahaj.sc"},
+        },
+    },
+    "supplier": {
+        "type": "object",
+        "description": "Targeted supplier details if issued to a specific vendor",
+        "item_fields": {
+            "name": {"type": "string", "example": "Prospective Bidder / Supplier"},
+            "code": {"type": "string", "example": "BID-01"},
+            "contact_person": {"type": "string", "example": "Sales Department"},
+            "email": {"type": "string", "example": "sales@supplier.com"},
+        },
+    },
+    "items": {
+        "type": "array",
+        "description": "Line items requested for quotation",
+        "item_fields": {
+            "line_no": {"type": "number", "example": 1},
+            "item_code": {"type": "string", "example": "STL-BEAM-HEA200"},
+            "description": {"type": "string", "example": "Structural Steel HEA 200 Beams (S275JR) 12m length"},
+            "quantity_requested": {"type": "number", "example": 45.0},
+            "unit": {"type": "string", "example": "MT"},
+            "technical_specifications": {"type": "string", "example": "Grade S275JR with EN 10204 3.1 mill test certificates."},
+            "notes": {"type": "string", "example": "Mill test certs required with shipment."},
+            "estimated_unit_price": {"type": "number", "restricted": True, "permission": "View_Financials", "example": 850.00},
+            "estimated_total": {"type": "number", "restricted": True, "permission": "View_Financials", "example": 38250.00},
+        },
+    },
+    "total_items": {"type": "number", "example": 5},
+    "instructions": {
+        "type": "array",
+        "description": "Standard terms and quotation submission guidelines",
+        "example": [
+            "Please submit itemized unit and total pricing including freight terms (CIF Port Victoria preferred).",
+            "Indicate manufacturer origin, warranty duration, and lead time in calendar days.",
+            "All quotations must remain valid for a minimum of 30 days from the closing date.",
+        ],
+    },
+}
+
+RFQ_SAMPLE_CONTEXT = {
+    "rfq_number": "RFQ-2026-0089",
+    "po_number": "RFQ-2026-0089",
+    "po_nce": "REQ-4011",
+    "doc_type": "RFQ",
+    "status": "SOURCING",
+    "status_label": "Sourcing / RFQ Open",
+    "lifecycle_stage": "SOURCING",
+    "issue_date": "2026-03-20",
+    "rfq_date": "2026-03-20",
+    "due_date": "2026-04-05",
+    "eta_date": "2026-04-05",
+    "report_date": "2026-03-28",
+    "currency": "USD",
+    "consignee": "Noble Construction Ltd",
+    "consignee_name": "Noble Construction Ltd",
+    "destination_port": "Port Victoria, Seychelles",
+    "freight_type": "Sea Freight",
+    "buyer_contact": "procurement@sahaj.sc",
+    "generated_by": "Senior Sourcing Officer",
+    "org_name": "Sahaj Holding Corp",
+    "remark": "Official Request for Quotation. Technical datasheets and mill test certificates required with bid submission.",
+    "show_budget": False,
+    "company": {
+        "name": "Sahaj Holding Corp",
+        "address": "Victoria Commercial Center, Mahe, Seychelles",
+        "tax_id": "TAX-SEY-99201",
+        "phone": "+248 4 123 456",
+        "email": "procurement@sahaj.sc",
+    },
+    "supplier": {
+        "name": "Prospective Bidder / Supplier",
+        "code": "VENDOR-INVITED",
+        "contact_person": "Commercial / Quotation Dept",
+        "email": "bids@supplier.com",
+    },
+    "supplier_name": "Prospective Bidder / Supplier",
+    "items": [
+        {
+            "line_no": 1,
+            "sku": "STL-BEAM-HEA200",
+            "item_code": "STL-BEAM-HEA200",
+            "description": "Structural Steel HEA 200 Beams (S275JR) 12m standard lengths",
+            "quantity": 45.0,
+            "quantity_requested": 45.0,
+            "unit": "MT",
+            "technical_specifications": "Grade S275JR compliant with EN 10025-2. Mill test certificates EN 10204 3.1 mandatory.",
+            "notes": "Bundle strapped with waterproof tags.",
+            "estimated_unit_price": 850.00,
+            "estimated_total": 38250.00,
+        },
+        {
+            "line_no": 2,
+            "sku": "STL-PLT-12MM",
+            "item_code": "STL-PLT-12MM",
+            "description": "Hot Rolled Mild Steel Plates 12mm x 2000mm x 6000mm",
+            "quantity": 25.0,
+            "quantity_requested": 25.0,
+            "unit": "MT",
+            "technical_specifications": "Grade ASTM A36 / S275, shot blasted and shop primed.",
+            "notes": "Anti-rust coating required for ocean freight.",
+            "estimated_unit_price": 820.00,
+            "estimated_total": 20500.00,
+        },
+        {
+            "line_no": 3,
+            "sku": "BLT-HEX-M24",
+            "item_code": "BLT-HEX-M24",
+            "description": "High Strength Hex Structural Bolts & Nuts M24x80 Grade 8.8",
+            "quantity": 1200.0,
+            "quantity_requested": 1200.0,
+            "unit": "SETS",
+            "technical_specifications": "Hot Dip Galvanized to ISO 10684 with 2 heavy flat washers per set.",
+            "notes": "Packaged in heavy-duty wooden boxes.",
+            "estimated_unit_price": 3.40,
+            "estimated_total": 4080.00,
+        },
+        {
+            "line_no": 4,
+            "sku": "ELEC-CBL-4CX16",
+            "item_code": "ELEC-CBL-4CX16",
+            "description": "Armored Copper Power Cable XLPE/SWA/PVC 4 Core x 16 sq mm",
+            "quantity": 600.0,
+            "quantity_requested": 600.0,
+            "unit": "METERS",
+            "technical_specifications": "0.6/1kV rated, stranded copper conductor, compliant with BS 5467.",
+            "notes": "Supplied on wooden drum with sealed end caps.",
+            "estimated_unit_price": 14.50,
+            "estimated_total": 8700.00,
+        },
+        {
+            "line_no": 5,
+            "sku": "PVC-PIPE-110",
+            "item_code": "PVC-PIPE-110",
+            "description": "Heavy Duty PVC Drainage & Conduit Pipes 110mm OD x 6m",
+            "quantity": 180.0,
+            "quantity_requested": 180.0,
+            "unit": "PCS",
+            "technical_specifications": "Class 4 (SN8 ring stiffness) with elastomeric rubber ring sockets.",
+            "notes": "UV stabilized for tropical conditions.",
+            "estimated_unit_price": 28.00,
+            "estimated_total": 5040.00,
+        },
+    ],
+    "total_items": 5,
+    "instructions": [
+        "Please provide firm quotation specifying Unit Price, Total Price, Currency, and Delivery Terms (CIF Port Victoria preferred).",
+        "State manufacturer name, country of origin, and expected delivery lead time in calendar days.",
+        "Quotations must be submitted via email to procurement@sahaj.sc prior to the closing deadline.",
+        "Prices must remain fixed and valid for at least 30 calendar days from the bid submission date.",
+        "Include technical data sheets and material compliance certifications with your offer.",
+    ],
+}
+
+
+@register_resolver(
+    key="sourcing_rfq",
+    name="Sourcing Request for Quotation (RFQ)",
+    category="ORDERS",
+    entity_type="RFQ",
+    description="Resolves material procurement requisitions, technical item specifications, submission deadlines, and bidding instructions for suppliers.",
+    schema_meta=RFQ_SCHEMA_META,
+    sample_context=RFQ_SAMPLE_CONTEXT,
+)
+def resolve_sourcing_rfq(
+    entity_id: Any,
+    db: Session,
+    org_context: OrgContext,
+    user: User,
+    params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+
+    query = db.query(PurchaseOrder).filter(PurchaseOrder.is_deleted == False)
+    if str(entity_id).isdigit():
+        query = query.filter((PurchaseOrder.id == int(entity_id)) | (PurchaseOrder.po_number == str(entity_id)))
+    else:
+        query = query.filter(PurchaseOrder.po_number == str(entity_id))
+
+    po = apply_org_filter(query, PurchaseOrder, org_context).first()
+    if not po:
+        raise HTTPException(status_code=404, detail=f"Sourcing RFQ '{entity_id}' not found or access denied.")
+
+    params = params or {}
+    can_financial = is_financial_user(user, org_context)
+    # Default: hide budget for vendor-facing RFQ unless explicitly requested and permitted
+    show_budget = bool(params.get("show_budget", False)) and can_financial
+    can_vendor = can_view_supplier_user(user, org_context)
+
+    # Company info
+    company_data = {
+        "name": "Sahaj Holding Corp",
+        "address": "Victoria Commercial Center, Mahe, Seychelles",
+        "tax_id": None,
+        "phone": "+248 4 123 456",
+        "email": "procurement@sahaj.sc",
+    }
+    if po.org_id:
+        org_rec = db.query(Organisation).filter(Organisation.id == po.org_id).first()
+        if org_rec:
+            company_data["name"] = org_rec.name or company_data["name"]
+
+    supplier_data = {}
+    if can_vendor and po.supplier_rel:
+        sup = po.supplier_rel
+        supplier_data = {
+            "name": getattr(sup, "company_name", None) or getattr(sup, "supplier_name", None) or getattr(sup, "Supplier", None) or po.company,
+            "code": getattr(sup, "supplier_code", None),
+            "contact_person": getattr(sup, "contact_person", None),
+            "email": getattr(sup, "email", None),
+            "phone": getattr(sup, "phone", None),
+            "address": getattr(sup, "address", None),
+        }
+    else:
+        supplier_data = {
+            "name": po.company or "Invited Prospective Bidder",
+            "code": None,
+            "contact_person": None,
+            "email": None,
+            "phone": None,
+            "address": None,
+        }
+
+    items_list = []
+    line_no = 1
+    total_est = Decimal("0.00")
+    for item in po.items:
+        if getattr(item, "is_deleted", False):
+            continue
+        item_qty = Decimal(str(item.quantity_ordered or 0))
+        unit_p = Decimal(str(item.unit_price or 0))
+        line_t = Decimal(str(item.total_price or (item_qty * unit_p)))
+        total_est += line_t
+
+        item_dict = {
+            "line_no": line_no,
+            "sku": item.item_code,
+            "item_code": item.item_code,
+            "description": item.description,
+            "quantity": float(item_qty),
+            "quantity_requested": float(item_qty),
+            "unit": item.unit or "PCS",
+            "technical_specifications": item.notes or "",
+            "notes": item.notes,
+            "estimated_unit_price": float(unit_p) if show_budget else None,
+            "estimated_total": float(line_t) if show_budget else None,
+        }
+        items_list.append(item_dict)
+        line_no += 1
+
+    return {
+        "rfq_number": po.po_number,
+        "po_number": po.po_number,
+        "po_nce": po.po_nce,
+        "doc_type": po.doc_type or "RFQ",
+        "status": po.status,
+        "status_label": po.status_label or po.status,
+        "lifecycle_stage": po.lifecycle_stage or "SOURCING",
+        "issue_date": _clean_val(po.order_mail_date) or date.today().isoformat(),
+        "rfq_date": _clean_val(po.order_mail_date) or date.today().isoformat(),
+        "due_date": _clean_val(po.eta_date) or "As specified in invitation",
+        "eta_date": _clean_val(po.eta_date),
+        "report_date": date.today().isoformat(),
+        "currency": po.currency or "USD",
+        "consignee": po.consignee,
+        "consignee_name": po.consignee,
+        "destination_port": getattr(po, "destination_port", None) or "Port Victoria, Seychelles",
+        "freight_type": po.freight_type or "Sea Freight",
+        "buyer_contact": company_data.get("email") or "procurement@sahaj.sc",
+        "generated_by": getattr(user, "username", "System"),
+        "org_name": company_data.get("name"),
+        "remark": po.remark or "Please submit best commercial offer in accordance with attached specifications.",
+        "show_budget": show_budget,
+        "company": company_data,
+        "supplier": supplier_data,
+        "supplier_name": supplier_data.get("name"),
+        "items": items_list,
+        "total_items": len(items_list),
+        "estimated_budget_total": float(total_est) if show_budget else None,
+        "instructions": [
+            "Please provide firm quotation specifying Unit Price, Total Price, Currency, and Delivery Terms (CIF Port Victoria preferred).",
+            "State manufacturer name, country of origin, and expected delivery lead time in calendar days.",
+            "Quotations must be submitted via email to procurement@sahaj.sc prior to the closing deadline.",
+            "Prices must remain fixed and valid for at least 30 calendar days from the bid submission date.",
+            "Include technical data sheets and material compliance certifications with your offer.",
+        ],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Vendor Quote & Commercial Bid Evaluation Resolver
+# ─────────────────────────────────────────────────────────────────────────────
+
+QUOTE_COMPARISON_SCHEMA_META = {
+    "rfq_number": {"type": "string", "description": "RFQ / Requisition reference", "example": "RFQ-2026-0089"},
+    "title": {"type": "string", "description": "Comparison report title", "example": "Commercial Bid Evaluation & Price Comparison"},
+    "comparison_date": {"type": "string", "description": "Date comparison generated", "example": "2026-03-28"},
+    "generated_by": {"type": "string", "description": "User who compiled evaluation", "example": "Lead Procurement Officer"},
+    "currency": {"type": "string", "description": "Base comparison currency", "example": "USD"},
+    "org_name": {"type": "string", "description": "Organization name", "example": "Sahaj Holding Corp"},
+    "show_financials": {"type": "boolean", "description": "True if user has permission to see financial comparison"},
+    "vendors": {
+        "type": "array",
+        "description": "Summary profile of participating suppliers",
+        "item_fields": {
+            "vendor_id": {"type": "number", "example": 101},
+            "vendor_name": {"type": "string", "example": "Apex Industrial Supplies Ltd"},
+            "quote_reference": {"type": "string", "example": "AIS-Q-8821"},
+            "quote_date": {"type": "string", "example": "2026-03-24"},
+            "valid_until": {"type": "string", "example": "2026-04-24"},
+            "total_quoted_amount": {"type": "number", "example": 68450.00},
+            "currency": {"type": "string", "example": "USD"},
+            "lead_time_days": {"type": "number", "example": 18},
+            "shipping_terms": {"type": "string", "example": "CIF Port Victoria"},
+            "payment_terms": {"type": "string", "example": "30% Advance, 70% vs BL"},
+            "rank": {"type": "number", "example": 2},
+            "status": {"type": "string", "example": "PENDING"},
+            "score_notes": {"type": "string", "example": "Fastest delivery lead time, high compliance."},
+        },
+    },
+    "matrix_rows": {
+        "type": "array",
+        "description": "Side-by-side line item pricing matrix across all bidders",
+        "item_fields": {
+            "item_code": {"type": "string", "example": "STL-BEAM-HEA200"},
+            "description": {"type": "string", "example": "Structural Steel HEA 200 Beams 12m length"},
+            "quantity": {"type": "number", "example": 45.0},
+            "unit": {"type": "string", "example": "MT"},
+            "lowest_unit_price": {"type": "number", "example": 820.00},
+            "lowest_vendor_name": {"type": "string", "example": "Global Steel & Metals Corp"},
+            "quotes": {
+                "type": "array",
+                "description": "Quotes for this specific line item per vendor",
+                "item_fields": {
+                    "vendor_id": {"type": "number", "example": 101},
+                    "vendor_name": {"type": "string", "example": "Apex Industrial Supplies Ltd"},
+                    "unit_price": {"type": "number", "example": 850.00},
+                    "total_price": {"type": "number", "example": 38250.00},
+                    "lead_time_days": {"type": "number", "example": 18},
+                    "availability": {"type": "string", "example": "AVAILABLE"},
+                    "is_awarded": {"type": "boolean", "example": False},
+                    "notes": {"type": "string", "example": "Ex-stock warehouse"},
+                },
+            },
+        },
+    },
+    "summary": {
+        "type": "object",
+        "description": "Comparative award and variance summary",
+        "item_fields": {
+            "total_items": {"type": "number", "example": 4},
+            "total_vendors": {"type": "number", "example": 3},
+            "recommended_vendor": {"type": "string", "example": "Global Steel & Metals Corp"},
+            "lowest_vendor_total": {"type": "number", "example": 64200.00},
+            "highest_vendor_total": {"type": "number", "example": 71800.00},
+            "potential_savings": {"type": "number", "example": 7600.00},
+        },
+    },
+}
+
+QUOTE_COMPARISON_SAMPLE_CONTEXT = {
+    "rfq_number": "RFQ-2026-0089",
+    "po_number": "RFQ-2026-0089",
+    "title": "Commercial Bid Evaluation & Vendor Price Comparison Matrix",
+    "comparison_date": "2026-03-28",
+    "generated_by": "Senior Sourcing Officer",
+    "currency": "USD",
+    "org_name": "Sahaj Holding Corp",
+    "show_financials": True,
+    "vendors": [
+        {
+            "vendor_id": 1,
+            "vendor_name": "Global Steel & Metals Corp",
+            "quote_reference": "GSM-2026-042",
+            "quote_date": "2026-03-25",
+            "valid_until": "2026-04-25",
+            "total_quoted_amount": 64200.00,
+            "currency": "USD",
+            "lead_time_days": 24,
+            "shipping_terms": "CIF Port Victoria",
+            "payment_terms": "20% Adv, 80% Cad",
+            "rank": 1,
+            "status": "RECOMMENDED",
+            "score_notes": "Lowest aggregate price ($64,200). Verified mill origin.",
+        },
+        {
+            "vendor_id": 2,
+            "vendor_name": "Apex Industrial Supplies Ltd",
+            "quote_reference": "AIS-Q-8821",
+            "quote_date": "2026-03-24",
+            "valid_until": "2026-04-20",
+            "total_quoted_amount": 68450.00,
+            "currency": "USD",
+            "lead_time_days": 18,
+            "shipping_terms": "CIF Port Victoria",
+            "payment_terms": "30% Adv, 70% BL",
+            "rank": 2,
+            "status": "COMPLIANT",
+            "score_notes": "Fastest lead time (18 days). Established warranty track record.",
+        },
+        {
+            "vendor_id": 3,
+            "vendor_name": "Prime Horizon Trading FZE",
+            "quote_reference": "PHT-9011-REV",
+            "quote_date": "2026-03-26",
+            "valid_until": "2026-04-30",
+            "total_quoted_amount": 71800.00,
+            "currency": "USD",
+            "lead_time_days": 14,
+            "shipping_terms": "FOB Dubai",
+            "payment_terms": "100% LC at sight",
+            "rank": 3,
+            "status": "HIGHER_PRICE",
+            "score_notes": "Prompt air/sea dispatch available, but freight excluded in FOB basis.",
+        },
+    ],
+    "matrix_rows": [
+        {
+            "item_code": "STL-BEAM-HEA200",
+            "description": "Structural Steel HEA 200 Beams 12m length",
+            "quantity": 45.0,
+            "unit": "MT",
+            "lowest_unit_price": 820.00,
+            "lowest_vendor_name": "Global Steel & Metals Corp",
+            "quotes": [
+                {
+                    "vendor_id": 1,
+                    "vendor_name": "Global Steel & Metals Corp",
+                    "unit_price": 820.00,
+                    "total_price": 36900.00,
+                    "lead_time_days": 24,
+                    "availability": "AVAILABLE",
+                    "is_awarded": True,
+                    "notes": "Grade S275JR",
+                },
+                {
+                    "vendor_id": 2,
+                    "vendor_name": "Apex Industrial Supplies Ltd",
+                    "unit_price": 850.00,
+                    "total_price": 38250.00,
+                    "lead_time_days": 18,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "European mill stock",
+                },
+                {
+                    "vendor_id": 3,
+                    "vendor_name": "Prime Horizon Trading FZE",
+                    "unit_price": 890.00,
+                    "total_price": 40050.00,
+                    "lead_time_days": 14,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Ready in Jebel Ali",
+                },
+            ],
+        },
+        {
+            "item_code": "STL-PLT-12MM",
+            "description": "Hot Rolled Mild Steel Plates 12mm x 2000mm x 6000mm",
+            "quantity": 25.0,
+            "unit": "MT",
+            "lowest_unit_price": 780.00,
+            "lowest_vendor_name": "Global Steel & Metals Corp",
+            "quotes": [
+                {
+                    "vendor_id": 1,
+                    "vendor_name": "Global Steel & Metals Corp",
+                    "unit_price": 780.00,
+                    "total_price": 19500.00,
+                    "lead_time_days": 24,
+                    "availability": "AVAILABLE",
+                    "is_awarded": True,
+                    "notes": "Shot blasted & primed",
+                },
+                {
+                    "vendor_id": 2,
+                    "vendor_name": "Apex Industrial Supplies Ltd",
+                    "unit_price": 810.00,
+                    "total_price": 20250.00,
+                    "lead_time_days": 18,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Standard mill finish",
+                },
+                {
+                    "vendor_id": 3,
+                    "vendor_name": "Prime Horizon Trading FZE",
+                    "unit_price": 840.00,
+                    "total_price": 21000.00,
+                    "lead_time_days": 14,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Ready warehouse stock",
+                },
+            ],
+        },
+        {
+            "item_code": "BLT-HEX-M24",
+            "description": "High Strength Hex Structural Bolts & Nuts M24x80 Gr 8.8",
+            "quantity": 1200.0,
+            "unit": "SETS",
+            "lowest_unit_price": 3.10,
+            "lowest_vendor_name": "Global Steel & Metals Corp",
+            "quotes": [
+                {
+                    "vendor_id": 1,
+                    "vendor_name": "Global Steel & Metals Corp",
+                    "unit_price": 3.10,
+                    "total_price": 3720.00,
+                    "lead_time_days": 20,
+                    "availability": "AVAILABLE",
+                    "is_awarded": True,
+                    "notes": "Hot Dip Galv ISO 10684",
+                },
+                {
+                    "vendor_id": 2,
+                    "vendor_name": "Apex Industrial Supplies Ltd",
+                    "unit_price": 3.40,
+                    "total_price": 4080.00,
+                    "lead_time_days": 15,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Zinc flaked finish",
+                },
+                {
+                    "vendor_id": 3,
+                    "vendor_name": "Prime Horizon Trading FZE",
+                    "unit_price": 3.80,
+                    "total_price": 4560.00,
+                    "lead_time_days": 10,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Electro-galvanized",
+                },
+            ],
+        },
+        {
+            "item_code": "PVC-PIPE-110",
+            "description": "Heavy Duty PVC Drainage Pipes 110mm OD x 6m",
+            "quantity": 180.0,
+            "unit": "PCS",
+            "lowest_unit_price": 22.65,
+            "lowest_vendor_name": "Global Steel & Metals Corp",
+            "quotes": [
+                {
+                    "vendor_id": 1,
+                    "vendor_name": "Global Steel & Metals Corp",
+                    "unit_price": 22.67,
+                    "total_price": 4080.00,
+                    "lead_time_days": 20,
+                    "availability": "AVAILABLE",
+                    "is_awarded": True,
+                    "notes": "Class 4 SN8",
+                },
+                {
+                    "vendor_id": 2,
+                    "vendor_name": "Apex Industrial Supplies Ltd",
+                    "unit_price": 32.61,
+                    "total_price": 5870.00,
+                    "lead_time_days": 18,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Heavy gauge socketed",
+                },
+                {
+                    "vendor_id": 3,
+                    "vendor_name": "Prime Horizon Trading FZE",
+                    "unit_price": 34.39,
+                    "total_price": 6190.00,
+                    "lead_time_days": 12,
+                    "availability": "AVAILABLE",
+                    "is_awarded": False,
+                    "notes": "Immediate container pack",
+                },
+            ],
+        },
+    ],
+    "summary": {
+        "total_items": 4,
+        "total_vendors": 3,
+        "recommended_vendor": "Global Steel & Metals Corp",
+        "lowest_vendor_total": 64200.00,
+        "highest_vendor_total": 71800.00,
+        "potential_savings": 7600.00,
+        "awarded_vendor": "Global Steel & Metals Corp",
+    },
+}
+
+
+@register_resolver(
+    key="quote_comparison",
+    name="Vendor Quote & Commercial Bid Evaluation",
+    category="ORDERS",
+    entity_type="QuoteComparison",
+    description="Resolves comparative supplier bid matrices, line-by-line item quotations, lowest bidder highlights, lead times, and commercial award selections.",
+    schema_meta=QUOTE_COMPARISON_SCHEMA_META,
+    sample_context=QUOTE_COMPARISON_SAMPLE_CONTEXT,
+)
+def resolve_quote_comparison(
+    entity_id: Any,
+    db: Session,
+    org_context: OrgContext,
+    user: User,
+    params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+    from Model.containermgmt.Orders.VendorQuote import VendorQuote
+    from Model.containermgmt.Orders.VendorQuoteItem import VendorQuoteItem
+
+    query = db.query(PurchaseOrder).filter(PurchaseOrder.is_deleted == False)
+    if str(entity_id).isdigit():
+        query = query.filter((PurchaseOrder.id == int(entity_id)) | (PurchaseOrder.po_number == str(entity_id)))
+    else:
+        query = query.filter(PurchaseOrder.po_number == str(entity_id))
+
+    po = apply_org_filter(query, PurchaseOrder, org_context).first()
+    if not po:
+        raise HTTPException(status_code=404, detail=f"Order / RFQ '{entity_id}' not found or access denied.")
+
+    can_financial = is_financial_user(user, org_context)
+    can_vendor = can_view_supplier_user(user, org_context)
+
+    # Fetch quotes for this PO/RFQ
+    quotes_query = db.query(VendorQuote).filter(
+        VendorQuote.po_id == po.id,
+        VendorQuote.is_deleted == False,
+    ).order_by(VendorQuote.rank.asc().nullslast(), VendorQuote.total_quoted_amount.asc())
+    vendor_quotes = quotes_query.all()
+
+    vendors_list = []
+    vendor_ids = []
+    for q in vendor_quotes:
+        v_name = "Supplier"
+        if can_vendor and q.supplier:
+            v_name = getattr(q.supplier, "company_name", None) or getattr(q.supplier, "supplier_name", None) or getattr(q.supplier, "Supplier", None) or f"Vendor #{q.supplier_id}"
+        elif not can_vendor:
+            v_name = f"Bidder #{len(vendors_list) + 1} (Confidential)"
+
+        vendor_ids.append(q.id)
+        vendors_list.append({
+            "vendor_id": q.id,
+            "supplier_id": q.supplier_id,
+            "vendor_name": v_name,
+            "quote_reference": q.quote_reference or f"Q-{q.id}",
+            "quote_date": _clean_val(q.quote_date),
+            "valid_until": _clean_val(q.valid_until),
+            "total_quoted_amount": float(q.total_quoted_amount or 0) if can_financial else None,
+            "currency": q.currency or po.currency or "USD",
+            "lead_time_days": q.delivery_lead_time_days,
+            "shipping_terms": q.shipping_terms,
+            "payment_terms": q.payment_terms,
+            "rank": q.rank,
+            "status": q.status,
+            "score_notes": q.score_notes,
+        })
+
+    # Build comparative matrix by PO items
+    matrix_rows = []
+    lowest_overall_total = None
+    highest_overall_total = None
+    recommended_vendor = None
+
+    if vendors_list and can_financial:
+        valid_totals = [v["total_quoted_amount"] for v in vendors_list if v["total_quoted_amount"] is not None]
+        if valid_totals:
+            lowest_overall_total = min(valid_totals)
+            highest_overall_total = max(valid_totals)
+            rec = next((v for v in vendors_list if v["total_quoted_amount"] == lowest_overall_total), None)
+            if rec:
+                recommended_vendor = rec["vendor_name"]
+
+    for po_item in po.items:
+        if getattr(po_item, "is_deleted", False):
+            continue
+
+        item_qty = float(po_item.quantity_ordered or 0)
+        quotes_for_item = []
+        lowest_unit_price = None
+        lowest_vendor_name = None
+
+        for v in vendors_list:
+            q_id = v["vendor_id"]
+            # Find matching quote item
+            q_item = db.query(VendorQuoteItem).filter(
+                VendorQuoteItem.vendor_quote_id == q_id,
+                VendorQuoteItem.po_item_id == po_item.id,
+                VendorQuoteItem.is_deleted == False,
+            ).first()
+
+            if not q_item:
+                # Try matching by item_code or description
+                q_item = db.query(VendorQuoteItem).filter(
+                    VendorQuoteItem.vendor_quote_id == q_id,
+                    VendorQuoteItem.item_code == po_item.item_code,
+                    VendorQuoteItem.is_deleted == False,
+                ).first()
+
+            if q_item:
+                unit_p = float(q_item.unit_price or 0) if can_financial else None
+                tot_p = float(q_item.total_price or 0) if can_financial else None
+                if can_financial and unit_p is not None:
+                    if lowest_unit_price is None or unit_p < lowest_unit_price:
+                        lowest_unit_price = unit_p
+                        lowest_vendor_name = v["vendor_name"]
+
+                quotes_for_item.append({
+                    "vendor_id": v["vendor_id"],
+                    "vendor_name": v["vendor_name"],
+                    "unit_price": unit_p,
+                    "total_price": tot_p,
+                    "lead_time_days": q_item.lead_time_days,
+                    "availability": q_item.availability or "AVAILABLE",
+                    "is_awarded": bool(q_item.is_awarded),
+                    "notes": q_item.notes or "",
+                })
+            else:
+                quotes_for_item.append({
+                    "vendor_id": v["vendor_id"],
+                    "vendor_name": v["vendor_name"],
+                    "unit_price": None,
+                    "total_price": None,
+                    "lead_time_days": None,
+                    "availability": "NO_QUOTE",
+                    "is_awarded": False,
+                    "notes": "No quote provided",
+                })
+
+        matrix_rows.append({
+            "item_code": po_item.item_code,
+            "description": po_item.description,
+            "quantity": item_qty,
+            "unit": po_item.unit or "PCS",
+            "lowest_unit_price": lowest_unit_price,
+            "lowest_vendor_name": lowest_vendor_name,
+            "quotes": quotes_for_item,
+        })
+
+    potential_savings = None
+    if lowest_overall_total is not None and highest_overall_total is not None:
+        potential_savings = highest_overall_total - lowest_overall_total
+
+    return {
+        "rfq_number": po.po_number,
+        "po_number": po.po_number,
+        "title": f"Commercial Bid Evaluation & Vendor Price Comparison — {po.po_number}",
+        "comparison_date": date.today().isoformat(),
+        "generated_by": getattr(user, "username", "System"),
+        "currency": po.currency or "USD",
+        "org_name": "Sahaj Holding Corp",
+        "show_financials": can_financial,
+        "vendors": vendors_list,
+        "matrix_rows": matrix_rows,
+        "summary": {
+            "total_items": len(matrix_rows),
+            "total_vendors": len(vendors_list),
+            "recommended_vendor": recommended_vendor or (vendors_list[0]["vendor_name"] if vendors_list else "None"),
+            "lowest_vendor_total": lowest_overall_total,
+            "highest_vendor_total": highest_overall_total,
+            "potential_savings": potential_savings,
+        },
+    }
+
+
 def resolve_report_data(
     resolver_key: str,
     entity_id: Optional[Any],

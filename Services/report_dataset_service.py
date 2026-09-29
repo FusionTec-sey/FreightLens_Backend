@@ -1005,7 +1005,7 @@ def render_dataset_pdf(
                     {% for row in grp.records %}
                     <tr>
                         {% for col in columns %}
-                            <td style="text-align: {{ col.align }};">
+                            <td style="text-align: {{ col.align }}; {% if col.width %}width: {{ col.width }}; max-width: {{ col.width }};{% endif %} {% if col.overflow_mode == 'truncate' %}white-space: nowrap; overflow: hidden; text-overflow: ellipsis;{% else %}white-space: normal; word-break: break-word;{% endif %}">
                                 {% if col.data_type == 'currency' and row[col.key] is not none %}
                                     {{ row[col.key] | format_currency }}
                                 {% elif col.data_type == 'number' and row[col.key] is not none %}
@@ -1050,7 +1050,7 @@ def render_dataset_pdf(
                 {% for row in records %}
                 <tr>
                     {% for col in columns %}
-                        <td style="text-align: {{ col.align }};">
+                        <td style="text-align: {{ col.align }}; {% if col.width %}width: {{ col.width }}; max-width: {{ col.width }};{% endif %} {% if col.overflow_mode == 'truncate' %}white-space: nowrap; overflow: hidden; text-overflow: ellipsis;{% else %}white-space: normal; word-break: break-word;{% endif %}">
                             {% if col.data_type == 'currency' and row[col.key] is not none %}
                                 {{ row[col.key] | format_currency }}
                             {% elif col.data_type == 'number' and row[col.key] is not none %}
@@ -1088,10 +1088,13 @@ def render_dataset_pdf(
     """
 
     context = dataset.model_dump()
+    final_html = spec.custom_html if (spec.custom_html and spec.custom_html.strip()) else html_template
+    final_css = f"{css_content}\n{spec.custom_css}" if spec.custom_css else css_content
+
     full_html = render_html_document(
-        html_template=html_template,
+        html_template=final_html,
         context=context,
-        css_content=css_content,
+        css_content=final_css,
         page_size=spec.page_size or "A4",
         orientation=spec.orientation or "landscape",
     )

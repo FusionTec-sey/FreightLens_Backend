@@ -31,6 +31,7 @@ def list_templates(
     is_active: Optional[bool] = None,
     search: Optional[str] = None,
     template_type: Optional[str] = None,
+    entity_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
 ) -> Tuple[List[ReportTemplate], int]:
@@ -51,6 +52,38 @@ def list_templates(
 
     if template_type:
         query = query.filter(ReportTemplate.template_type == template_type.upper())
+
+    if entity_type and entity_type.upper() != "ALL":
+        if entity_type.upper() == "RFQ":
+            query = query.filter(
+                or_(
+                    ReportTemplate.entity_type.ilike("%RFQ%"),
+                    ReportTemplate.resolver_key.ilike("%rfq%"),
+                    ReportTemplate.slug.ilike("%rfq%"),
+                )
+            )
+        elif entity_type.upper() == "PURCHASEORDER":
+            query = query.filter(
+                or_(
+                    ReportTemplate.entity_type == "PurchaseOrder",
+                    ReportTemplate.resolver_key == "purchase_order",
+                )
+            )
+        elif entity_type.upper() == "QUOTECOMPARISON":
+            query = query.filter(
+                or_(
+                    ReportTemplate.entity_type == "QuoteComparison",
+                    ReportTemplate.resolver_key == "quote_comparison",
+                )
+            )
+        else:
+            term = f"%{entity_type}%"
+            query = query.filter(
+                or_(
+                    ReportTemplate.entity_type.ilike(term),
+                    ReportTemplate.resolver_key.ilike(term),
+                )
+            )
 
     if is_active is not None:
         query = query.filter(ReportTemplate.is_active == is_active)
@@ -400,11 +433,17 @@ def list_active_templates_for_entity(
         ),
     )
 
+    allowed_types = [entity_type]
+    if entity_type == "RFQ":
+        allowed_types = ["RFQ", "PurchaseOrder"]
+    elif entity_type == "PurchaseOrder":
+        allowed_types = ["PurchaseOrder", "RFQ"]
+
     query = (
         db.query(ReportTemplate)
         .filter(
             ReportTemplate.is_deleted == False,
-            ReportTemplate.entity_type == entity_type,
+            ReportTemplate.entity_type.in_(allowed_types),
             ReportTemplate.template_type == template_type,
             active_condition,
         )

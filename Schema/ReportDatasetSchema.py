@@ -26,6 +26,7 @@ class ColumnDefinition(BaseModel):
     data_type: str = "string"  # "string", "number", "currency", "date", "badge", "boolean"
     align: str = "left"  # "left", "center", "right"
     width: Optional[str] = None  # e.g. "15%", "120px"
+    overflow_mode: Optional[str] = "wrap"  # "wrap" | "truncate"
     format: Optional[str] = None  # e.g. "%Y-%m-%d", "$#,##0.00"
     is_numeric: bool = False
     aggregatable: bool = False  # can be summed in subtotals
@@ -71,6 +72,10 @@ class DatasetQuerySpec(BaseModel):
     margin_right: Optional[str] = "10mm"
     custom_width_mm: Optional[float] = None
     custom_height_mm: Optional[float] = None
+
+    # HTML/CSS Code Designer Override
+    custom_html: Optional[str] = None
+    custom_css: Optional[str] = None
 
     # Excel Output Settings
     sheet_per_group: Optional[bool] = False  # In Excel export, create one tab per group
