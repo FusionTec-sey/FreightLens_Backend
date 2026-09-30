@@ -2,6 +2,13 @@
 
 Newest entries appear first. Every architecture change records why it changed, its commit or release tag, any migration, and how to undo it.
 
+## 2026-09-30 - Phase 1C order-document access
+
+- **Why:** Document download and delete endpoints previously queried records by ID without tenant or permission enforcement and physically removed blobs during soft delete.
+- **Change:** Reads and deletes now require document permissions, filter by organisation, add finance checks for confidential/payment files, and retain soft-deleted blobs.
+- **Migration:** none
+- **Undo:** revert the Phase 1C backend commit.
+
 ## 2026-09-30 - Phase 1B signed media links
 
 - **Why:** Browser image and video elements cannot attach the API bearer token, while stable public object URLs expose media indefinitely.

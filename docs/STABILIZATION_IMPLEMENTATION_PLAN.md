@@ -49,3 +49,23 @@ Revert the Phase 1A commit. This increment has no database migration.
 ### Rollback
 
 Revert the paired Phase 1B backend and frontend commits. This increment has no database migration.
+
+## Increment 3: Phase 1C order-document access
+
+### Scope
+
+- Require backend view/delete document permissions.
+- Apply organisation filtering before reading order documents or defect images.
+- Require financial clearance for confidential and payment documents.
+- Keep blobs when records are soft-deleted.
+
+### Verification
+
+- Cross-organisation records resolve as 404 before blob access.
+- Non-financial users receive 403 for payment documents.
+- Soft delete marks the record and does not call blob deletion.
+- `pytest -q`
+
+### Rollback
+
+Revert the Phase 1C backend commit. This increment has no database migration and retained blobs need no recovery.

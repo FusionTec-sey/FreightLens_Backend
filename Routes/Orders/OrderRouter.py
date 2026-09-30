@@ -32,6 +32,8 @@ from auth.security_guards import (
     has_permission,
     require_permission,
     require_financial_access,
+    can_view_documents_user,
+    can_delete_documents_user,
 )
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
@@ -871,15 +873,40 @@ async def upload_general_document(
 async def download_order_document(
     document_id: str,
     db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    doc = db.query(OrderDocument).filter(OrderDocument.id == document_id, OrderDocument.is_deleted == False).first()
+    if not can_view_documents_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Insufficient permission to view documents")
+
+    doc_query = db.query(OrderDocument).filter(
+        OrderDocument.id == document_id,
+        OrderDocument.is_deleted == False,
+    )
+    doc = apply_org_filter(doc_query, OrderDocument, org_context).first()
     if doc and doc.file_path:
+        is_financial_document = bool(
+            doc.is_confidential
+            or doc.payment_id
+            or doc.entity_type == "PAYMENT"
+            or "PAYMENT" in (doc.doc_type or "").upper()
+        )
+        if is_financial_document and not is_financial_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Financial clearance is required for this document")
         body, ctype, fname = blob_storage.get_file(doc.file_path)
         if body:
             return StreamingResponse(body, media_type=ctype or doc.mime_type or "application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{doc.file_name or fname}"'})
     if document_id.isdigit():
-        img = db.query(DefectImage).filter(DefectImage.id == int(document_id), DefectImage.is_deleted == False).first()
+        img_query = (
+            db.query(DefectImage)
+            .join(DefectReport, DefectImage.defect_id == DefectReport.id)
+            .filter(
+                DefectImage.id == int(document_id),
+                DefectImage.is_deleted == False,
+                DefectReport.is_deleted == False,
+            )
+        )
+        img = apply_org_filter(img_query, DefectReport, org_context).first()
         if img and img.file_path:
             body, ctype, fname = blob_storage.get_file(img.file_path)
             if body:
@@ -890,32 +917,47 @@ async def download_order_document(
 async def delete_order_document(
     document_id: str,
     db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    doc = db.query(OrderDocument).filter(OrderDocument.id == document_id).first()
+    if not can_delete_documents_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Insufficient permission to delete documents")
+
+    doc_query = db.query(OrderDocument).filter(
+        OrderDocument.id == document_id,
+        OrderDocument.is_deleted == False,
+    )
+    doc = apply_org_filter(doc_query, OrderDocument, org_context).first()
     if doc:
+        is_financial_document = bool(
+            doc.is_confidential
+            or doc.payment_id
+            or doc.entity_type == "PAYMENT"
+            or "PAYMENT" in (doc.doc_type or "").upper()
+        )
+        if is_financial_document and not is_financial_user(current_user, org_context):
+            raise HTTPException(status_code=403, detail="Financial clearance is required for this document")
         doc.is_deleted = True
         # Clear evidence_doc_id on linked payment if matching
         if doc.payment_id:
             pm = db.query(OrderPayment).filter(OrderPayment.id == doc.payment_id).first()
             if pm and str(pm.evidence_doc_id) == str(doc.id):
                 pm.evidence_doc_id = None
-        if doc.file_path:
-            try:
-                blob_storage.delete_file(doc.file_path)
-            except Exception as del_err:
-                logger.warning("Could not delete blob %s: %s", doc.file_path, del_err)
         db.commit()
         return {"success": True}
     if document_id.isdigit():
-        img = db.query(DefectImage).filter(DefectImage.id == int(document_id)).first()
+        img_query = (
+            db.query(DefectImage)
+            .join(DefectReport, DefectImage.defect_id == DefectReport.id)
+            .filter(
+                DefectImage.id == int(document_id),
+                DefectImage.is_deleted == False,
+                DefectReport.is_deleted == False,
+            )
+        )
+        img = apply_org_filter(img_query, DefectReport, org_context).first()
         if img:
             img.is_deleted = True
-            if img.file_path:
-                try:
-                    blob_storage.delete_file(img.file_path)
-                except Exception as del_err:
-                    logger.warning("Could not delete defect blob %s: %s", img.file_path, del_err)
             db.commit()
             return {"success": True}
     raise HTTPException(status_code=404, detail="Document not found")
