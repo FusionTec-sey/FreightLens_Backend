@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import logging
 import mimetypes
@@ -12,6 +13,39 @@ from botocore.exceptions import ClientError
 from fastapi import UploadFile
 
 logger = logging.getLogger("containerMgmt.blob_storage")
+
+BLOB_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "BLOB"))
+
+
+def _safe_key(key: str) -> str:
+    """Return a normalized object key or reject unsafe filesystem-like paths."""
+    if not isinstance(key, str) or not key.strip():
+        raise ValueError("Blob key must not be empty")
+    if "\x00" in key:
+        raise ValueError("Blob key contains a null byte")
+
+    normalized = key.strip().replace("\\", "/")
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        raise ValueError("Absolute blob paths are not allowed")
+
+    parts = normalized.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError("Blob key contains an unsafe path segment")
+    if parts[0].lower() == "blob":
+        parts = parts[1:]
+    if not parts:
+        raise ValueError("Blob key must identify a file or folder")
+    return "/".join(parts)
+
+
+def _local_fallback_path(key: str) -> str:
+    """Resolve a validated object key beneath the local BLOB fallback root."""
+    clean_key = _safe_key(key)
+    candidate = os.path.realpath(os.path.join(BLOB_ROOT, *clean_key.split("/")))
+    if os.path.commonpath([BLOB_ROOT, candidate]) != BLOB_ROOT:
+        raise ValueError("Blob key escapes the fallback storage root")
+    return candidate
+
 
 class RustFSClient:
     """
@@ -87,6 +121,7 @@ class RustFSClient:
         Uploads a file or bytes to RustFS under the specified folder prefix.
         Returns the unique object key (e.g., 'Shipping/20260831120000_abc123.pdf').
         """
+        clean_folder = _safe_key(folder)
         if file_obj is None and "file_bytes" in kwargs:
             file_obj = kwargs["file_bytes"]
         fname = original_filename or kwargs.get("file_name")
@@ -111,7 +146,7 @@ class RustFSClient:
 
         file_ext = os.path.splitext(fname)[1]
         unique_id = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:12]}"
-        object_key = f"{folder.strip('/')}/{unique_id}{file_ext}"
+        object_key = f"{clean_folder}/{unique_id}{file_ext}"
 
         mime_type, _ = mimetypes.guess_type(fname)
         mime_type = mime_type or "application/octet-stream"
@@ -132,20 +167,20 @@ class RustFSClient:
         except Exception as e:
             logger.error("Failed to upload blob '%s' to RustFS: %s", object_key, e)
             # Fallback to local storage if RustFS is unreachable
-            fallback_dir = os.path.join("BLOB", folder)
+            fallback_dir = _local_fallback_path(clean_folder)
             os.makedirs(fallback_dir, exist_ok=True)
             fallback_path = os.path.join(fallback_dir, f"{unique_id}{file_ext}")
             with open(fallback_path, "wb") as f:
                 f.write(content)
             logger.warning("Saved to fallback local path: %s", fallback_path)
-            return fallback_path
+            return object_key
 
     def get_file(self, object_key: str) -> Tuple[Optional[BinaryIO], str, str]:
         """
         Retrieves a blob from RustFS.
         Returns (streaming_body, content_type, filename).
         """
-        clean_key = object_key.replace("BLOB/", "").replace("\\", "/")
+        clean_key = _safe_key(object_key)
         filename = os.path.basename(clean_key)
         mime_type, _ = mimetypes.guess_type(filename)
         mime_type = mime_type or "application/octet-stream"
@@ -160,18 +195,13 @@ class RustFSClient:
             logger.debug("Object key '%s' not in RustFS bucket, checking local disk: %s", clean_key, rustfs_err)
 
         # 2. Fallback check on local disk
-        local_candidates = [
-            object_key,
-            os.path.join("BLOB", clean_key),
-            os.path.normpath(object_key)
-        ]
-        for candidate in local_candidates:
-            if os.path.isfile(candidate):
-                try:
-                    f = open(candidate, "rb")
-                    return f, mime_type, filename
-                except Exception as disk_err:
-                    logger.error("Error reading local fallback file %s: %s", candidate, disk_err)
+        candidate = _local_fallback_path(clean_key)
+        if os.path.isfile(candidate):
+            try:
+                f = open(candidate, "rb")
+                return f, mime_type, filename
+            except Exception as disk_err:
+                logger.error("Error reading local fallback file %s: %s", candidate, disk_err)
 
         return None, mime_type, filename
 
@@ -180,7 +210,7 @@ class RustFSClient:
         Retrieves metadata about a blob (file size, content type, ETag, etc.).
         Checks RustFS first, then fallback to local disk.
         """
-        clean_key = object_key.replace("BLOB/", "").replace("\\", "/")
+        clean_key = _safe_key(object_key)
         try:
             head = self.client.head_object(Bucket=self.bucket_name, Key=clean_key)
             mime_type, _ = mimetypes.guess_type(clean_key)
@@ -195,22 +225,16 @@ class RustFSClient:
             pass
 
         # Check local disk
-        local_candidates = [
-            object_key,
-            os.path.join("BLOB", clean_key),
-            os.path.normpath(object_key)
-        ]
-        for candidate in local_candidates:
-            if os.path.isfile(candidate):
-                mime_type, _ = mimetypes.guess_type(candidate)
-                return {
-                    "size": os.path.getsize(candidate),
-                    "content_type": mime_type or "application/octet-stream",
-                    "etag": None,
-                    "filename": os.path.basename(candidate),
-                    "in_rustfs": False,
-                    "local_path": candidate
-                }
+        candidate = _local_fallback_path(clean_key)
+        if os.path.isfile(candidate):
+            mime_type, _ = mimetypes.guess_type(candidate)
+            return {
+                "size": os.path.getsize(candidate),
+                "content_type": mime_type or "application/octet-stream",
+                "etag": None,
+                "filename": os.path.basename(candidate),
+                "in_rustfs": False,
+            }
         return None
 
     def get_file_range(
@@ -223,7 +247,7 @@ class RustFSClient:
         Supports byte range requests for video streaming / resuming.
         Returns (streaming_body, content_type, filename, content_length, content_range).
         """
-        clean_key = object_key.replace("BLOB/", "").replace("\\", "/")
+        clean_key = _safe_key(object_key)
         filename = os.path.basename(clean_key)
         mime_type, _ = mimetypes.guess_type(filename)
         mime_type = mime_type or "application/octet-stream"
@@ -243,29 +267,24 @@ class RustFSClient:
             logger.debug("Object key '%s' not in RustFS bucket or range error, checking local disk: %s", clean_key, rustfs_err)
 
         # 2. Fallback check on local disk
-        local_candidates = [
-            object_key,
-            os.path.join("BLOB", clean_key),
-            os.path.normpath(object_key)
-        ]
-        for candidate in local_candidates:
-            if os.path.isfile(candidate):
-                try:
-                    f = open(candidate, "rb")
-                    file_size = os.path.getsize(candidate)
-                    if byte_range and byte_range.startswith("bytes="):
-                        r = byte_range[6:]
-                        parts = r.split("-")
-                        start = int(parts[0]) if parts[0] else 0
-                        end = int(parts[1]) if len(parts) > 1 and parts[1] else file_size - 1
-                        end = min(end, file_size - 1)
-                        f.seek(start)
-                        length = end - start + 1
-                        crange = f"bytes {start}-{end}/{file_size}"
-                        return f, mime_type, filename, length, crange
-                    return f, mime_type, filename, file_size, None
-                except Exception as disk_err:
-                    logger.error("Error reading local fallback file %s: %s", candidate, disk_err)
+        candidate = _local_fallback_path(clean_key)
+        if os.path.isfile(candidate):
+            try:
+                f = open(candidate, "rb")
+                file_size = os.path.getsize(candidate)
+                if byte_range and byte_range.startswith("bytes="):
+                    r = byte_range[6:]
+                    parts = r.split("-")
+                    start = int(parts[0]) if parts[0] else 0
+                    end = int(parts[1]) if len(parts) > 1 and parts[1] else file_size - 1
+                    end = min(end, file_size - 1)
+                    f.seek(start)
+                    length = end - start + 1
+                    crange = f"bytes {start}-{end}/{file_size}"
+                    return f, mime_type, filename, length, crange
+                return f, mime_type, filename, file_size, None
+            except Exception as disk_err:
+                logger.error("Error reading local fallback file %s: %s", candidate, disk_err)
 
         return None, mime_type, filename, None, None
 
@@ -273,10 +292,7 @@ class RustFSClient:
         """
         Deletes a blob from RustFS and any local fallback path.
         """
-        if not object_key:
-            return True
-
-        clean_key = object_key.replace("BLOB/", "").replace("\\", "/")
+        clean_key = _safe_key(object_key)
 
         # Delete from RustFS
         try:
@@ -286,13 +302,12 @@ class RustFSClient:
             logger.warning("RustFS delete object warning for '%s': %s", clean_key, e)
 
         # Delete local copy if present
-        local_candidates = [object_key, os.path.join("BLOB", clean_key)]
-        for path in local_candidates:
-            try:
-                if os.path.exists(path):
-                    os.remove(path)
-            except Exception:
-                pass
+        local_path = _local_fallback_path(clean_key)
+        try:
+            if os.path.isfile(local_path):
+                os.remove(local_path)
+        except OSError as exc:
+            logger.warning("Local fallback delete warning for '%s': %s", clean_key, exc)
 
         return True
 
@@ -300,7 +315,7 @@ class RustFSClient:
         """
         Generates a presigned GET URL for direct download / streaming.
         """
-        clean_key = object_key.replace("BLOB/", "").replace("\\", "/")
+        clean_key = _safe_key(object_key)
         try:
             url = self.client.generate_presigned_url(
                 "get_object",
