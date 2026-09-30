@@ -101,7 +101,12 @@ Meilisearch must never bypass authorization.
 Every search call must apply `org_id` filter to restrict results to the current tenant:
 
 ```python
-filters = [f"org_id = {current_user.org_id}", "is_deleted = false", "status = active"]
+org_ids = [org_context.org_id] if org_context.selected_org_id else org_context.allowed_org_ids
+filters = [
+    f"org_id IN [{', '.join(str(org_id) for org_id in org_ids)}]",
+    "is_deleted = false",
+    "status = active",
+]
 hits = search_products(query, filters=filters)
 ```
 

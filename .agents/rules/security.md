@@ -28,9 +28,9 @@ A breach of this data can cause direct financial and competitive harm.
 ### Permission checks in code
 
 ```python
-# Pattern used in ProductMasterPage.js and routers:
-isAccountsUser = current_user.has_any_role(["Admin", "Manager", "Accounts"])
-canViewVendor   = current_user.has_any_role(["Admin", "Manager", "Buyer", "Accounts"])
+# Server-side helpers in auth/security_guards.py:
+can_view_cost = is_financial_user(current_user, org_context)
+can_view_vendor = can_view_supplier_user(current_user, org_context)
 ```
 
 Always check permissions server-side before returning sensitive data.
@@ -71,7 +71,11 @@ if not can_view_vendor:
 
 # Correct — never fetches unauthorized data
 if can_view_vendor:
-    vendors = db.query(Supplier).filter(Supplier.org_id == org_id).all()
+    vendors = apply_shared_or_org_filter(
+        db.query(Supplier).filter(Supplier.is_deleted.is_(False)),
+        Supplier,
+        org_context,
+    ).all()
 else:
     vendors = []
 ```
@@ -121,7 +125,7 @@ Every endpoint returning or modifying protected data must:
 1. Verify the user is authenticated (JWT).
 2. Verify the user has the required module (`require_module`).
 3. Verify the user has the required permission.
-4. Filter the query by `org_id`.
+4. Resolve `OrgContext` and use `apply_org_filter` or `apply_shared_or_org_filter`.
 5. Return 403 or 404 if any check fails — never return partial data.
 
 ```python
@@ -129,13 +133,15 @@ Every endpoint returning or modifying protected data must:
 async def list_order_documents(
     order_id: int,
     current_user = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
     db: Session = Depends(get_db),
 ):
     # 1. org isolation
-    order = db.query(PurchaseOrder).filter(
+    order_query = db.query(PurchaseOrder).filter(
         PurchaseOrder.id == order_id,
-        PurchaseOrder.org_id == current_user.org_id,
-    ).first()
+        PurchaseOrder.is_deleted.is_(False),
+    )
+    order = apply_org_filter(order_query, PurchaseOrder, org_context).first()
     if not order:
         raise HTTPException(404, "Order not found")
 
@@ -145,7 +151,7 @@ async def list_order_documents(
     ).all()
 
     # 3. strip vendor pricing if user lacks permission
-    can_view_cost = current_user.has_any_role(["Admin", "Manager", "Accounts", "Buyer"])
+    can_view_cost = is_financial_user(current_user, org_context)
     return [serialize_doc(d, include_cost=can_view_cost) for d in docs]
 ```
 
@@ -156,13 +162,14 @@ async def list_order_documents(
 Meilisearch does not enforce authorization by itself.
 
 Every search call must:
-1. Apply `org_id = {user.org_id}` as a filter.
+1. Apply the active/allowed IDs from `OrgContext` as an `org_id` filter.
 2. Apply `is_deleted = false` filter.
 3. Strip vendor/cost fields from results for unauthorised users before returning.
 
 ```python
+org_ids = [org_context.org_id] if org_context.selected_org_id else org_context.allowed_org_ids
 filters = [
-    f"org_id = {current_user.org_id}",
+    f"org_id IN [{', '.join(str(org_id) for org_id in org_ids)}]",
     "is_deleted = false",
     "status = active"
 ]

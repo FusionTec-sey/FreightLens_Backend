@@ -74,13 +74,15 @@ Modules gate entire feature areas. Current modules:
 Every router that belongs to a module must declare the dependency:
 
 ```python
-# In containerMgmt.py — this is already done for existing routers
+# In containerMgmt.py
 app.include_router(OrderRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
 ```
 
 A new router for a new module area MUST include `require_module`.
 Never add business routes without a module guard.
+Cross-module and platform routers must be authenticated and individually authorized;
+current unguarded exceptions are listed in `docs/ARCHITECTURE.md` pending Phase 5 review.
 
 ---
 
@@ -122,7 +124,8 @@ All one-time setup runs in `containerMgmt.py` `startup_event` in this order:
 - Database schema: `containermgmt` (business data), `usercredentials` (auth/users)
 - Tenant isolation: row-level via `org_id` on every business data table
 - All models inherit `OrgMixin` for `org_id`
-- All queries filter `Model.org_id == current_user.org_id`
+- Requests resolve `OrgContext` with `get_org_context`; tenant-owned queries use
+  `apply_org_filter`, and explicit shared/tenant resources use `apply_shared_or_org_filter`
 - Never mix data across organisations
 
 ---

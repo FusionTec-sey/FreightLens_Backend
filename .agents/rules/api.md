@@ -25,7 +25,7 @@ Never mix unrelated domains in the same router file.
 
 ## Module Guards
 
-Every business router must be guarded by `require_module`:
+Every module-owned business router must be guarded by `require_module`:
 
 ```python
 from auth.module_guard import require_module
@@ -34,7 +34,10 @@ from auth.module_guard import require_module
 app.include_router(OrderRouter, dependencies=[Depends(require_module("ORDERS"))])
 ```
 
-Do not add a new router without assigning it to a module.
+Do not add a new module-owned router without assigning it to a module. Authentication,
+administration, organisation management, and genuinely cross-module routers may be
+exceptions, but the exception must be documented in `docs/ARCHITECTURE.md` and every
+endpoint must still enforce authentication and its fine-grained authorization.
 
 ---
 
@@ -43,18 +46,19 @@ Do not add a new router without assigning it to a module.
 Within a router, use the permission check helper to verify fine-grained permissions:
 
 ```python
-from auth.permissions import require_permission
+from auth.security_guards import require_permission
 
-@router.get("/orders/{order_id}/payments")
+@router.get(
+    "/orders/{order_id}/payments",
+    dependencies=[Depends(require_permission("View_Payment"))],
+)
 async def get_payments(
     order_id: int,
-    current_user = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
     db: Session = Depends(get_db)
 ):
-    # Always check permission before querying
-    if not current_user.has_permission("View_Payment"):
-        raise HTTPException(403, "Insufficient permissions")
-    ...
+    query = db.query(Payment).filter(Payment.order_id == order_id)
+    return apply_org_filter(query, Payment, org_context).all()
 ```
 
 Permissions are checked server-side in every endpoint.
@@ -146,22 +150,25 @@ Always use `detail=` with a human-readable message.
 
 ---
 
-## Org Isolation in Queries
+## Organisation Isolation in Queries
 
-Every query must filter by the authenticated user's organisation:
+Resolve the request's organisation scope with `get_org_context`; do not derive tenant
+scope directly from `current_user.org_id`. Use the shared query helpers:
 
 ```python
-order = db.query(PurchaseOrder).filter(
+base_query = db.query(PurchaseOrder).filter(
     PurchaseOrder.id == order_id,
-    PurchaseOrder.org_id == current_user.org_id,  # MANDATORY
-    PurchaseOrder.is_deleted == False,
-).first()
+    PurchaseOrder.is_deleted.is_(False),
+)
+order = apply_org_filter(base_query, PurchaseOrder, org_context).first()
 
 if not order:
     raise HTTPException(404, "Purchase order not found")
 ```
 
-Never query by ID alone. Always combine with `org_id` filter.
+For models that explicitly support shared records, such as `Supplier`, use
+`apply_shared_or_org_filter`; never emulate shared scope with nullable-org conditions.
+Never query a tenant-owned record by ID alone.
 A missing record and an unauthorised record should both return 404 — never leak existence information.
 
 ---
@@ -173,11 +180,30 @@ File uploads go through `Utils/blob_storage.py`. Never save files to the local f
 ```python
 from Utils.blob_storage import blob_storage
 
-object_key = f"orders/{po_number}/documents/{filename}"
-url = blob_storage.upload_file(file.file, object_key, content_type=file.content_type)
+folder = f"orders/{po_number}/documents"
+object_key = blob_storage.upload_file(
+    file_obj=file,
+    folder=folder,
+    original_filename=file.filename,
+)
 ```
 
 See `storage.md` for complete object key conventions.
+
+All object keys and folders are validated by `Utils.blob_storage._safe_key`. Do not
+concatenate user-controlled path segments without validating or normalising them.
+
+---
+
+## Endpoint Test Minimum
+
+For every new or changed protected endpoint, cover at least:
+- unauthenticated request rejection;
+- a user without the required permission;
+- an allowed user in the owning tenant;
+- a user from another tenant receiving no data (normally 404 for record endpoints).
+
+Shared/tenant resources also require one shared-row and one tenant-only visibility case.
 
 ---
 

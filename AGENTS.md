@@ -63,7 +63,8 @@ Before building anything:
 
 ### 7. Multi-Tenant Row Isolation
 - Every data model that stores business data must use OrgMixin for org_id.
-- All queries must filter by org_id of the authenticated user.
+- Resolve `OrgContext` with `get_org_context` and scope queries with `apply_org_filter`.
+- Models with an explicit shared/tenant scope use `apply_shared_or_org_filter`.
 - Never expose data from one organisation to another.
 - See .agents/rules/database.md.
 
@@ -101,6 +102,28 @@ Design accordingly from day one.
 ### 13. Always Ask Before Proceeding with DOM / Browser Interactions
 - Before initiating any automated browser interaction, navigating URLs, manipulating web pages, or inspecting/modifying DOM elements in the browser via subagents or automated tools, the assistant must always ask the user for explicit confirmation.
 - Clearly explain the planned verification steps and target URLs, and await user approval before launching browser automation.
+
+### 14. Verification Is Part of Done
+- Add or update endpoint tests for authentication, authorization, and tenant isolation when API behavior changes.
+- Run the relevant backend test suite and frontend production build before calling a phase complete.
+- Record any skipped check or pre-existing failure explicitly.
+
+### 15. Keep Rules Executable
+- Rule examples must name the helpers and libraries that exist in the repository.
+- When a helper, dependency, or framework convention changes, update the affected rule file in the same approved change.
+
+---
+
+## Known Stabilization Deviations
+
+These are tracked exceptions, not approved patterns for new code:
+
+- `OrgMixin.org_id` is still nullable and defaults to organisation `1`; Phase 2 must remove both behaviors after data cleanup.
+- Several cross-module routers do not yet have an explicit module guard; Phase 5 owns the router-by-router authorization review.
+- APScheduler starts at import time and FastAPI still uses deprecated startup events; lifecycle migration remains pending.
+- Some large router and frontend page files remain above the maintainable size target.
+- The frontend production build succeeds with existing ESLint warnings, but strict CI warning enforcement does not yet pass.
+- Legacy MySQL migration material and committed development secret defaults remain until Phase 5 cleanup.
 
 ---
 

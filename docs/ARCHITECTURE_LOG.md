@@ -2,6 +2,13 @@
 
 Newest entries appear first. Every architecture change records why it changed, its commit or release tag, any migration, and how to undo it.
 
+## 2026-09-30 - Phase 4 executable rulebook
+
+- **Why:** Several development rules referenced obsolete libraries, helper names, and single-organisation query patterns.
+- **Change:** Rules now reflect the current RBAC, organisation-context, explicit shared-resource, storage, frontend toast, and verification conventions; unresolved stabilization work is recorded as known deviations.
+- **Migration:** none
+- **Undo:** revert the Phase 4 documentation commit.
+
 ## 2026-09-30 - Phase 2A explicit supplier scope
 
 - **Why:** The global supplier table could not distinguish group-wide suppliers from tenant-owned suppliers.

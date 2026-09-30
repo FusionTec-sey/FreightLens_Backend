@@ -19,8 +19,13 @@ Always:
 
 Single bucket: `containermgmt-blobs`
 
-All files for all organisations go into this bucket.
-Tenant isolation is enforced by the `org_id` filter on `order_documents` records — not by separate buckets.
+All files for all organisations go into this bucket. Tenant isolation is enforced by
+the authenticated owning endpoint and an organisation-scoped database record, not by
+separate buckets or by an unverified object key.
+
+Direct media reads must use short-lived application signatures. Operational documents
+must only be read through authenticated owning-resource endpoints. Never expose a
+stable public object URL.
 
 ---
 
@@ -67,7 +72,8 @@ containers/{container_no}/documents/{timestamp}_{hash}.{ext}
 ```
 
 The timestamp format is `YYYYMMDDHHMMSS`.
-The hash is the first 12 characters of the file content hash.
+The generated suffix is a collision-resistant identifier owned by `blob_storage`.
+Callers provide a validated folder and the original filename, not a complete object key.
 
 ---
 
@@ -108,8 +114,8 @@ The `document_id` is a UUID string — never an integer.
 
 Before streaming the file:
 1. Look up the document record by UUID.
-2. Verify the document belongs to an order with `org_id == current_user.org_id`.
-3. If not found or org mismatch: return 404.
+2. Verify the owning order through `get_org_context` and `apply_org_filter`.
+3. Scope the owning order with `apply_org_filter`; if not found, return 404.
 4. Stream the file from RustFS using `blob_storage.download_file(doc.file_url)`.
 
 ---
@@ -144,16 +150,11 @@ from datetime import datetime
 import hashlib
 
 async def upload_document(file: UploadFile, order, payment_id=None):
-    contents = await file.read()
-    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    file_hash = hashlib.md5(contents).hexdigest()[:12]
-    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin"
-    object_key = f"orders/{order.po_number}/po_documents/{ts}_{file_hash}.{ext}"
-
-    blob_storage.upload_file(
-        file_obj=io.BytesIO(contents),
-        object_key=object_key,
-        content_type=file.content_type
+    folder = f"orders/{order.po_number}/po_documents"
+    object_key = blob_storage.upload_file(
+        file_obj=file,
+        folder=folder,
+        original_filename=file.filename,
     )
 
     doc = OrderDocument(
@@ -169,3 +170,6 @@ async def upload_document(file: UploadFile, order, payment_id=None):
     db.commit()
     return doc
 ```
+
+`Utils.blob_storage._safe_key` must validate every caller-provided folder or object key.
+Do not bypass it, import `boto3` in a route, or build a local filesystem path directly.

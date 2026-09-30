@@ -35,6 +35,10 @@ Automatically adds:
 Adds:
 - `org_id` — FK to `usercredentials.organisations` with index
 
+Current stabilization deviation: `OrgMixin.org_id` remains nullable and defaults to
+organisation `1`. New code must always assign the resolved organisation explicitly.
+Do not rely on that default; Phase 2 will remove it after legacy rows are classified.
+
 ```python
 from Model.mixins import AuditMixin, OrgMixin
 
@@ -122,7 +126,7 @@ orders = db.query(PurchaseOrder).options(
 ).filter(...).all()
 ```
 
-Never use lazy-loaded relationships inside loops.
+Avoid lazy-loaded relationships inside loops where they cause N+1 database access.
 
 ---
 
@@ -161,6 +165,7 @@ def ensure_my_feature_schema():
 - Always `conn.commit()` after DDL.
 - Register the migration in `containerMgmt.py` `startup_event`.
 - Name clearly: `migrate_order_documents.py`, `migrate_product_suppliers.py`.
+- New migrations use the date prefix `migrate_YYYYMMDD_feature.py`.
 
 ### Registration (containerMgmt.py)
 ```python

@@ -180,9 +180,9 @@ Pattern for conditional tabs:
 
 ## Toasts and Notifications
 
-Use `react-hot-toast` for all success/error notifications:
+Use `react-toastify` for all success/error notifications:
 ```javascript
-import toast from "react-hot-toast";
+import { toast } from "react-toastify";
 
 toast.success("Product saved successfully");
 toast.error("Failed to save product");
