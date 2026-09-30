@@ -1,3 +1,5 @@
+> **Archived v1 document.** This describes the pre-FreightLens single-company system and is retained only for historical reference. Current architecture is in `docs/ARCHITECTURE.md`.
+
 # Backend Architecture & Codebase Details
 
 ## Overview

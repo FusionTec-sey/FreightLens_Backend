@@ -1,5 +1,7 @@
 # FreightLens — Development Rules
 
+> Before any change, read `docs/ARCHITECTURE.md` and the latest 10 entries in `docs/ARCHITECTURE_LOG.md`.
+
 > **This file is the single source of truth for all development standards.**
 > Before writing any code, read the relevant detailed rule file under .agents/rules/.
 
