@@ -1,8 +1,11 @@
 import os
 import re
 import uuid
+import hashlib
+import hmac
 import logging
 import mimetypes
+import time
 from datetime import datetime
 from typing import Optional, Tuple, BinaryIO, Union
 from io import BytesIO
@@ -310,6 +313,36 @@ class RustFSClient:
             logger.warning("Local fallback delete warning for '%s': %s", clean_key, exc)
 
         return True
+
+    @staticmethod
+    def _signing_key() -> bytes:
+        key = os.getenv("MEDIA_SIGNING_KEY", "")
+        if not key:
+            raise RuntimeError("MEDIA_SIGNING_KEY is required to sign media URLs")
+        return key.encode("utf-8")
+
+    def _media_signature(self, object_key: str, expires_at: int) -> str:
+        clean_key = _safe_key(object_key)
+        payload = f"{clean_key}:{int(expires_at)}".encode("utf-8")
+        return hmac.new(self._signing_key(), payload, hashlib.sha256).hexdigest()
+
+    def signed_url(self, object_key: str, ttl: int) -> str:
+        """Return an application URL with a short-lived HMAC signature."""
+        clean_key = _safe_key(object_key)
+        expires_at = int(time.time()) + max(1, int(ttl))
+        signature = self._media_signature(clean_key, expires_at)
+        return f"/blobs/{clean_key}?exp={expires_at}&sig={signature}"
+
+    def verify_signed_url(self, object_key: str, expires_at: int, signature: str) -> bool:
+        """Validate a media URL without revealing why an invalid link failed."""
+        try:
+            expiry = int(expires_at)
+            if expiry < int(time.time()) or not signature:
+                return False
+            expected = self._media_signature(object_key, expiry)
+            return hmac.compare_digest(expected, signature)
+        except (TypeError, ValueError, RuntimeError):
+            return False
 
     def get_presigned_url(self, object_key: str, expires_in: int = 3600) -> Optional[str]:
         """

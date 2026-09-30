@@ -38,7 +38,8 @@ _open_clients = []
 
 
 @pytest.fixture(autouse=True)
-def close_test_clients():
+def close_test_clients(monkeypatch):
+    monkeypatch.setenv("MEDIA_SIGNING_KEY", "test-media-signing-key")
     yield
     while _open_clients:
         _open_clients.pop().__exit__(None, None, None)
@@ -124,6 +125,12 @@ def test_non_media_blob_paths_are_not_public():
         assert response.status_code == 404
 
 
+def test_media_requires_a_valid_signature(monkeypatch):
+    monkeypatch.setattr(blob_router_module.blob_storage, "verify_signed_url", lambda *args: False)
+    response = _client().get("/blobs/products/images/photo.jpg?exp=1&sig=bad")
+    assert response.status_code == 404
+
+
 def test_traversal_blob_paths_are_not_public():
     response = _client().get("/blobs/products/images/%2E%2E/%2E%2E/app.log")
     assert response.status_code == 404
@@ -136,14 +143,15 @@ def test_public_product_media_supports_full_and_range_responses(monkeypatch):
         return BytesIO(b"abcd"), "image/jpeg", "photo.jpg", 4, None
 
     monkeypatch.setattr(blob_router_module.blob_storage, "get_file_range", fake_get_file_range)
+    monkeypatch.setattr(blob_router_module.blob_storage, "verify_signed_url", lambda *args: True)
     client = _client()
 
-    response = client.get("/blobs/products/images/photo.jpg")
+    response = client.get("/blobs/products/images/photo.jpg?exp=9999999999&sig=valid")
     assert response.status_code == 200
     assert response.content == b"abcd"
 
     range_response = client.get(
-        "/blobs/products/images/photo.jpg",
+        "/blobs/products/images/photo.jpg?exp=9999999999&sig=valid",
         headers={"Range": "bytes=1-2"},
     )
     assert range_response.status_code == 206

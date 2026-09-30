@@ -24,12 +24,14 @@ UPLOAD_RULES = {
 }
 
 
-def _public_media_path(blob_path: str) -> str:
+def _signed_media_path(blob_path: str, exp: int | None, sig: str | None) -> str:
     try:
         normalized = _safe_key(blob_path)
     except ValueError:
         raise HTTPException(status_code=404, detail="Blob not found")
     if not normalized.startswith(PUBLIC_MEDIA_PREFIXES):
+        raise HTTPException(status_code=404, detail="Blob not found")
+    if not blob_storage.verify_signed_url(normalized, exp, sig):
         raise HTTPException(status_code=404, detail="Blob not found")
     return normalized
 
@@ -45,12 +47,12 @@ def check_blob_storage_health(current_user=Depends(get_current_user)):
 
 
 @BlobRouter.head("/{blob_path:path}")
-def head_blob(blob_path: str):
+def head_blob(blob_path: str, exp: int | None = Query(None), sig: str | None = Query(None)):
     """
     Check if a blob exists in RustFS and return its content type and length.
     Useful for video pre-buffering and image existence checks.
     """
-    blob_path = _public_media_path(blob_path)
+    blob_path = _signed_media_path(blob_path, exp, sig)
     try:
         info = blob_storage.get_file_info(blob_path)
     except ValueError:
@@ -62,7 +64,7 @@ def head_blob(blob_path: str):
         "Content-Type": info["content_type"],
         "Content-Length": str(info["size"]),
         "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "private, max-age=300",
     }
     if info.get("etag"):
         headers["ETag"] = info["etag"]
@@ -71,12 +73,12 @@ def head_blob(blob_path: str):
 
 
 @BlobRouter.get("/{blob_path:path}")
-def get_blob(blob_path: str, request: Request):
+def get_blob(blob_path: str, request: Request, exp: int | None = Query(None), sig: str | None = Query(None)):
     """
     Stream a blob (image, video, document, logo) from RustFS.
     Supports HTTP Range requests (RFC 7233) for HTML5 video playback, seeking, and streaming.
     """
-    blob_path = _public_media_path(blob_path)
+    blob_path = _signed_media_path(blob_path, exp, sig)
     range_header = request.headers.get("Range")
 
     try:
@@ -92,7 +94,7 @@ def get_blob(blob_path: str, request: Request):
     response_headers = {
         "Content-Type": ctype,
         "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "private, max-age=300",
     }
     if clen is not None:
         response_headers["Content-Length"] = str(clen)
@@ -139,7 +141,7 @@ async def upload_blob(
     return {
         "success": True,
         "object_key": key,
-        "url": f"/blobs/{key}",
+        "url": blob_storage.signed_url(key, ttl=24 * 60 * 60),
         "file_name": file.filename,
         "message": "File stored successfully in RustFS"
     }

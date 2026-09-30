@@ -19,7 +19,13 @@ Local ports are PostgreSQL `5433`, RustFS `9005`, RustFS console `9006`, and Mei
 
 ## Backend
 
-Create `.env` from deployment-specific values. Do not commit secrets. `DATABASE_URL` is required.
+Create `.env` from deployment-specific values. Do not commit secrets. `DATABASE_URL` and a random `MEDIA_SIGNING_KEY` separate from `JWT_SECRET_KEY` are required.
+
+Generate a signing key once per environment:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
 
 ```powershell
 py -3.11 -m venv .venv

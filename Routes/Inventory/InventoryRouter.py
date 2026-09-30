@@ -25,6 +25,27 @@ logger = logging.getLogger("containerMgmt.inventory")
 
 InventoryRouter = APIRouter(prefix="/inventory", tags=["Inventory & Product Master"])
 
+PRODUCT_MEDIA_TTL = 24 * 60 * 60
+
+
+def _signed_media_url(value: Optional[str]) -> Optional[str]:
+    if not value or value.startswith(("http://", "https://", "blob:", "data:")):
+        return value
+    return blob_storage.signed_url(value, ttl=PRODUCT_MEDIA_TTL)
+
+
+def _signed_media_items(items: list) -> list:
+    signed_items = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            signed_items.append(item)
+            continue
+        signed_item = dict(item)
+        media_key = item.get("file_url") or item.get("url")
+        signed_item["file_signed_url"] = _signed_media_url(media_key)
+        signed_items.append(signed_item)
+    return signed_items
+
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
 class ProductSupplierSchema(BaseModel):
@@ -677,8 +698,9 @@ def product_to_dict(
         "default_factory_code": default_factory_code if can_view_supplier else None,
         # Media
         "image_url": img_url,
-        "images": images,
-        "videos": getattr(p, "videos", None) or [],
+        "image_signed_url": _signed_media_url(img_url),
+        "images": _signed_media_items(images),
+        "videos": _signed_media_items(getattr(p, "videos", None) or []),
         "attachment": p.attachment or [],
         # Flags
         "is_consumable": p.is_consumable, "is_hazardous": p.is_hazardous,
@@ -768,7 +790,8 @@ def lookup_products(
                 "description_quick": p.get("description_quick") or "",
                 "unit": p.get("unit") or "PCS",
                 "image_url": p.get("image_url"),
-                "images": p.get("images") or [],
+                "image_signed_url": _signed_media_url(p.get("image_url")),
+                "images": _signed_media_items(p.get("images") or []),
                 "suppliers": [] if hide_supplier else (p.get("suppliers") or []),
                 "brand": p.get("brand") if not hide_supplier else None,
                 "category_id": p.get("category_id"),
@@ -849,7 +872,8 @@ def lookup_products(
             "description_quick": p.description_quick,
             "unit": p.unit or "PCS",
             "image_url": img_url,
-            "images": imgs,
+            "image_signed_url": _signed_media_url(img_url),
+            "images": _signed_media_items(imgs),
             "suppliers": [] if hide_supplier else supps_data,
             "brand": p.brand if not hide_supplier else None,
             "category_id": p.category_id,

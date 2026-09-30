@@ -40,6 +40,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://postgres:postgres_local@postgres:5432/containermgmt_pg
       - JWT_SECRET_KEY=f830910ff3d22d6fc544ef7634ae5df3b1c1b676302fb39c0aeb075ba5cabe70
+      - MEDIA_SIGNING_KEY=${MEDIA_SIGNING_KEY}
       - JWT_ALGORITHM=HS256
       - ENVIRONMENT=development
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173

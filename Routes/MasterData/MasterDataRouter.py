@@ -13,6 +13,7 @@ from Model.containermgmt.MasterData.DocumentType import MasterDocumentType
 from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.Organisation import Organisation
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import can_view_supplier_user
 from Utils.org_filter import OrgContext
 from Utils.blob_storage import blob_storage
 from Routes.Orders.OrderRouter import is_accounts_user
@@ -464,6 +465,7 @@ def get_suppliers_master(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    can_view_supplier = can_view_supplier_user(current_user)
     query = db.query(Supplier).filter(Supplier.is_deleted != True)
     if active_only:
         query = query.filter(Supplier.is_active == True)
@@ -504,6 +506,10 @@ def get_suppliers_master(
             "contact_person": s.contact_person,
             "country": s.country or "Seychelles",
             "logo_url": s.logo_url,
+            "logo_signed_url": (
+                blob_storage.signed_url(s.logo_url, ttl=15 * 60)
+                if can_view_supplier and s.logo_url else None
+            ),
             "default_currency": s.default_currency or "USD",
             "default_payment_term_id": s.default_payment_term_id,
             "payment_term": {
@@ -644,7 +650,12 @@ def upload_supplier_logo(
     )
     supplier.logo_url = key
     db.commit()
-    return {"success": True, "logo_url": key, "message": "Supplier logo uploaded successfully."}
+    return {
+        "success": True,
+        "logo_url": key,
+        "logo_signed_url": blob_storage.signed_url(key, ttl=15 * 60),
+        "message": "Supplier logo uploaded successfully.",
+    }
 
 @MasterDataRouter.delete("/suppliers/{id}")
 def delete_supplier_master(

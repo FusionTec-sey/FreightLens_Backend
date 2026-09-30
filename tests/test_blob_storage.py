@@ -1,4 +1,5 @@
 import importlib.util
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -71,3 +72,28 @@ def test_local_fallback_reads_only_from_blob_root(monkeypatch):
             assert filename == "photo.jpg"
         finally:
             body.close()
+
+
+def test_signed_url_round_trip_and_tamper_rejection(monkeypatch):
+    monkeypatch.setenv("MEDIA_SIGNING_KEY", "test-media-signing-key")
+    client = storage_module.RustFSClient()
+
+    url = client.signed_url("products/images/photo.jpg", ttl=60)
+    query = url.split("?", 1)[1]
+    params = dict(part.split("=", 1) for part in query.split("&"))
+
+    assert client.verify_signed_url(
+        "products/images/photo.jpg", int(params["exp"]), params["sig"]
+    )
+    assert not client.verify_signed_url(
+        "products/images/other.jpg", int(params["exp"]), params["sig"]
+    )
+
+
+def test_signed_url_rejects_expired_signature(monkeypatch):
+    monkeypatch.setenv("MEDIA_SIGNING_KEY", "test-media-signing-key")
+    client = storage_module.RustFSClient()
+    expired = int(time.time()) - 1
+    signature = client._media_signature("products/images/photo.jpg", expired)
+
+    assert not client.verify_signed_url("products/images/photo.jpg", expired, signature)

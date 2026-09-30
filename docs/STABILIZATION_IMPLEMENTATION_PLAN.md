@@ -28,3 +28,24 @@ This file tracks implementation of the approved FreightLens stabilization plan w
 ### Rollback
 
 Revert the Phase 1A commit. This increment has no database migration.
+
+## Increment 2: Phase 1B signed media links
+
+### Scope
+
+- Sign approved media paths with HMAC-SHA256 and an expiry timestamp.
+- Require a valid signature for every product-media and supplier-logo GET or HEAD request.
+- Return signed product media for 24 hours and supplier logos for 15 minutes.
+- Keep raw object keys as storage identifiers; React renders only signed or external URLs.
+- Configure a separate `MEDIA_SIGNING_KEY` in every environment.
+
+### Verification
+
+- `pytest -q`
+- `npm test -- --watchAll=false --runInBand src/utils/mediaUrl.test.js`
+- `npm run build`
+- Manual check: product thumbnails, image preview, video seeking, supplier logos, and product upload.
+
+### Rollback
+
+Revert the paired Phase 1B backend and frontend commits. This increment has no database migration.

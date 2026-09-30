@@ -2,6 +2,13 @@
 
 Newest entries appear first. Every architecture change records why it changed, its commit or release tag, any migration, and how to undo it.
 
+## 2026-09-30 - Phase 1B signed media links
+
+- **Why:** Browser image and video elements cannot attach the API bearer token, while stable public object URLs expose media indefinitely.
+- **Change:** Product media and supplier logos use expiring HMAC-SHA256 application URLs backed by a separate `MEDIA_SIGNING_KEY`; raw object keys remain storage identifiers only.
+- **Migration:** none
+- **Undo:** revert the Phase 1B backend and frontend commits together.
+
 ## 2026-09-30 - Phase 1A blob-storage hotfix
 
 - **Why:** Public mutation endpoints and raw local-path fallbacks exposed files outside their owning workflows.

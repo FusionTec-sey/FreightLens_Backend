@@ -57,6 +57,7 @@ services:
       # Password has '@' which is percent-encoded as '%40' for SQLAlchemy URL parsing
       - DATABASE_URL=postgresql+psycopg2://postgres:Frigh1liner%40Fu5i0n1ech@postgres-staging:5432/containermgmt_pg
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MEDIA_SIGNING_KEY=${MEDIA_SIGNING_KEY}
       - JWT_ALGORITHM=HS256
       - ENVIRONMENT=production
       - ALLOWED_ORIGINS=${FRONTEND_URL}

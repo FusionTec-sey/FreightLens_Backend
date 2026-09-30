@@ -13,10 +13,17 @@ from Model.containermgmt.Orders.Notification import Notification
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.blob_storage import blob_storage
 
 logger = logging.getLogger("containerMgmt.orders.requests")
 
 StoreRequestRouter = APIRouter(prefix="/store-requests", tags=["Store Requests"])
+
+
+def _signed_item_image(image_url: Optional[str]) -> Optional[str]:
+    if not image_url or image_url.startswith(("http://", "https://", "blob:", "data:")):
+        return image_url
+    return blob_storage.signed_url(image_url, ttl=24 * 60 * 60)
 
 def format_request(req: StoreRequest, is_accounts: bool = True) -> dict:
     return {
@@ -45,6 +52,7 @@ def format_request(req: StoreRequest, is_accounts: bool = True) -> dict:
                 "required_date": item.required_date.isoformat() if item.required_date else None,
                 "notes": item.notes,
                 "image_url": item.image_url,
+                "image_signed_url": _signed_item_image(item.image_url),
             }
             for item in req.items if not item.is_deleted
         ],

@@ -63,7 +63,7 @@ Schema changes are idempotent `Utils/migrate_*.py` functions registered in `cont
 
 - `Utils/blob_storage.py` is the only object-storage client.
 - Local fallback files are confined to `Backend/BLOB`.
-- Direct `/blobs` reads are limited to product media and supplier logos until signed media links replace public access.
+- Direct `/blobs` reads require an expiring HMAC signature. Product media links live for 24 hours; supplier-logo links live for 15 minutes.
 - Order and operational documents are accessed through their owning authenticated endpoints.
 - `Services/search_service.py` owns Meilisearch clients, index configuration, synchronization, and SQL fallback behavior.
 - Every search must apply organisation and soft-delete filters.
@@ -76,7 +76,9 @@ APScheduler currently starts at module import time. This can duplicate jobs unde
 
 ## Configuration
 
-Deployment-specific environment variables include `DATABASE_URL`, JWT settings, environment/CORS/host settings, RustFS credentials, Meilisearch credentials, and carrier credentials prefixed by `CMA_CGM_` and `MEARSK_`.
+Deployment-specific environment variables include `DATABASE_URL`, JWT settings, `MEDIA_SIGNING_KEY`, environment/CORS/host settings, RustFS credentials, Meilisearch credentials, and carrier credentials prefixed by `CMA_CGM_` and `MEARSK_`.
+
+`MEDIA_SIGNING_KEY` must be random, must differ from `JWT_SECRET_KEY`, and must match across API instances in the same environment.
 
 Secrets must come from local `.env` or the deployment platform and must not be committed.
 
