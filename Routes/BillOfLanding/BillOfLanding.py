@@ -14,7 +14,7 @@ from Utils import *
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import can_view_bl_user, can_view_supplier_user
 from Model.Credentials.users import User
-from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from fastapi import  Depends, Body, status
 
 # from fastapi.responses import FileResponse, StreamingResponse
@@ -41,13 +41,14 @@ def resolve_vessel(db: Session, entry: Any, current_user_id: int) -> Any:
         db.flush()
     return vessel.id
 
-def resolve_supplier(db: Session, entry: Any, current_user_id: int) -> Any:
+def resolve_supplier(db: Session, entry: Any, current_user_id: int, org_context: OrgContext) -> Any:
     if entry is None or entry == "": return None
     if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
     val = str(entry).strip()
-    supplier = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True).first()
+    supplier_query = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True)
+    supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
-        supplier = Supplier(name=val, created_by=current_user_id, updated_by=current_user_id)
+        supplier = Supplier(name=val, org_id=org_context.org_id, is_shared=False, created_by=current_user_id, updated_by=current_user_id)
         db.add(supplier)
         db.flush()
     return supplier.supplier_id
@@ -163,7 +164,7 @@ class BillOfLandingAPI:
         resolved_consignee_id = resolve_consignee(db, data.Consignee, current_user.id)
         resolved_vessel_id = resolve_vessel(db, data.Vessel, current_user.id)
         resolved_doc_id = resolve_doc(db, data.Doc, current_user.id)
-        resolved_supplier_id = resolve_supplier(db, data.Supplier, current_user.id)
+        resolved_supplier_id = resolve_supplier(db, data.Supplier, current_user.id, org_context)
         resolved_provider_id = resolve_provider(db, data.Provider, current_user.id)
         resolved_status_id = resolve_status(db, data.status)
 
@@ -385,7 +386,7 @@ class BillOfLandingAPI:
         if "Vessel" in update_data and update_data["Vessel"] is not None:
             update_data["Vessel"] = resolve_vessel(db, update_data["Vessel"], current_user.id)
         if "Supplier" in update_data and update_data["Supplier"] is not None:
-            update_data["Supplier"] = resolve_supplier(db, update_data["Supplier"], current_user.id)
+            update_data["Supplier"] = resolve_supplier(db, update_data["Supplier"], current_user.id, org_context)
         if "Provider" in update_data and update_data["Provider"] is not None:
             update_data["Provider"] = resolve_provider(db, update_data["Provider"], current_user.id)
         if "Doc" in update_data and update_data["Doc"] is not None:

@@ -126,6 +126,8 @@ async def startup_event():
     ensure_po_lifecycle_schema()
     from Utils.migrate_master_data import ensure_master_data_schema
     ensure_master_data_schema()
+    from Utils.migrate_20260930_supplier_scope import ensure_supplier_scope_schema
+    ensure_supplier_scope_schema()
     from Utils.migrate_order_documents import ensure_order_documents_schema
     ensure_order_documents_schema()
     from Utils.migrate_order_documents_org import ensure_order_documents_org_schema

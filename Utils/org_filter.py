@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Query
+from sqlalchemy import or_
 
 class OrgContext(BaseModel):
     current_org_id: int
@@ -26,3 +27,15 @@ def apply_org_filter(query: Query, model, org_context: OrgContext) -> Query:
         return query.filter(model.org_id == org_context.selected_org_id)
     
     return query.filter(model.org_id.in_(org_context.allowed_org_ids))
+
+
+def apply_shared_or_org_filter(query: Query, model, org_context: OrgContext) -> Query:
+    """Expose explicitly shared rows plus rows owned by the active/allowed tenant."""
+    if not hasattr(model, "org_id") or not hasattr(model, "is_shared"):
+        raise ValueError("Shared-or-tenant models require org_id and is_shared columns")
+
+    if org_context.selected_org_id:
+        tenant_scope = model.org_id == org_context.selected_org_id
+    else:
+        tenant_scope = model.org_id.in_(org_context.allowed_org_ids)
+    return query.filter(or_(model.is_shared.is_(True), tenant_scope))

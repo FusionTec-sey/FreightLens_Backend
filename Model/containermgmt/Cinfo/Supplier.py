@@ -9,6 +9,8 @@ class Supplier(AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     supplier_id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("usercredentials.organisations.id"), nullable=True, index=True)
+    is_shared = Column(Boolean, default=False, nullable=False, index=True)
     name = Column(String(255))
     code = Column(String(50), nullable=True)
     address = Column(String(255), nullable=True)
@@ -25,4 +27,5 @@ class Supplier(AuditMixin, Base):
     
     bill_of_landings = relationship("BillOfLanding", back_populates="supplier_rel")
     payment_term = relationship("PaymentTerm", foreign_keys=[default_payment_term_id], lazy="joined")
+    organisation = relationship("Organisation", foreign_keys=[org_id], viewonly=True)
 

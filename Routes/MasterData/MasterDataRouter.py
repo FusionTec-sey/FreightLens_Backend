@@ -14,7 +14,7 @@ from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.Organisation import Organisation
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import can_view_supplier_user
-from Utils.org_filter import OrgContext
+from Utils.org_filter import OrgContext, apply_shared_or_org_filter
 from Utils.blob_storage import blob_storage
 from Routes.Orders.OrderRouter import is_accounts_user
 
@@ -62,6 +62,7 @@ class SupplierMasterSchema(BaseModel):
     variance_threshold_pct: Optional[float] = 2.0
     notes: Optional[str] = None
     is_active: Optional[bool] = True
+    is_shared: bool = False
 
 
 # ── 1. Currencies Endpoints ───────────────────────────────────────────────────
@@ -319,6 +320,7 @@ def convert_currency(
 def get_payment_terms(
     active_only: bool = True,
     db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
     current_user = Depends(get_current_user)
 ):
     query = db.query(PaymentTerm)
@@ -329,10 +331,11 @@ def get_payment_terms(
     results = []
     for t in terms:
         # Count vendors bound to this term
-        vendor_count = db.query(Supplier).filter(
+        vendor_query = db.query(Supplier).filter(
             Supplier.default_payment_term_id == t.id,
             Supplier.is_deleted != True
-        ).count()
+        )
+        vendor_count = apply_shared_or_org_filter(vendor_query, Supplier, org_context).count()
 
         results.append({
             "id": t.id,
@@ -463,10 +466,12 @@ def get_suppliers_master(
     sort_dir: Optional[str] = Query("asc"),
     active_only: bool = False,
     db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
     current_user = Depends(get_current_user)
 ):
     can_view_supplier = can_view_supplier_user(current_user)
     query = db.query(Supplier).filter(Supplier.is_deleted != True)
+    query = apply_shared_or_org_filter(query, Supplier, org_context)
     if active_only:
         query = query.filter(Supplier.is_active == True)
 
@@ -510,6 +515,9 @@ def get_suppliers_master(
                 blob_storage.signed_url(s.logo_url, ttl=15 * 60)
                 if can_view_supplier and s.logo_url else None
             ),
+            "is_shared": bool(s.is_shared),
+            "org_id": s.org_id,
+            "scope": "shared" if s.is_shared else "tenant",
             "default_currency": s.default_currency or "USD",
             "default_payment_term_id": s.default_payment_term_id,
             "payment_term": {
@@ -553,11 +561,17 @@ def create_supplier_master(
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can create suppliers.")
 
     name_clean = payload.name.strip()
-    existing = db.query(Supplier).filter(Supplier.name.ilike(name_clean), Supplier.is_deleted != True).first()
+    if payload.is_shared and not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Only root organisation users can create shared suppliers.")
+
+    existing_query = db.query(Supplier).filter(Supplier.name.ilike(name_clean), Supplier.is_deleted != True)
+    existing = apply_shared_or_org_filter(existing_query, Supplier, org_context).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Supplier '{name_clean}' already exists.")
 
     supplier = Supplier(
+        org_id=None if payload.is_shared else org_context.org_id,
+        is_shared=payload.is_shared,
         name=name_clean,
         code=payload.code.strip() if payload.code else None,
         address=payload.address.strip() if payload.address else None,
@@ -594,9 +608,12 @@ def update_supplier_master(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can update suppliers.")
 
-    supplier = db.query(Supplier).filter(Supplier.supplier_id == id, Supplier.is_deleted != True).first()
+    supplier_query = db.query(Supplier).filter(Supplier.supplier_id == id, Supplier.is_deleted != True)
+    supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found.")
+    if supplier.is_shared and not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Shared suppliers can only be updated by root organisation users.")
 
     if "name" in payload and payload["name"]:
         supplier.name = payload["name"].strip()
@@ -624,6 +641,13 @@ def update_supplier_master(
         supplier.notes = payload["notes"]
     if "is_active" in payload and payload["is_active"] is not None:
         supplier.is_active = bool(payload["is_active"])
+    if "is_shared" in payload and payload["is_shared"] is not None:
+        requested_shared = bool(payload["is_shared"])
+        if requested_shared != bool(supplier.is_shared):
+            if not org_context.is_root:
+                raise HTTPException(status_code=403, detail="Only root organisation users can change supplier scope.")
+            supplier.is_shared = requested_shared
+            supplier.org_id = None if requested_shared else org_context.org_id
 
     db.commit()
     return {"success": True, "message": f"Supplier '{supplier.name}' updated successfully."}
@@ -639,9 +663,12 @@ def upload_supplier_logo(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can upload logos.")
 
-    supplier = db.query(Supplier).filter(Supplier.supplier_id == id, Supplier.is_deleted != True).first()
+    supplier_query = db.query(Supplier).filter(Supplier.supplier_id == id, Supplier.is_deleted != True)
+    supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found.")
+    if supplier.is_shared and not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Shared supplier logos can only be updated by root organisation users.")
 
     key = blob_storage.upload_file(
         file_obj=file,
@@ -667,9 +694,12 @@ def delete_supplier_master(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can delete suppliers.")
 
-    supplier = db.query(Supplier).filter(Supplier.supplier_id == id).first()
+    supplier_query = db.query(Supplier).filter(Supplier.supplier_id == id, Supplier.is_deleted != True)
+    supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found.")
+    if supplier.is_shared and not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Shared suppliers can only be deleted by root organisation users.")
 
     supplier.is_deleted = True
     supplier.is_active = False

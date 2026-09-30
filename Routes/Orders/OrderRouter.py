@@ -1155,14 +1155,6 @@ def create_order(
 
     status_label = status_obj.name if status_obj else (payload.get("status_label") or status_val)
 
-    # Supplier info
-    supplier_id = payload.get("supplier")
-    company = payload.get("company", "").strip()
-    if supplier_id:
-        supp = db.query(Supplier).filter(Supplier.supplier_id == supplier_id).first()
-        if supp:
-            company = supp.name
-
     target_org_id = payload.get("org_id")
     if not target_org_id:
         consignee_val = (payload.get("consignee") or "").upper()
@@ -1178,6 +1170,19 @@ def create_order(
 
     if not org_context.is_root and target_org_id not in org_context.allowed_org_ids:
         target_org_id = current_user.org_id
+
+    # Supplier must be shared or owned by the order's target organisation.
+    supplier_id = payload.get("supplier")
+    company = payload.get("company", "").strip()
+    if supplier_id:
+        supp = db.query(Supplier).filter(
+            Supplier.supplier_id == supplier_id,
+            Supplier.is_deleted != True,
+            or_(Supplier.is_shared == True, Supplier.org_id == target_org_id),
+        ).first()
+        if not supp:
+            raise HTTPException(status_code=404, detail="Supplier not available to this organisation")
+        company = supp.name
 
     # Helpers
     def parse_d(val):
@@ -1371,9 +1376,14 @@ def update_order(
     if "supplier" in payload and is_accounts:
         order.supplier_id = payload["supplier"] or None
         if order.supplier_id:
-            supp = db.query(Supplier).filter(Supplier.supplier_id == order.supplier_id).first()
-            if supp:
-                order.company = supp.name
+            supp = db.query(Supplier).filter(
+                Supplier.supplier_id == order.supplier_id,
+                Supplier.is_deleted != True,
+                or_(Supplier.is_shared == True, Supplier.org_id == order.org_id),
+            ).first()
+            if not supp:
+                raise HTTPException(status_code=404, detail="Supplier not available to this organisation")
+            order.company = supp.name
     if "company" in payload and is_accounts and not order.supplier_id:
         order.company = (payload.get("company") or "").strip() or None
     if "goods_description" in payload:

@@ -14,6 +14,7 @@ from Model.containermgmt.Orders.Product import Product, ProductCategory, Product
 from Model.containermgmt.Orders.ProductSupplier import ProductSupplier
 from Model.containermgmt.Orders.POItem import POItem
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import is_financial_user, has_permission
@@ -499,6 +500,13 @@ def _sync_product_suppliers(db: Session, prod: Product, suppliers_payload: Optio
     for item in suppliers_payload:
         if not item.supplier_id:
             continue
+        supplier = db.query(Supplier).filter(
+            Supplier.supplier_id == item.supplier_id,
+            Supplier.is_deleted != True,
+            or_(Supplier.is_shared == True, Supplier.org_id == org_id),
+        ).first()
+        if not supplier:
+            raise HTTPException(status_code=400, detail="Supplier is not available to this organisation")
         existing = db.query(ProductSupplier).filter(
             ProductSupplier.product_id == prod.id,
             ProductSupplier.supplier_id == item.supplier_id

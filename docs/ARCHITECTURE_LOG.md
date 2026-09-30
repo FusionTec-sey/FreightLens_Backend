@@ -2,6 +2,13 @@
 
 Newest entries appear first. Every architecture change records why it changed, its commit or release tag, any migration, and how to undo it.
 
+## 2026-09-30 - Phase 2A explicit supplier scope
+
+- **Why:** The global supplier table could not distinguish group-wide suppliers from tenant-owned suppliers.
+- **Change:** Every supplier is explicitly shared or tenant-specific; scoped queries return shared rows plus the active tenant's rows, and only root users may manage shared suppliers.
+- **Migration:** `migrate_20260930_supplier_scope.py`; legacy suppliers become shared to preserve existing access.
+- **Undo:** remove the check constraint and indexes, then remove `is_shared` and `org_id` only after confirming no dependent deployment uses supplier scope.
+
 ## 2026-09-30 - Phase 1C order-document access
 
 - **Why:** Document download and delete endpoints previously queried records by ID without tenant or permission enforcement and physically removed blobs during soft delete.

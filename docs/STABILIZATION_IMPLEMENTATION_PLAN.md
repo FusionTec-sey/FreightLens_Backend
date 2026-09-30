@@ -69,3 +69,23 @@ Revert the paired Phase 1B backend and frontend commits. This increment has no d
 ### Rollback
 
 Revert the Phase 1C backend commit. This increment has no database migration and retained blobs need no recovery.
+
+## Increment 4: Phase 2A explicit supplier scope
+
+### Scope
+
+- Add an explicit `is_shared` plus `org_id` supplier classification.
+- Preserve existing global suppliers by classifying them as shared during migration.
+- Default new suppliers to the active tenant; only root users may create or manage shared suppliers.
+- Scope supplier master and legacy option endpoints to shared plus active/allowed tenant rows.
+- Reject product-supplier links to suppliers outside the product organisation's scope.
+
+### Verification
+
+- Shared-or-tenant query tests cover selected and allowed organisation contexts.
+- Backend `pytest -q` and frontend `npm run build` pass.
+- Before staging, review the migrated shared supplier list and reclassify tenant-owned rows.
+
+### Rollback
+
+Code can be reverted. Database rollback drops `ck_supplier_scope`, `ix_supplier_org_id`, and `ix_supplier_is_shared`, then drops `org_id` and `is_shared` only after a backup and dependency review.

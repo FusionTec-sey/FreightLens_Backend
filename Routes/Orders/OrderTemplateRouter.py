@@ -298,12 +298,18 @@ async def create_template(
 
     supplier_id = payload.get("supplier_id") or payload.get("supplier")
     company = (payload.get("company") or "").strip()
-    if supplier_id:
-        supp = db.query(Supplier).filter(Supplier.supplier_id == supplier_id).first()
-        if supp:
-            company = supp.name
-
     target_org_id = payload.get("org_id") or org_context.selected_org_id or current_user.org_id or 1
+    if not org_context.is_root and target_org_id not in org_context.allowed_org_ids:
+        raise HTTPException(status_code=403, detail="Organisation is not available to this user")
+    if supplier_id:
+        supp = db.query(Supplier).filter(
+            Supplier.supplier_id == supplier_id,
+            Supplier.is_deleted != True,
+            or_(Supplier.is_shared == True, Supplier.org_id == target_org_id),
+        ).first()
+        if not supp:
+            raise HTTPException(status_code=404, detail="Supplier not available to this organisation")
+        company = supp.name
 
     template = OrderTemplate(
         org_id=target_org_id,
@@ -359,10 +365,11 @@ async def update_template(
     if not (has_permission(current_user, "Edit_OrderTemplate") or has_permission(current_user, "Edit_Order") or is_accounts):
         raise HTTPException(status_code=403, detail="Access forbidden: Missing Edit_OrderTemplate permission")
 
-    template = db.query(OrderTemplate).filter(
+    template_query = db.query(OrderTemplate).filter(
         OrderTemplate.id == template_id,
         OrderTemplate.is_deleted == False
-    ).first()
+    )
+    template = apply_org_filter(template_query, OrderTemplate, org_context).first()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -385,9 +392,14 @@ async def update_template(
         s_id = payload.get("supplier_id") or payload.get("supplier")
         template.supplier_id = s_id
         if s_id:
-            supp = db.query(Supplier).filter(Supplier.supplier_id == s_id).first()
-            if supp:
-                template.company = supp.name
+            supp = db.query(Supplier).filter(
+                Supplier.supplier_id == s_id,
+                Supplier.is_deleted != True,
+                or_(Supplier.is_shared == True, Supplier.org_id == template.org_id),
+            ).first()
+            if not supp:
+                raise HTTPException(status_code=404, detail="Supplier not available to this organisation")
+            template.company = supp.name
         else:
             template.company = payload.get("company", "")
 

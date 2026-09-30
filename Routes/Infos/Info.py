@@ -11,7 +11,7 @@ from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, Consi
 
 from Utils import *
 from auth.dependencies import get_current_user, get_org_context
-from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 import json
 
 
@@ -21,8 +21,9 @@ Cinfo = InferringRouter()
 class CinfoAPI:
     
     @Cinfo.get("/suppliers")
-    async def getsupplier(self, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        suppliers = db.query(Supplier).filter(Supplier.is_deleted != True).order_by(Supplier.name.asc()).all()
+    async def getsupplier(self, db: Session = Depends(get_db), org_context: OrgContext = Depends(get_org_context), current_user: dict = Depends(get_current_user)):
+        query = db.query(Supplier).filter(Supplier.is_deleted != True)
+        suppliers = apply_shared_or_org_filter(query, Supplier, org_context).order_by(Supplier.name.asc()).all()
         formatted = [
             [
                 s.supplier_id,
@@ -184,6 +185,7 @@ class CinfoAPI:
     async def create_supplier(self,
         request: Request,
         db: Session = Depends(get_db),
+        org_context: OrgContext = Depends(get_org_context),
         current_user: dict = Depends(get_current_user)):
         
         supplier_data = await request.json()
@@ -193,7 +195,8 @@ class CinfoAPI:
         if not name:
             raise HTTPException(status_code=422, detail="Missing supplier name")
 
-        existing = db.query(Supplier).filter(Supplier.name.ilike(name), Supplier.is_deleted != True).first()
+        existing_query = db.query(Supplier).filter(Supplier.name.ilike(name), Supplier.is_deleted != True)
+        existing = apply_shared_or_org_filter(existing_query, Supplier, org_context).first()
         if existing:
             raise HTTPException(status_code=400, detail="Supplier with this name already exists")
 
@@ -206,7 +209,15 @@ class CinfoAPI:
         else:
             var_thresh = 2.0
 
-        new_supplier = Supplier(name=name, variance_threshold_pct=var_thresh)
+        is_shared = bool(supplier_data.get("is_shared", False))
+        if is_shared and not org_context.is_root:
+            raise HTTPException(status_code=403, detail="Only root organisation users can create shared suppliers")
+        new_supplier = Supplier(
+            name=name,
+            variance_threshold_pct=var_thresh,
+            is_shared=is_shared,
+            org_id=None if is_shared else org_context.org_id,
+        )
         db.add(new_supplier)
         db.commit()
         db.refresh(new_supplier)
@@ -380,14 +391,17 @@ class CinfoAPI:
         }
     
     @Cinfo.put("/suppliers/{item_id}")
-    async def update_supplier(self, item_id: int, request: Request, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    async def update_supplier(self, item_id: int, request: Request, db: Session = Depends(get_db), org_context: OrgContext = Depends(get_org_context), current_user: dict = Depends(get_current_user)):
         data = await request.json()
-        item = db.query(Supplier).filter(Supplier.supplier_id == item_id).first()
+        item_query = db.query(Supplier).filter(Supplier.supplier_id == item_id, Supplier.is_deleted != True)
+        item = apply_shared_or_org_filter(item_query, Supplier, org_context).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
+        if item.is_shared and not org_context.is_root: raise HTTPException(status_code=403, detail="Shared suppliers are root-managed")
         
         new_name = data.get("name")
         if new_name:
-            existing = db.query(Supplier).filter(Supplier.name.ilike(new_name), Supplier.supplier_id != item_id, Supplier.is_deleted != True).first()
+            existing_query = db.query(Supplier).filter(Supplier.name.ilike(new_name), Supplier.supplier_id != item_id, Supplier.is_deleted != True)
+            existing = apply_shared_or_org_filter(existing_query, Supplier, org_context).first()
             if existing: raise HTTPException(status_code=400, detail="Supplier with this name already exists")
             item.name = new_name
         if "variance_threshold_pct" in data:
@@ -400,9 +414,11 @@ class CinfoAPI:
         return {"id": item.supplier_id, "name": item.name, "variance_threshold_pct": float(item.variance_threshold_pct or 2.0)}
 
     @Cinfo.delete("/suppliers/{item_id}")
-    async def delete_supplier(self, item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-        item = db.query(Supplier).filter(Supplier.supplier_id == item_id).first()
+    async def delete_supplier(self, item_id: int, db: Session = Depends(get_db), org_context: OrgContext = Depends(get_org_context), current_user: dict = Depends(get_current_user)):
+        item_query = db.query(Supplier).filter(Supplier.supplier_id == item_id, Supplier.is_deleted != True)
+        item = apply_shared_or_org_filter(item_query, Supplier, org_context).first()
         if not item: raise HTTPException(status_code=404, detail="Not found")
+        if item.is_shared and not org_context.is_root: raise HTTPException(status_code=403, detail="Shared suppliers are root-managed")
         item.is_deleted = True
         item.deleted_at = datetime.utcnow()
         item.deleted_by = current_user.id

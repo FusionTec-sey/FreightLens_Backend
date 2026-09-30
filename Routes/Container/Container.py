@@ -25,7 +25,7 @@ from auth.security_guards import (
     has_permission,
 )
 from Model.Credentials.users import User
-from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
 
 from fastapi.responses import FileResponse, StreamingResponse
@@ -101,13 +101,14 @@ def resolve_vessel(db: Session, entry: Any, current_user_id: int) -> Any:
         db.flush()
     return vessel.id
 
-def resolve_supplier(db: Session, entry: Any, current_user_id: int) -> Any:
+def resolve_supplier(db: Session, entry: Any, current_user_id: int, org_context: OrgContext) -> Any:
     if entry is None or entry == "": return None
     if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
     val = str(entry).strip()
-    supplier = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True).first()
+    supplier_query = db.query(Supplier).filter(Supplier.name.ilike(val), Supplier.is_deleted != True)
+    supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
-        supplier = Supplier(name=val, created_by=current_user_id, updated_by=current_user_id)
+        supplier = Supplier(name=val, org_id=org_context.org_id, is_shared=False, created_by=current_user_id, updated_by=current_user_id)
         db.add(supplier)
         db.flush()
     return supplier.supplier_id
@@ -367,7 +368,7 @@ class ContainerAPI:
         if "Vessel" in bl_data and bl_data["Vessel"] is not None:
             bl_data["Vessel"] = resolve_vessel(db, bl_data["Vessel"], current_user.id)
         if "Supplier" in bl_data and bl_data["Supplier"] is not None:
-            bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id)
+            bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id, org_context)
         if "Provider" in bl_data and bl_data["Provider"] is not None:
             bl_data["Provider"] = resolve_provider(db, bl_data["Provider"], current_user.id)
         if "Doc" in bl_data and bl_data["Doc"] is not None:
@@ -891,7 +892,7 @@ class ContainerAPI:
             if "Vessel" in bl_data and bl_data["Vessel"] is not None:
                 bl_data["Vessel"] = resolve_vessel(db, bl_data["Vessel"], current_user.id)
             if "Supplier" in bl_data and bl_data["Supplier"] is not None:
-                bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id)
+                bl_data["Supplier"] = resolve_supplier(db, bl_data["Supplier"], current_user.id, org_context)
             if "Provider" in bl_data and bl_data["Provider"] is not None:
                 bl_data["Provider"] = resolve_provider(db, bl_data["Provider"], current_user.id)
             if "Doc" in bl_data and bl_data["Doc"] is not None:

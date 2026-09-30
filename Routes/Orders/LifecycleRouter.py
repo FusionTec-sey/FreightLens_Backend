@@ -5,6 +5,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
+from sqlalchemy import or_
 
 from Model.db import get_db
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
@@ -23,7 +24,7 @@ from auth.security_guards import (
     require_sourcing_permission,
     can_access_sourcing
 )
-from Utils.org_filter import OrgContext
+from Utils.org_filter import OrgContext, apply_org_filter
 
 from .LifecycleService import LifecycleService, LIFECYCLE_SEQUENCE, STAGE_TITLES
 from .QuoteComparisonService import QuoteComparisonService
@@ -131,7 +132,8 @@ def get_order_lifecycle(
     """
     Returns current lifecycle stage, gate readiness checklist, and mutation warning level.
     """
-    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False).first()
+    po_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False)
+    po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
     if not po:
         raise HTTPException(status_code=404, detail="Purchase Order not found.")
 
@@ -229,11 +231,16 @@ def create_vendor_quote(
     """
     Captures a vendor quotation against this PO.
     """
-    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False).first()
+    po_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False)
+    po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
     if not po:
         raise HTTPException(status_code=404, detail="Purchase Order not found.")
 
-    supp = db.query(Supplier).filter(Supplier.supplier_id == req.supplier_id).first()
+    supp = db.query(Supplier).filter(
+        Supplier.supplier_id == req.supplier_id,
+        Supplier.is_deleted != True,
+        or_(Supplier.is_shared == True, Supplier.org_id == po.org_id),
+    ).first()
     if not supp:
         raise HTTPException(status_code=404, detail="Supplier not found.")
 
@@ -377,7 +384,8 @@ def update_vendor_quote(
     """
     Updates an existing vendor quotation and its line item details.
     """
-    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False).first()
+    po_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False)
+    po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
     if not po:
         raise HTTPException(status_code=404, detail="Purchase Order not found.")
 
@@ -390,7 +398,11 @@ def update_vendor_quote(
         raise HTTPException(status_code=404, detail="Vendor quote not found.")
 
     if req.supplier_id is not None and req.supplier_id != quote.supplier_id:
-        supp = db.query(Supplier).filter(Supplier.supplier_id == req.supplier_id).first()
+        supp = db.query(Supplier).filter(
+            Supplier.supplier_id == req.supplier_id,
+            Supplier.is_deleted != True,
+            or_(Supplier.is_shared == True, Supplier.org_id == po.org_id),
+        ).first()
         if not supp:
             raise HTTPException(status_code=404, detail="Supplier not found.")
         duplicate_check = db.query(VendorQuote).filter(
