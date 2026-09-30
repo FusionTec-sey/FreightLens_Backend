@@ -2,6 +2,14 @@
 
 Newest entries appear first. Every architecture change records why it changed, its commit or release tag, any migration, and how to undo it.
 
+## 2026-09-30 - Phase 5 security and legacy cleanup
+
+- **Why:** The carrier webhook and legacy credential-management routes lacked adequate sender authorization, committed configuration contained credentials, and retired MySQL/development paths remained in production code.
+- **Change:** Carrier webhooks require a constant-time shared-secret check; root administration is centrally guarded; module exceptions are explicit; secret defaults and the internal probe are removed; Compose requires environment configuration; legacy MySQL dependencies and startup support are removed; manual utilities are isolated under `Utils/dev` and `Utils/archive`.
+- **Migration:** none
+- **Operational action:** rotate the retired MySQL credential because removing it from the current tree does not remove it from Git history.
+- **Undo:** revert the Phase 5 security commit, then restore deployment secrets only through the deployment platform.
+
 ## 2026-09-30 - Phase 4 executable rulebook
 
 - **Why:** Several development rules referenced obsolete libraries, helper names, and single-organisation query patterns.

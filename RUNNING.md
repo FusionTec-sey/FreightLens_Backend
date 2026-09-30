@@ -19,7 +19,7 @@ Local ports are PostgreSQL `5433`, RustFS `9005`, RustFS console `9006`, and Mei
 
 ## Backend
 
-Create `.env` from deployment-specific values. Do not commit secrets. `DATABASE_URL` and a random `MEDIA_SIGNING_KEY` separate from `JWT_SECRET_KEY` are required.
+Copy `.env.example` to `.env`, replace every placeholder with a unique local value, and never commit the result. `JWT_SECRET_KEY`, `MEDIA_SIGNING_KEY`, and `CMA_CGM_WEBHOOK_SECRET` must be separate random values.
 
 Generate a signing key once per environment:
 

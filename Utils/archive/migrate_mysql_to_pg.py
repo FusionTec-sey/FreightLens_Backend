@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from sqlalchemy import create_engine, text, MetaData, Table, inspect
 from sqlalchemy.orm import sessionmaker
@@ -6,10 +7,12 @@ from sqlalchemy.orm import sessionmaker
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("migration")
 
-MYSQL_URL = "mysql+mysqlconnector://mysql:WixN8jgG57GnfHfOj7jYwiF6gD8xzkTJmRPsb5Ri20iC1pBbUngVLLuGAuC4JVqX@82.25.110.112:3309"
-PG_URL = "postgresql+psycopg2://postgres:postgres_local@127.0.0.1:5433/containermgmt_pg"
+MYSQL_URL = os.getenv("LEGACY_MYSQL_URL")
+PG_URL = os.getenv("DATABASE_URL")
 
 def run_migration():
+    if not MYSQL_URL or not PG_URL:
+        raise RuntimeError("LEGACY_MYSQL_URL and DATABASE_URL are required")
     logger.info("Connecting to MySQL source & PostgreSQL target...")
     mysql_engine = create_engine(MYSQL_URL)
     pg_engine = create_engine(PG_URL)

@@ -37,6 +37,40 @@ SOURCING_PERMISSIONS = {
     "Issue_PO",
 }
 
+ADMIN_ROLE_NAMES = {"admin", "administrator", "root", "super_admin", "superadmin"}
+
+
+def is_admin_user(user: User) -> bool:
+    if not user:
+        return False
+    return any(
+        getattr(role, "name", "").strip().lower() in ADMIN_ROLE_NAMES
+        for role in getattr(user, "roles", [])
+    )
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Require an administrator role without granting cross-tenant access."""
+    if not is_admin_user(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access is required",
+        )
+    return current_user
+
+
+def require_root_admin(
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+) -> User:
+    """Restrict platform administration to administrators in the root tenant."""
+    if not org_context.is_root or not is_admin_user(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Root administrator access is required",
+        )
+    return current_user
+
 def has_permission(user: User, permission_name: str) -> bool:
     """
     Checks whether a user holds a specific permission through any assigned role,

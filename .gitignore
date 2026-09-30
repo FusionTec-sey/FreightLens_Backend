@@ -66,6 +66,7 @@ pytestdebug.log
 .env.*
 *.env
 .envrc
+!.env.example
 
 # IDE / Editor settings
 .vscode/

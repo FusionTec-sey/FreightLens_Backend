@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: containermgmt_pg
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_local
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "5433:5432"
     volumes:
@@ -21,8 +21,8 @@ services:
     container_name: sahaj_rustfs_local
     restart: unless-stopped
     environment:
-      - RUSTFS_ACCESS_KEY=rustfs_admin
-      - RUSTFS_SECRET_KEY=rustfs_secret_password_123
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
       - RUSTFS_ADDRESS=:9000
       - RUSTFS_CONSOLE_ADDRESS=:9001
       - RUSTFS_CONSOLE_ENABLE=true
@@ -38,21 +38,22 @@ services:
       dockerfile: Dockerfile
     container_name: sahaj_backend_local
     environment:
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres_local@postgres:5432/containermgmt_pg
-      - JWT_SECRET_KEY=f830910ff3d22d6fc544ef7634ae5df3b1c1b676302fb39c0aeb075ba5cabe70
-      - MEDIA_SIGNING_KEY=${MEDIA_SIGNING_KEY}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - MEDIA_SIGNING_KEY=${MEDIA_SIGNING_KEY:?MEDIA_SIGNING_KEY is required}
+      - CMA_CGM_WEBHOOK_SECRET=${CMA_CGM_WEBHOOK_SECRET:?CMA_CGM_WEBHOOK_SECRET is required}
       - JWT_ALGORITHM=HS256
       - ENVIRONMENT=development
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
       - HOST_IP=0.0.0.0
       - HOST_PORT=9000
       - RUSTFS_ENDPOINT_URL=http://rustfs:9000
-      - RUSTFS_ACCESS_KEY=rustfs_admin
-      - RUSTFS_SECRET_KEY=rustfs_secret_password_123
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
       - RUSTFS_BUCKET_NAME=containermgmt-blobs
       - RUSTFS_REGION=us-east-1
       - MEILISEARCH_URL=http://meilisearch:7700
-      - MEILISEARCH_MASTER_KEY=sahaj_meili_secret_key_123
+      - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
     ports:
       - "9000:9000"
     volumes:
@@ -71,7 +72,7 @@ services:
     container_name: sahaj_meilisearch_local
     restart: unless-stopped
     environment:
-      - MEILI_MASTER_KEY=sahaj_meili_secret_key_123
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
       - MEILI_NO_ANALYTICS=true
       - MEILI_ENV=development
     ports:
@@ -83,18 +84,11 @@ services:
     build:
       context: ../containermgmt
       dockerfile: Dockerfile
+      args:
+        - REACT_APP_NETWORK=http://localhost:9000
     container_name: sahaj_frontend_local
-    stdin_open: true
-    tty: true
-    environment:
-      - REACT_APP_NETWORK=http://localhost:9000
-      - REACT_APP_MEILISEARCH_URL=http://localhost:7700
-      - WATCHPACK_POLLING=true
     ports:
-      - "3000:3000"
-    volumes:
-      - ../containermgmt:/app
-      - /app/node_modules
+      - "3000:4005"
     depends_on:
       - backend
 

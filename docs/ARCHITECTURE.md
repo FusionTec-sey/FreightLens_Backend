@@ -46,7 +46,12 @@ The frontend permission checks are user-interface behavior only. The API is the 
 | `ORDERS` | Requests, sourcing, quotations, purchase orders, packing, receiving, defects |
 | `INVENTORY` | Product master, categories, stock and product media |
 
-Some cross-module routers currently have no module guard: reports, master data, dashboard, notifications, settings, organisations, reference information, and blobs. These are known deviations pending the router review in the stabilization plan.
+Router authorization after the Phase 5 review:
+
+- Logistics, orders, inventory, notifications, and logistics settings use module guards.
+- Credential and admin-console routers require a root-tenant administrator.
+- Reports, master data, dashboard, organisations, and reference information are deliberate cross-module/platform routers. Their endpoints require authentication and enforce their own permissions and organisation scope.
+- Blob upload and health endpoints require authentication; browser media reads are the narrow signed-link exception.
 
 ## Data
 
@@ -78,9 +83,10 @@ APScheduler currently starts at module import time. This can duplicate jobs unde
 
 ## Configuration
 
-Deployment-specific environment variables include `DATABASE_URL`, JWT settings, `MEDIA_SIGNING_KEY`, environment/CORS/host settings, RustFS credentials, Meilisearch credentials, and carrier credentials prefixed by `CMA_CGM_` and `MEARSK_`.
+Deployment-specific environment variables include `DATABASE_URL`, JWT settings, `MEDIA_SIGNING_KEY`, `CMA_CGM_WEBHOOK_SECRET`, environment/CORS/host settings, RustFS credentials, Meilisearch credentials, and carrier credentials prefixed by `CMA_CGM_` and `MEARSK_`.
 
 `MEDIA_SIGNING_KEY` must be random, must differ from `JWT_SECRET_KEY`, and must match across API instances in the same environment.
+`CMA_CGM_WEBHOOK_SECRET` authenticates inbound carrier events through `X-Webhook-Secret` and must be stored only in deployment configuration. Staging and production refuse to start when any required security secret is absent.
 
 Secrets must come from local `.env` or the deployment platform and must not be committed.
 

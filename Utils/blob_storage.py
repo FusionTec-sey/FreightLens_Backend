@@ -58,8 +58,8 @@ class RustFSClient:
 
     def __init__(self):
         self.endpoint_url = os.getenv("RUSTFS_ENDPOINT_URL", "http://rustfs:9000")
-        self.access_key = os.getenv("RUSTFS_ACCESS_KEY", "rustfs_admin")
-        self.secret_key = os.getenv("RUSTFS_SECRET_KEY", "rustfs_secret_password_123")
+        self.access_key = os.getenv("RUSTFS_ACCESS_KEY")
+        self.secret_key = os.getenv("RUSTFS_SECRET_KEY")
         self.bucket_name = os.getenv("RUSTFS_BUCKET_NAME", "containermgmt-blobs")
         self.region = os.getenv("RUSTFS_REGION", "us-east-1")
         self._s3_client = None

@@ -119,11 +119,12 @@ Design accordingly from day one.
 These are tracked exceptions, not approved patterns for new code:
 
 - `OrgMixin.org_id` is still nullable and defaults to organisation `1`; Phase 2 must remove both behaviors after data cleanup.
-- Several cross-module routers do not yet have an explicit module guard; Phase 5 owns the router-by-router authorization review.
+- Cross-module routers (reports, master data, dashboard, organisations, reference data, and blobs) intentionally have no single module guard; they must remain authenticated and endpoint-authorized as documented in `docs/ARCHITECTURE.md`.
 - APScheduler starts at import time and FastAPI still uses deprecated startup events; lifecycle migration remains pending.
 - Some large router and frontend page files remain above the maintainable size target.
 - The frontend production build succeeds with existing ESLint warnings, but strict CI warning enforcement does not yet pass.
-- Legacy MySQL migration material and committed development secret defaults remain until Phase 5 cleanup.
+- The legacy MySQL credential removed in Phase 5 remains in Git history and must be rotated on the retired server; code changes cannot perform that external operation.
+- `mockOrders.js` remains because live order screens import its `STATUS_PIPELINE` fallback; split that constant before deleting the mock module.
 
 ---
 

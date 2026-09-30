@@ -7,6 +7,19 @@ load_dotenv(override=False)
 
 logger = logging.getLogger("auth.config")
 
+DEPLOYED_ENVIRONMENTS = {"staging", "production"}
+
+
+def validate_security_settings(environment: str, secrets: dict) -> None:
+    """Fail closed when a deployed environment is missing required secrets."""
+    if environment.strip().lower() not in DEPLOYED_ENVIRONMENTS:
+        return
+    missing = sorted(name for name, value in secrets.items() if not value)
+    if missing:
+        raise ValueError(
+            "Missing required security environment variables: " + ", ".join(missing)
+        )
+
 class Settings:
     HOST_IP = os.getenv("HOST_IP", "0.0.0.0")
     HOST_PORT = int(os.getenv("HOST_PORT", 9000))
@@ -14,6 +27,7 @@ class Settings:
     # ── JWT / Auth ────────────────────────────────────────────────────────────
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+    MEDIA_SIGNING_KEY = os.getenv("MEDIA_SIGNING_KEY", "")
 
     # ── App Environment ────────────────────────────────────────────────────────
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
@@ -31,6 +45,7 @@ class Settings:
     CMA_CGM_TRACK_AND_TRACE_URL = os.getenv("CMA_CGM_TRACK_AND_TRACE_URL", "")
     CMA_CGM_SHIPEMENTS_URL = os.getenv("CMA_CGM_SHIPEMENTS_URL", "")
     CMA_CGM_TOKEN_URL = os.getenv("CMA_CGM_OAUTH", "")
+    CMA_CGM_WEBHOOK_SECRET = os.getenv("CMA_CGM_WEBHOOK_SECRET", "")
 
     MEARSK_CLIENT_ID = os.getenv("MEARSK_CLIENT_ID", "")
     MEARSK_SECRET = os.getenv("MEARSK_SECRET", "")
@@ -45,10 +60,18 @@ class Settings:
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL environment variable is not set!")
 
-    # ── Validation Warnings ───────────────────────────────────────────────────
-    if not JWT_SECRET_KEY:
+    # ── Security validation ───────────────────────────────────────────────────
+    validate_security_settings(
+        ENVIRONMENT,
+        {
+            "JWT_SECRET_KEY": JWT_SECRET_KEY,
+            "MEDIA_SIGNING_KEY": MEDIA_SIGNING_KEY,
+            "CMA_CGM_WEBHOOK_SECRET": CMA_CGM_WEBHOOK_SECRET,
+        },
+    )
+    if ENVIRONMENT.strip().lower() not in DEPLOYED_ENVIRONMENTS and not JWT_SECRET_KEY:
         logger.warning(
-            "JWT_SECRET_KEY is not set in .env — using an empty string is insecure!"
+            "JWT_SECRET_KEY is not set; authentication tokens are unsafe outside local development"
         )
 
 settings = Settings()

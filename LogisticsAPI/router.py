@@ -4,8 +4,11 @@ Exposes dedicated, commercial-grade endpoints under `/api/logistics`.
 Can be mounted directly into FastAPI or run independently as a standalone microservice.
 """
 
-from fastapi import APIRouter, Query, HTTPException, Request
+import hmac
+
+from fastapi import APIRouter, Query, HTTPException, Request, Header, status
 from typing import Optional, Dict, Any
+from auth.config import settings
 from .services import (
     TrackingService,
     VesselService,
@@ -25,7 +28,7 @@ from .models import (
 # Main router for logistics consumers (authenticated in main app, or token-protected in standalone)
 logistics_router = APIRouter(prefix="/api/logistics", tags=["Logistics Engine"])
 
-# Dedicated public router for inbound carrier webhooks (push notifications without user login)
+# Dedicated carrier router authenticated with a per-environment shared secret.
 logistics_webhook_router = APIRouter(prefix="/api/logistics/webhook", tags=["Logistics Webhooks"])
 
 # Service singletons
@@ -151,15 +154,35 @@ def create_booking(payload: BookingRequestPayload):
 
 # ── 6. Inbound Webhook Listener (Push Notification Receiver) ──────────────────
 
+def _verify_cma_webhook_secret(provided_secret: Optional[str]) -> None:
+    configured_secret = settings.CMA_CGM_WEBHOOK_SECRET
+    if not configured_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Carrier webhook authentication is not configured",
+        )
+    if not provided_secret or not hmac.compare_digest(provided_secret, configured_secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid carrier webhook credentials",
+        )
+
 @logistics_webhook_router.post(
     "/cma-cgm",
     summary="CMA CGM Inbound Webhook Receiver",
     description="Receives real-time DCSA event push notifications from CMA CGM without consuming polling API quota."
 )
-async def receive_cma_cgm_webhook(request: Request):
+async def receive_cma_cgm_webhook(
+    request: Request,
+    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
+):
+    _verify_cma_webhook_secret(x_webhook_secret)
     try:
         payload = await request.json()
     except Exception:
-        payload = {}
+        raise HTTPException(status_code=400, detail="Webhook payload must be valid JSON")
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Webhook payload must be a JSON object")
     
     return _webhook_service.process_cma_webhook(raw_payload=payload)

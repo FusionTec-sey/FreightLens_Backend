@@ -32,6 +32,7 @@ class WebhookService:
         ev_code = parsed.get("event_code")
         label = parsed.get("event_label", "")
         dt_str = parsed.get("event_datetime")
+        loc_name = parsed.get("location")
 
         db_updated = False
         db = _get_db_session()

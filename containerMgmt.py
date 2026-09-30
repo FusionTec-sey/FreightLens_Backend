@@ -88,32 +88,23 @@ scheduler.start()
 # ── Lifecycle events ──────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    from sqlalchemy import create_engine
     from Model.db import SessionLocal
     from Model.seed import seed_db
 
+    if engine.dialect.name != "postgresql":
+        raise RuntimeError("FreightLens requires PostgreSQL")
+
     logger.info("Initializing database schemas...")
     try:
-        if engine.dialect.name == "postgresql":
-            with engine.connect() as conn:
-                conn.execute(text("CREATE SCHEMA IF NOT EXISTS containermgmt"))
-                conn.execute(text("CREATE SCHEMA IF NOT EXISTS usercredentials"))
-                conn.commit()
-        else:
-            # Generate a temporary engine that connects directly to the MySQL server without a default schema/DB.
-            # This prevents "Unknown database" errors when the schema doesn't exist yet.
-            temp_url = engine.url.set(database=None)
-            temp_engine = create_engine(temp_url)
-            with temp_engine.connect() as conn:
-                conn.execute(text("CREATE DATABASE IF NOT EXISTS containermgmt"))
-                conn.execute(text("CREATE DATABASE IF NOT EXISTS usercredentials"))
-                conn.commit()
-            temp_engine.dispose()
+        with engine.connect() as conn:
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS containermgmt"))
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS usercredentials"))
+            conn.commit()
         logger.info("Database schemas are verified/created.")
     except Exception as e:
         logger.error("Failed to check/create database schemas: %s", e)
 
-        # Proceed anyway as the database might already exist or the user might not have admin rights to CREATE DATABASE
+        # Continue so health diagnostics can report an existing database permission issue.
 
     logger.info("Initializing database tables...")
     from Utils.migrate_product_master import ensure_product_master_schema
@@ -223,28 +214,9 @@ async def health_check(db: Session = Depends(get_db)):
     }
 
 
-# ── Temporary testing endpoint ────────────────────────────────────────────────
-@app.get("/test-connection", tags=["System"])
-async def test_connection():
-    """Temporary endpoint to test connectivity to remote endpoint http://100.90.45.82:8000/status"""
-    import requests
-    url = "http://100.90.45.82:8000/status"
-    try:
-        response = requests.get(url, timeout=10)
-        return {
-            "status": "connected",
-            "remote_status_code": response.status_code,
-            "remote_response": response.text[:2000]
-        }
-    except requests.exceptions.RequestException as e:
-        return {
-            "status": "failed",
-            "error": str(e)
-        }
-
-
 # ── Route registration ────────────────────────────────────────────────────────
 from auth.module_guard import require_module
+from auth.security_guards import require_root_admin
 
 from LogisticsAPI import logistics_router, logistics_webhook_router
 
@@ -256,14 +228,14 @@ app.include_router(auth_router)
 app.include_router(ReportRouter)
 app.include_router(Cinfo)
 app.include_router(ContainerRouter, dependencies=[Depends(require_module("LOGISTICS"))])
-app.include_router(CreadentialsInfo)
+app.include_router(CreadentialsInfo, dependencies=[Depends(require_root_admin)])
 app.include_router(TrackingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(logistics_router, dependencies=[Depends(require_module("LOGISTICS"))])
-app.include_router(logistics_webhook_router)  # Public webhook for carrier push events
+app.include_router(logistics_webhook_router)  # Carrier-authenticated push events
 app.include_router(BillOfLandingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
-app.include_router(SettingRouter)
+app.include_router(SettingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(OrganisationRouter)
-app.include_router(AdminRouter)
+app.include_router(AdminRouter, dependencies=[Depends(require_root_admin)])
 app.include_router(OrderTemplateRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(LifecycleRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(OrderRouter, dependencies=[Depends(require_module("ORDERS"))])
@@ -273,7 +245,7 @@ app.include_router(ReceivingRouter, dependencies=[Depends(require_module("ORDERS
 app.include_router(DefectRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
-app.include_router(NotificationRouter)
+app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter)

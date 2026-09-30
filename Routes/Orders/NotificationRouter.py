@@ -56,9 +56,11 @@ async def list_notifications(
 async def mark_read(
     notif_id: int,
     db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    n = db.query(Notification).filter(Notification.id == notif_id).first()
+    query = db.query(Notification).filter(Notification.id == notif_id)
+    n = apply_org_filter(query, Notification, org_context).first()
     if not n:
         raise HTTPException(status_code=404, detail="Notification not found")
     n.is_read = True

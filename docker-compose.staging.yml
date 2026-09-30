@@ -1,6 +1,4 @@
 # Coolify Staging Stack for FreightLens
-version: '3.8'
-
 services:
   postgres-staging:
     image: postgres:16-alpine
@@ -9,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: containermgmt_pg
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - freightlens_staging_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -25,8 +23,8 @@ services:
     container_name: rustfs-staging
     restart: unless-stopped
     environment:
-      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
-      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
       - RUSTFS_ADDRESS=:9000
       - RUSTFS_CONSOLE_ADDRESS=:9001
       - RUSTFS_CONSOLE_ENABLE=false
@@ -40,7 +38,7 @@ services:
     container_name: meilisearch-staging
     restart: unless-stopped
     environment:
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
       - MEILI_NO_ANALYTICS=true
       - MEILI_ENV=production
     volumes:
@@ -50,26 +48,26 @@ services:
 
   backend-staging:
     build:
-      context: https://github.com/vekaria-production/FreightLens_Backend.git#standalone-main
+      context: https://github.com/FusionTec-sey/FreightLens_Backend.git#standalone-main
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      # Password has '@' which is percent-encoded as '%40' for SQLAlchemy URL parsing
-      - DATABASE_URL=postgresql+psycopg2://postgres:Frigh1liner%40Fu5i0n1ech@postgres-staging:5432/containermgmt_pg
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MEDIA_SIGNING_KEY=${MEDIA_SIGNING_KEY}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - MEDIA_SIGNING_KEY=${MEDIA_SIGNING_KEY:?MEDIA_SIGNING_KEY is required}
+      - CMA_CGM_WEBHOOK_SECRET=${CMA_CGM_WEBHOOK_SECRET:?CMA_CGM_WEBHOOK_SECRET is required}
       - JWT_ALGORITHM=HS256
       - ENVIRONMENT=production
       - ALLOWED_ORIGINS=${FRONTEND_URL}
       - HOST_IP=0.0.0.0
       - HOST_PORT=6051
       - RUSTFS_ENDPOINT_URL=http://rustfs-staging:9000
-      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
-      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
       - RUSTFS_BUCKET_NAME=containermgmt-blobs
       - RUSTFS_REGION=us-east-1
       - MEILISEARCH_URL=http://meilisearch-staging:7700
-      - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY}
+      - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
     depends_on:
       postgres-staging:
         condition: service_healthy
@@ -82,7 +80,7 @@ services:
 
   frontend-staging:
     build:
-      context: https://github.com/vekaria-production/FreightLens_Frontend.git#standalone-main
+      context: https://github.com/FusionTec-sey/FreightLens_Frontend.git#standalone-main
       dockerfile: Dockerfile
       args:
         - REACT_APP_NETWORK=${BACKEND_URL}

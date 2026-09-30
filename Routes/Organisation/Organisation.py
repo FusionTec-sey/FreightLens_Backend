@@ -7,7 +7,8 @@ from datetime import datetime
 from Model.db import get_db
 from Model.Credentials import Organisation, User, Role
 from Model.containermgmt import ContainerDetails, BillOfLanding
-from auth.dependencies import get_current_user, get_org_context, require_roles
+from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import require_admin, require_root_admin
 from Utils.org_filter import OrgContext
 
 OrganisationRouter = APIRouter(prefix="/organisations", tags=["Organisation Management"])
@@ -94,6 +95,7 @@ async def create_organisation(
     data: OrganisationCreateSchema = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    root_admin: User = Depends(require_root_admin),
     org_context: OrgContext = Depends(get_org_context),
 ):
     if not org_context.is_root:
@@ -127,10 +129,11 @@ async def update_organisation(
     data: OrganisationUpdateSchema = Body(...),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(require_admin),
 ):
     if not org_context.is_root and org_id != org_context.current_org_id:
         raise HTTPException(status_code=403, detail="Access denied.")
-    
+
     org = db.query(Organisation).filter_by(id=org_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organisation not found.")

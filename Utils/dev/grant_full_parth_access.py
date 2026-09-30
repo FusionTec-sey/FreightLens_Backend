@@ -1,11 +1,14 @@
 import psycopg2
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-PG_URL = "postgresql://postgres:postgres_local@127.0.0.1:5433/containermgmt_pg"
+PG_URL = os.getenv("DATABASE_URL")
 
 def grant_full_access_to_parth():
+    if not PG_URL:
+        raise RuntimeError("DATABASE_URL is required")
     logging.info("Connecting to PostgreSQL to verify/grant full access for user 'parth'...")
     conn = psycopg2.connect(PG_URL)
     cur = conn.cursor()
