@@ -379,7 +379,7 @@ def resolve_containers_by_vendor(
         })
 
     # Org branding
-    org_rec = db.query(Organisation).filter(Organisation.id == org_context.current_org_id).first()
+    org_rec = db.query(Organisation).filter(Organisation.id == org_context.org_id).first()
     org_name = org_rec.name if org_rec else "Sahaj Holding Corp"
 
     # Filter description map for report header
@@ -578,7 +578,7 @@ def resolve_demurrage_aging_risk(
         # Default: estimated_demurrage DESC
         records.sort(key=lambda r: (r["estimated_demurrage"] or 0, r["days_on_port"] or 0), reverse=reverse)
 
-    org_rec = db.query(Organisation).filter(Organisation.id == org_context.current_org_id).first()
+    org_rec = db.query(Organisation).filter(Organisation.id == org_context.org_id).first()
     org_name = org_rec.name if org_rec else "Sahaj Holding Corp"
 
     is_grouped = bool(spec.group_by and spec.group_by != "none")
@@ -766,7 +766,7 @@ def resolve_po_procurement_register(
             "balance_amount": bal_amt,
         })
 
-    org_rec = db.query(Organisation).filter(Organisation.id == org_context.current_org_id).first()
+    org_rec = db.query(Organisation).filter(Organisation.id == org_context.org_id).first()
     org_name = org_rec.name if org_rec else "Sahaj Holding Corp"
 
     filters_applied = {}

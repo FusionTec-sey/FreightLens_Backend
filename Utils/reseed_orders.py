@@ -122,6 +122,7 @@ def clean_and_reseed():
         db.flush()
 
         it1_1 = POItem(
+            org_id=rfq1.org_id,
             po_id=rfq1.id,
             description="LED Smart Touch Bathroom Mirror 90x70cm with Anti-Fog & Demister",
             quantity_ordered=45.0,
@@ -133,6 +134,7 @@ def clean_and_reseed():
             created_by=1
         )
         it1_2 = POItem(
+            org_id=rfq1.org_id,
             po_id=rfq1.id,
             description="Countertop Ceramic Basin 90cm Oval Matt White",
             quantity_ordered=45.0,
@@ -183,6 +185,7 @@ def clean_and_reseed():
         db.flush()
 
         it2_1 = POItem(
+            org_id=rfq2.org_id,
             po_id=rfq2.id,
             description="Porcelain Floor Tile 60x60cm Ivory Glazed Vitrified",
             quantity_ordered=1800.0,
@@ -194,6 +197,7 @@ def clean_and_reseed():
             created_by=1
         )
         it2_2 = POItem(
+            org_id=rfq2.org_id,
             po_id=rfq2.id,
             description="Stainless Steel Grade 304 Tile Trim Square Edge 10mm x 2.5m Brushed Rose Gold",
             quantity_ordered=320.0,
@@ -245,6 +249,7 @@ def clean_and_reseed():
         db.flush()
 
         it3_1 = POItem(
+            org_id=rfq3.org_id,
             po_id=rfq3.id,
             description="Brass Ball Valve 1/2-inch Full Bore PN25 Female Thread",
             quantity_ordered=1200.0,
@@ -255,6 +260,7 @@ def clean_and_reseed():
             created_by=1
         )
         it3_2 = POItem(
+            org_id=rfq3.org_id,
             po_id=rfq3.id,
             description="Brass Ball Valve 3/4-inch Full Bore PN25 Female Thread",
             quantity_ordered=800.0,
@@ -265,6 +271,7 @@ def clean_and_reseed():
             created_by=1
         )
         it3_3 = POItem(
+            org_id=rfq3.org_id,
             po_id=rfq3.id,
             description="Brass Check Valve 1-inch Spring Type Vertical",
             quantity_ordered=350.0,
@@ -316,6 +323,7 @@ def clean_and_reseed():
         db.flush()
 
         it4_1 = POItem(
+            org_id=rfq4.org_id,
             po_id=rfq4.id,
             description="Architectural Glass Block 190x190x80mm Clear Wave Pattern",
             quantity_ordered=2500.0,
@@ -326,6 +334,7 @@ def clean_and_reseed():
             created_by=1
         )
         it4_2 = POItem(
+            org_id=rfq4.org_id,
             po_id=rfq4.id,
             description="Architectural Aluminum Extrusion Profile 6063-T5 Matt Black Anodized 6.0m",
             quantity_ordered=400.0,
@@ -448,6 +457,7 @@ def clean_and_reseed():
         db.flush()
 
         it5_1 = POItem(
+            org_id=rfq5.org_id,
             po_id=rfq5.id,
             description="Stainless Steel Lever Door Handles Set with Escutcheons Grade 316",
             quantity_ordered=150.0,
@@ -459,6 +469,7 @@ def clean_and_reseed():
             created_by=1
         )
         it5_2 = POItem(
+            org_id=rfq5.org_id,
             po_id=rfq5.id,
             description="Concealed Cistern Dual Flush Wall-Hung Toilet Framework",
             quantity_ordered=80.0,
@@ -572,6 +583,7 @@ def clean_and_reseed():
         db.flush()
 
         db.add(POItem(
+            org_id=child_po_a.org_id,
             po_id=child_po_a.id,
             source_rfq_item_id=it5_1.id,
             description=it5_1.description,
@@ -583,6 +595,7 @@ def clean_and_reseed():
             created_by=1
         ))
         db.add(POItem(
+            org_id=child_po_b.org_id,
             po_id=child_po_b.id,
             source_rfq_item_id=it5_2.id,
             description=it5_2.description,
@@ -643,9 +656,9 @@ def clean_and_reseed():
         db.add(po1)
         db.flush()
         db.add_all([
-            POItem(po_id=po1.id, description="Brass Gate Valve 2-inch PN16 Female Threaded", quantity_ordered=250.0, unit="PCS", unit_price=22.50, po_unit_price=22.50, total_price=5625.00, created_by=1),
-            POItem(po_id=po1.id, description="PPR Equal Tee Fitting 32mm PN25 Green", quantity_ordered=1500.0, unit="PCS", unit_price=1.85, po_unit_price=1.85, total_price=2775.00, created_by=1),
-            POItem(po_id=po1.id, description="PPR Elbow 90 Degree 32mm PN25 Green", quantity_ordered=2200.0, unit="PCS", unit_price=1.84, po_unit_price=1.84, total_price=4050.00, created_by=1),
+            POItem(org_id=po1.org_id, po_id=po1.id, description="Brass Gate Valve 2-inch PN16 Female Threaded", quantity_ordered=250.0, unit="PCS", unit_price=22.50, po_unit_price=22.50, total_price=5625.00, created_by=1),
+            POItem(org_id=po1.org_id, po_id=po1.id, description="PPR Equal Tee Fitting 32mm PN25 Green", quantity_ordered=1500.0, unit="PCS", unit_price=1.85, po_unit_price=1.85, total_price=2775.00, created_by=1),
+            POItem(org_id=po1.org_id, po_id=po1.id, description="PPR Elbow 90 Degree 32mm PN25 Green", quantity_ordered=2200.0, unit="PCS", unit_price=1.84, po_unit_price=1.84, total_price=4050.00, created_by=1),
         ])
         db.add(OrderStatusHistory(entity_type="PO", entity_id=po1.id, po_id=po1.id, org_id=2, from_status=None, to_status="ORDERED", to_status_label="Ordered", changed_by=1, notes="Official PO issued to Double Lin Valves"))
 
@@ -683,8 +696,8 @@ def clean_and_reseed():
         db.add(po2)
         db.flush()
         db.add_all([
-            POItem(po_id=po2.id, description="Glass Block 190x190x80mm Cloudy Diffused Texture", quantity_ordered=6000.0, unit="PCS", unit_price=3.50, po_unit_price=3.50, total_price=21000.00, created_by=1),
-            POItem(po_id=po2.id, description="Specialized Plastic Installation Spacers 10mm Cross", quantity_ordered=15000.0, unit="PCS", unit_price=0.50, po_unit_price=0.50, total_price=7500.00, created_by=1),
+            POItem(org_id=po2.org_id, po_id=po2.id, description="Glass Block 190x190x80mm Cloudy Diffused Texture", quantity_ordered=6000.0, unit="PCS", unit_price=3.50, po_unit_price=3.50, total_price=21000.00, created_by=1),
+            POItem(org_id=po2.org_id, po_id=po2.id, description="Specialized Plastic Installation Spacers 10mm Cross", quantity_ordered=15000.0, unit="PCS", unit_price=0.50, po_unit_price=0.50, total_price=7500.00, created_by=1),
         ])
         db.add(OrderPayment(
             po_id=po2.id,
@@ -735,8 +748,8 @@ def clean_and_reseed():
         db.add(po3)
         db.flush()
         db.add_all([
-            POItem(po_id=po3.id, description="Bathroom Vanity Set 90cm Solid Plywood Charcoal Grey", quantity_ordered=60.0, unit="SET", unit_price=350.00, po_unit_price=350.00, total_price=21000.00, created_by=1),
-            POItem(po_id=po3.id, description="Engineered Quartz Countertop Basin Slab 90cm Calacatta", quantity_ordered=60.0, unit="PCS", unit_price=220.00, po_unit_price=220.00, total_price=13200.00, created_by=1),
+            POItem(org_id=po3.org_id, po_id=po3.id, description="Bathroom Vanity Set 90cm Solid Plywood Charcoal Grey", quantity_ordered=60.0, unit="SET", unit_price=350.00, po_unit_price=350.00, total_price=21000.00, created_by=1),
+            POItem(org_id=po3.org_id, po_id=po3.id, description="Engineered Quartz Countertop Basin Slab 90cm Calacatta", quantity_ordered=60.0, unit="PCS", unit_price=220.00, po_unit_price=220.00, total_price=13200.00, created_by=1),
         ])
         db.add(OrderPayment(
             po_id=po3.id,
@@ -786,8 +799,8 @@ def clean_and_reseed():
         db.add(po4)
         db.flush()
         db.add_all([
-            POItem(po_id=po4.id, description="SS304 Heavy Duty Friction Stays 16-inch Top Hung", quantity_ordered=800.0, unit="PAIR", unit_price=14.50, po_unit_price=14.50, total_price=11600.00, created_by=1),
-            POItem(po_id=po4.id, description="Commercial Panic Exit Touch Bar Device 1000mm Fire Rated", quantity_ordered=50.0, unit="PCS", unit_price=146.00, po_unit_price=146.00, total_price=7300.00, created_by=1),
+            POItem(org_id=po4.org_id, po_id=po4.id, description="SS304 Heavy Duty Friction Stays 16-inch Top Hung", quantity_ordered=800.0, unit="PAIR", unit_price=14.50, po_unit_price=14.50, total_price=11600.00, created_by=1),
+            POItem(org_id=po4.org_id, po_id=po4.id, description="Commercial Panic Exit Touch Bar Device 1000mm Fire Rated", quantity_ordered=50.0, unit="PCS", unit_price=146.00, po_unit_price=146.00, total_price=7300.00, created_by=1),
         ])
         db.add(OrderPayment(
             po_id=po4.id,
@@ -839,8 +852,8 @@ def clean_and_reseed():
         db.add(po5)
         db.flush()
         db.add_all([
-            POItem(po_id=po5.id, description="High Yield Deformed Rebar Steel Grade 500 T12 x 12m Bundles", quantity_ordered=25.0, unit="TON", unit_price=920.00, po_unit_price=920.00, total_price=23000.00, created_by=1),
-            POItem(po_id=po5.id, description="High Yield Deformed Rebar Steel Grade 500 T16 x 12m Bundles", quantity_ordered=25.0, unit="TON", unit_price=952.00, po_unit_price=952.00, total_price=23800.00, created_by=1),
+            POItem(org_id=po5.org_id, po_id=po5.id, description="High Yield Deformed Rebar Steel Grade 500 T12 x 12m Bundles", quantity_ordered=25.0, unit="TON", unit_price=920.00, po_unit_price=920.00, total_price=23000.00, created_by=1),
+            POItem(org_id=po5.org_id, po_id=po5.id, description="High Yield Deformed Rebar Steel Grade 500 T16 x 12m Bundles", quantity_ordered=25.0, unit="TON", unit_price=952.00, po_unit_price=952.00, total_price=23800.00, created_by=1),
         ])
         db.add_all([
             OrderPayment(po_id=po5.id, org_id=1, payment_type="ADVANCE", reference_number="TT-MCB-2026-6101", payment_method="Wire Transfer (TT)", amount=Decimal("14040.00"), currency="USD", paid_date=today - timedelta(days=35), status="COMPLETED", notes="30% Advance deposit", created_by=1),
@@ -883,8 +896,8 @@ def clean_and_reseed():
         db.add(po6)
         db.flush()
         db.add_all([
-            POItem(po_id=po6.id, description="Excavator CAT 320D Complete Hydraulic Cylinder Seal Kits", quantity_ordered=40.0, unit="KIT", unit_price=240.00, po_unit_price=240.00, total_price=9600.00, created_by=1),
-            POItem(po_id=po6.id, description="High Pressure 4-Spiral Hydraulic Wire Hose 3/4-inch 100m Roll", quantity_ordered=5.0, unit="ROLL", unit_price=2500.00, po_unit_price=2500.00, total_price=12500.00, created_by=1),
+            POItem(org_id=po6.org_id, po_id=po6.id, description="Excavator CAT 320D Complete Hydraulic Cylinder Seal Kits", quantity_ordered=40.0, unit="KIT", unit_price=240.00, po_unit_price=240.00, total_price=9600.00, created_by=1),
+            POItem(org_id=po6.org_id, po_id=po6.id, description="High Pressure 4-Spiral Hydraulic Wire Hose 3/4-inch 100m Roll", quantity_ordered=5.0, unit="ROLL", unit_price=2500.00, po_unit_price=2500.00, total_price=12500.00, created_by=1),
         ])
         db.add_all([
             OrderPayment(po_id=po6.id, org_id=2, payment_type="ADVANCE", reference_number="TT-NCB-2026-3091", payment_method="Wire Transfer (TT)", amount=Decimal("6630.00"), currency="USD", paid_date=today - timedelta(days=40), status="COMPLETED", created_by=1),
@@ -924,8 +937,8 @@ def clean_and_reseed():
         )
         db.add(po7)
         db.flush()
-        it7_1 = POItem(po_id=po7.id, description="Polished Porcelain Tile 80x80cm Super White Nano Glaze", quantity_ordered=600.0, quantity_received=600.0, unit="SQM", unit_price=22.00, po_unit_price=22.00, total_price=13200.00, created_by=1)
-        it7_2 = POItem(po_id=po7.id, description="Polyurethane Construction Joint Sealant 600ml Sausage Grey", quantity_ordered=300.0, quantity_received=300.0, unit="PCS", unit_price=8.00, po_unit_price=8.00, total_price=2400.00, created_by=1)
+        it7_1 = POItem(org_id=po7.org_id, po_id=po7.id, description="Polished Porcelain Tile 80x80cm Super White Nano Glaze", quantity_ordered=600.0, quantity_received=600.0, unit="SQM", unit_price=22.00, po_unit_price=22.00, total_price=13200.00, created_by=1)
+        it7_2 = POItem(org_id=po7.org_id, po_id=po7.id, description="Polyurethane Construction Joint Sealant 600ml Sausage Grey", quantity_ordered=300.0, quantity_received=300.0, unit="PCS", unit_price=8.00, po_unit_price=8.00, total_price=2400.00, created_by=1)
         db.add_all([it7_1, it7_2])
         db.flush()
 
@@ -983,8 +996,8 @@ def clean_and_reseed():
         db.add(po8)
         db.flush()
         db.add_all([
-            POItem(po_id=po8.id, description="Mineral Fiber Acoustic Ceiling Tile 600x600x15mm Tegular", quantity_ordered=1200.0, quantity_received=1200.0, unit="SQM", unit_price=11.50, po_unit_price=11.50, total_price=13800.00, created_by=1),
-            POItem(po_id=po8.id, description="Heavy Duty Ceiling T-Grid Main Runner 3.6m Galvanized Steel", quantity_ordered=1400.0, quantity_received=1400.0, unit="PCS", unit_price=4.00, po_unit_price=4.00, total_price=5600.00, created_by=1),
+            POItem(org_id=po8.org_id, po_id=po8.id, description="Mineral Fiber Acoustic Ceiling Tile 600x600x15mm Tegular", quantity_ordered=1200.0, quantity_received=1200.0, unit="SQM", unit_price=11.50, po_unit_price=11.50, total_price=13800.00, created_by=1),
+            POItem(org_id=po8.org_id, po_id=po8.id, description="Heavy Duty Ceiling T-Grid Main Runner 3.6m Galvanized Steel", quantity_ordered=1400.0, quantity_received=1400.0, unit="PCS", unit_price=4.00, po_unit_price=4.00, total_price=5600.00, created_by=1),
         ])
         db.add(OrderStatusHistory(entity_type="PO", entity_id=po8.id, po_id=po8.id, org_id=3, from_status="RECEIVED", to_status="COMPLETED", to_status_label="Completed", changed_by=1, notes="Final accounts audit and reconciliation completed"))
 

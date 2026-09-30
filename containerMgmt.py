@@ -143,6 +143,8 @@ async def startup_event():
     ensure_template_activation_and_tabular_schema()
     from Utils.migrate_sourcing_and_quote_templates import ensure_sourcing_and_quote_templates_schema
     ensure_sourcing_and_quote_templates_schema()
+    from Utils.migrate_20260930_org_id_integrity import ensure_org_id_integrity
+    ensure_org_id_integrity()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

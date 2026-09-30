@@ -360,7 +360,7 @@ class ContainerAPI:
 
         # 📦 Extract BL data
         bl_data = create_data.bill_of_landing.dict(exclude_unset=True)
-        bl_data["org_id"] = org_context.current_org_id
+        bl_data["org_id"] = org_context.org_id
         
         # Resolve BL reference fields dynamically
         if "Consignee" in bl_data and bl_data["Consignee"] is not None:
@@ -379,7 +379,8 @@ class ContainerAPI:
         bl_number = bl_data.get("BillOfLanding")
 
         # 🔄 Create or update Bill of Landing
-        existing_bl = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number).first()
+        existing_bl_query = db.query(BillOfLanding).filter_by(BillOfLanding=bl_number)
+        existing_bl = apply_org_filter(existing_bl_query, BillOfLanding, org_context).first()
         if existing_bl:
             for key, value in bl_data.items():
                 setattr(existing_bl, key, value)
@@ -395,7 +396,7 @@ class ContainerAPI:
 
         # 📦 Create Container and link to Bill of Landing
         container_data = create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"})
-        container_data["org_id"] = org_context.current_org_id
+        container_data["org_id"] = org_context.org_id
         
         # Resolve container reference fields dynamically
         if "type" in container_data and container_data["type"] is not None:
@@ -1480,7 +1481,8 @@ class ContainerAPI:
         - Merged Documents (empty if lacking document clearance)
         - Summary metrics
         """
-        container = db.query(ContainerDetails).filter_by(Container_ID=container_id, is_deleted=False).first()
+        container_query = db.query(ContainerDetails).filter_by(Container_ID=container_id, is_deleted=False)
+        container = apply_org_filter(container_query, ContainerDetails, org_context).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
 
@@ -1670,7 +1672,8 @@ class ContainerAPI:
         from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
         from Model.containermgmt.Orders.OrderShipment import OrderShipment
 
-        po = db.query(PurchaseOrder).filter_by(id=po_id, is_deleted=False).first()
+        po_query = db.query(PurchaseOrder).filter_by(id=po_id, is_deleted=False)
+        po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
@@ -1681,6 +1684,7 @@ class ContainerAPI:
             return {"success": True, "message": "Order is already linked to this container", "shipment_id": existing.id}
 
         shipment = OrderShipment(
+            org_id=container.org_id,
             po_id=po_id,
             container_id=container_id,
             bill_of_lading_no=container.BillOfLanding or "",

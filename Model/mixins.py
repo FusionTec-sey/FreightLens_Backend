@@ -40,7 +40,7 @@ class OrgMixin:
     """
     @declared_attr
     def org_id(cls):
-        return Column(Integer, ForeignKey('usercredentials.organisations.id'), nullable=True, default=1, index=True)
+        return Column(Integer, ForeignKey('usercredentials.organisations.id'), nullable=False, index=True)
 
     @declared_attr
     def organisation(cls):

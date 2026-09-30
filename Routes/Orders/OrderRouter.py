@@ -33,6 +33,7 @@ from auth.security_guards import (
     require_permission,
     require_financial_access,
     can_view_documents_user,
+    can_upload_documents_user,
     can_delete_documents_user,
 )
 from Utils.org_filter import OrgContext, apply_org_filter
@@ -565,6 +566,11 @@ async def list_documents(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
+    if not can_view_documents_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Insufficient permission to view documents")
+    if (payment_id or vendor_quote_id) and not is_financial_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Financial document access is required")
+
     results = []
     if payment_id:
         doc_q = db.query(OrderDocument).filter(
@@ -572,6 +578,7 @@ async def list_documents(
              ((OrderDocument.entity_type == "PAYMENT") & (OrderDocument.entity_id == payment_id))),
             OrderDocument.is_deleted == False
         ).order_by(OrderDocument.created_at.desc())
+        doc_q = apply_org_filter(doc_q, OrderDocument, org_context)
         for doc in doc_q.all():
             results.append({
                 "id": str(doc.id),
@@ -592,6 +599,7 @@ async def list_documents(
              ((OrderDocument.entity_type == "VENDOR_QUOTE") & (OrderDocument.entity_id == vendor_quote_id))),
             OrderDocument.is_deleted == False
         ).order_by(OrderDocument.created_at.desc())
+        doc_q = apply_org_filter(doc_q, OrderDocument, org_context)
         for doc in doc_q.all():
             results.append({
                 "id": str(doc.id),
@@ -624,6 +632,7 @@ async def list_documents(
                     })
     if purchase_order_id:
         doc_q = db.query(OrderDocument).filter(OrderDocument.po_id == purchase_order_id, OrderDocument.is_deleted == False)
+        doc_q = apply_org_filter(doc_q, OrderDocument, org_context)
         for doc in doc_q.all():
             results.append({
                 "id": str(doc.id),
@@ -642,6 +651,7 @@ async def list_documents(
             (OrderDocument.po_id == request_id),
             OrderDocument.is_deleted == False
         )
+        doc_q = apply_org_filter(doc_q, OrderDocument, org_context)
         for doc in doc_q.all():
             results.append({
                 "id": str(doc.id),
@@ -655,7 +665,8 @@ async def list_documents(
                 "uploaded_at": doc.created_at.isoformat() if doc.created_at else datetime.utcnow().isoformat(),
             })
     if not defect_report_id and not purchase_order_id and not request_id and not payment_id and not vendor_quote_id:
-        doc_q = db.query(OrderDocument).filter(OrderDocument.is_deleted == False).order_by(OrderDocument.created_at.desc()).limit(100)
+        doc_q = db.query(OrderDocument).filter(OrderDocument.is_deleted == False)
+        doc_q = apply_org_filter(doc_q, OrderDocument, org_context).order_by(OrderDocument.created_at.desc()).limit(100)
         for doc in doc_q.all():
             results.append({
                 "id": str(doc.id),
@@ -683,15 +694,24 @@ async def upload_general_document(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
+    if not can_upload_documents_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Insufficient permission to upload documents")
+    if (payment_id or vendor_quote_id) and not is_financial_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Financial document access is required")
+
     file_bytes = await file.read()
 
     # 1. Payment Proof Upload
     if payment_id:
-        pm = db.query(OrderPayment).filter(OrderPayment.id == payment_id, OrderPayment.is_deleted == False).first()
+        pm_query = db.query(OrderPayment).filter(OrderPayment.id == payment_id, OrderPayment.is_deleted == False)
+        pm = apply_org_filter(pm_query, OrderPayment, org_context).first()
         if not pm:
             raise HTTPException(status_code=404, detail="Payment record not found")
-        order = db.query(PurchaseOrder).filter(PurchaseOrder.id == pm.po_id, PurchaseOrder.is_deleted == False).first()
-        po_number = (order.po_number if order and order.po_number else f"PO-{pm.po_id}").strip().replace("/", "-")
+        order_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == pm.po_id, PurchaseOrder.is_deleted == False)
+        order = apply_org_filter(order_query, PurchaseOrder, org_context).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        po_number = (order.po_number or f"PO-{pm.po_id}").strip().replace("/", "-")
         
         folder = f"orders/{po_number}/payments/pay_{pm.id}_{pm.payment_type}"
         key = blob_storage.upload_file(
@@ -700,6 +720,7 @@ async def upload_general_document(
             folder=folder
         )
         doc = OrderDocument(
+            org_id=order.org_id,
             entity_type="PAYMENT",
             entity_id=pm.id,
             po_id=order.id if order else None,
@@ -728,11 +749,15 @@ async def upload_general_document(
 
     # 2. Vendor Quote Attachment Upload
     if vendor_quote_id:
-        quote = db.query(VendorQuote).filter(VendorQuote.id == vendor_quote_id, VendorQuote.is_deleted == False).first()
+        quote_query = db.query(VendorQuote).filter(VendorQuote.id == vendor_quote_id, VendorQuote.is_deleted == False)
+        quote = apply_org_filter(quote_query, VendorQuote, org_context).first()
         if not quote:
             raise HTTPException(status_code=404, detail="Vendor quote record not found")
-        order = db.query(PurchaseOrder).filter(PurchaseOrder.id == quote.po_id, PurchaseOrder.is_deleted == False).first()
-        rfq_number = (order.po_number if order and order.po_number else f"RFQ-{quote.po_id}").strip().replace("/", "-")
+        order_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == quote.po_id, PurchaseOrder.is_deleted == False)
+        order = apply_org_filter(order_query, PurchaseOrder, org_context).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        rfq_number = (order.po_number or f"RFQ-{quote.po_id}").strip().replace("/", "-")
 
         folder = f"rfqs/{rfq_number}/vendor_quotes/v{quote.supplier_id}"
         key = blob_storage.upload_file(
@@ -741,6 +766,7 @@ async def upload_general_document(
             folder=folder
         )
         doc = OrderDocument(
+            org_id=order.org_id,
             entity_type="VENDOR_QUOTE",
             entity_id=quote.id,
             po_id=order.id if order else None,
@@ -802,6 +828,7 @@ async def upload_general_document(
             folder=f"orders/{folder_po}/po_documents"
         )
         doc = OrderDocument(
+            org_id=order.org_id,
             entity_type="PO",
             entity_id=order.id,
             po_id=order.id,
@@ -822,7 +849,10 @@ async def upload_general_document(
     if request_id:
         from Model.containermgmt.Orders.StoreRequest import StoreRequest
         req_q = db.query(StoreRequest).filter(StoreRequest.id == request_id, StoreRequest.is_deleted == False)
+        req_q = apply_org_filter(req_q, StoreRequest, org_context)
         req = req_q.first()
+        if not req:
+            raise HTTPException(status_code=404, detail="Store request not found")
         folder_name = (req.request_number if req and req.request_number else f"request_{request_id}").strip().replace("/", "-")
         key = blob_storage.upload_file(
             file_obj=file_bytes,
@@ -830,6 +860,7 @@ async def upload_general_document(
             folder=f"sourcing/requests/{folder_name}/specs"
         )
         doc = OrderDocument(
+            org_id=req.org_id,
             entity_type="STORE_REQUEST",
             entity_id=request_id,
             po_id=None,
@@ -853,6 +884,7 @@ async def upload_general_document(
         folder="general"
     )
     doc = OrderDocument(
+        org_id=org_context.org_id,
         entity_type="GENERAL",
         entity_id=None,
         po_id=None,
@@ -1155,21 +1187,10 @@ def create_order(
 
     status_label = status_obj.name if status_obj else (payload.get("status_label") or status_val)
 
-    target_org_id = payload.get("org_id")
-    if not target_org_id:
-        consignee_val = (payload.get("consignee") or "").upper()
-        sheet_val = (payload.get("sheet_type") or "").upper()
-        if "NOBLE" in consignee_val or "NOBLE" in sheet_val:
-            target_org_id = 2
-        elif "SAHAJANAND" in consignee_val or "SAHAJANAND" in sheet_val:
-            target_org_id = 3
-        elif "SAHAJ" in consignee_val or "SAHAJ" in sheet_val:
-            target_org_id = 1
-        else:
-            target_org_id = org_context.selected_org_id or current_user.org_id or 1
-
-    if not org_context.is_root and target_org_id not in org_context.allowed_org_ids:
-        target_org_id = current_user.org_id
+    requested_org_id = payload.get("org_id")
+    if requested_org_id is not None and requested_org_id not in org_context.allowed_org_ids:
+        raise HTTPException(status_code=403, detail="Organisation is not available to this user")
+    target_org_id = requested_org_id or org_context.org_id
 
     # Supplier must be shared or owned by the order's target organisation.
     supplier_id = payload.get("supplier")
@@ -1258,6 +1279,7 @@ def create_order(
         if u_price is not None and tot_price is None:
             tot_price = qty * u_price
         po_it = POItem(
+            org_id=new_order.org_id,
             po_id=new_order.id,
             request_item_id=it.get("request_item_id"),
             product_id=it.get("product_id"),
@@ -1600,6 +1622,7 @@ def update_order(
                     "unit": item_data.get("unit", "PCS")
                 })
                 new_item = POItem(
+                    org_id=order.org_id,
                     po_id=order.id,
                     request_item_id=item_data.get("request_item_id"),
                     product_id=item_data.get("product_id"),
@@ -1832,6 +1855,7 @@ async def link_shipment(
     container_id = payload.get("container_id")
 
     shipment = OrderShipment(
+        org_id=order.org_id,
         po_id=order.id,
         bill_of_lading_no=bl_no,
         container_id=container_id,
@@ -2005,6 +2029,7 @@ async def record_payment(
             paid_d = date.today()
 
     payment = OrderPayment(
+        org_id=order.org_id,
         po_id=order.id,
         payment_type=p_type,
         amount=amt,
@@ -2357,6 +2382,7 @@ async def upload_order_document(
     )
 
     doc = OrderDocument(
+        org_id=order.org_id,
         entity_type="PO",
         entity_id=order.id,
         po_id=order.id,

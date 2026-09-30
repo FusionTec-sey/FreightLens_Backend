@@ -1300,6 +1300,7 @@ def duplicate_product(
     for ps in (orig.product_suppliers or []):
         if not getattr(ps, "is_deleted", False):
             new_ps = ProductSupplier(
+                org_id=new_prod.org_id,
                 product_id=new_prod.id,
                 supplier_id=ps.supplier_id,
                 factory_code=f"{ps.factory_code}-COPY" if ps.factory_code else None,
@@ -1356,7 +1357,7 @@ def create_product(
     if not has_permission(current_user, "Add_Product"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to register products.")
 
-    target_org_id = org_context.org_id or 1
+    target_org_id = org_context.org_id
     sku_val = payload.sku.strip().upper() if payload.sku and payload.sku.strip() else f"SKU-{datetime.utcnow().strftime('%y%m%d%H%M%S')}"
     existing = db.query(Product).filter(
         Product.org_id == target_org_id, Product.sku == sku_val, Product.is_deleted == False
@@ -1633,7 +1634,7 @@ def add_product_link(
     Add a variant, related item, or BOM part link.
     If a link already exists for this (parent, child) pair, flags are merged (OR'd together).
     """
-    target_org_id = org_context.org_id or 1
+    target_org_id = org_context.org_id
     if payload.child_product_id == product_id:
         raise HTTPException(status_code=400, detail="Cannot link a product to itself")
 
@@ -1752,7 +1753,7 @@ def list_categories(
     if not has_permission(current_user, "View_ProductCategory"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to view product categories.")
 
-    target_org_id = org_context.org_id or 1
+    target_org_id = org_context.org_id
     _ensure_root_category(db, target_org_id, current_user.id)
     query = apply_org_filter(
         db.query(ProductCategory).filter(ProductCategory.is_deleted == False),
@@ -1773,7 +1774,7 @@ def create_category(
     if not has_permission(current_user, "Manage_ProductCategory"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to manage product categories.")
 
-    target_org_id = org_context.org_id or 1
+    target_org_id = org_context.org_id
     parent_id = payload.parent_id
     if parent_id is None:
         root = _ensure_root_category(db, target_org_id, current_user.id)

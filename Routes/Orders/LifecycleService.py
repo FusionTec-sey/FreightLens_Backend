@@ -383,6 +383,7 @@ class LifecycleService:
         new_version = po.lifecycle_version + 1
         old_stage_v = getattr(po, "stage_version", 1) or 1
         transition_record = POStageTransition(
+            org_id=po.org_id,
             po_id=po.id,
             from_stage=old_stage,
             to_stage=target_stage,
@@ -506,6 +507,7 @@ class LifecycleService:
 
         # Log transition record documenting the variance approval
         transition = POStageTransition(
+            org_id=po.org_id,
             po_id=po.id,
             from_stage=po.lifecycle_stage,
             to_stage=po.lifecycle_stage,

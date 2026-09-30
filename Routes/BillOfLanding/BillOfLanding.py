@@ -168,7 +168,8 @@ class BillOfLandingAPI:
         resolved_provider_id = resolve_provider(db, data.Provider, current_user.id)
         resolved_status_id = resolve_status(db, data.status)
 
-        existing_bl = db.query(BillOfLanding).filter(BillOfLanding.BillOfLanding == data.BillOfLanding).first()
+        existing_query = db.query(BillOfLanding).filter(BillOfLanding.BillOfLanding == data.BillOfLanding)
+        existing_bl = apply_org_filter(existing_query, BillOfLanding, org_context).first()
         if existing_bl:
             if existing_bl.is_deleted:
                 existing_bl.is_deleted = False
@@ -183,11 +184,13 @@ class BillOfLandingAPI:
                 existing_bl.FreeDays = data.FreeDays
                 existing_bl.status = resolved_status_id
                 existing_bl.updated_by = current_user.id
+                existing_bl.org_id = org_context.org_id
                 new_bl = existing_bl
             else:
                 raise HTTPException(status_code=409, detail="Bill of Lading already exists")
         else:
             new_bl = BillOfLanding(
+                org_id=org_context.org_id,
                 BillOfLanding=data.BillOfLanding,
                 Consignee=resolved_consignee_id,
                 Vessel=resolved_vessel_id,
@@ -213,6 +216,7 @@ class BillOfLandingAPI:
             resolved_container_status_id = resolve_status(db, container_status_input)
 
             new_container = ContainerDetails(
+                org_id=org_context.org_id,
                 container_no=container.container_no,
                 type=resolved_type_id,
                 in_bound=container.in_bound,

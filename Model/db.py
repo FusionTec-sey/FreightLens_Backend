@@ -1,7 +1,8 @@
 # db.py
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import event
 import os
 from dotenv import load_dotenv
 
@@ -21,6 +22,23 @@ engine = create_engine(
     pool_recycle=1800,    # Recycle connections every 30 min
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def _reject_missing_org_ids(session, flush_context, instances):
+    """Reject new tenant-owned rows that were not assigned an organisation."""
+    from Model.mixins import OrgMixin
+
+    missing = [
+        type(obj).__name__
+        for obj in session.new
+        if isinstance(obj, OrgMixin) and getattr(obj, "org_id", None) is None
+    ]
+    if missing:
+        model_names = ", ".join(sorted(set(missing)))
+        raise ValueError(f"org_id is required for tenant-owned models: {model_names}")
+
+
+event.listen(Session, "before_flush", _reject_missing_org_ids)
 
 # Dependency for FastAPI
 def get_db():

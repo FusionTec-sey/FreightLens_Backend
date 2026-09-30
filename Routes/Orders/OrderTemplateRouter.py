@@ -298,9 +298,10 @@ async def create_template(
 
     supplier_id = payload.get("supplier_id") or payload.get("supplier")
     company = (payload.get("company") or "").strip()
-    target_org_id = payload.get("org_id") or org_context.selected_org_id or current_user.org_id or 1
-    if not org_context.is_root and target_org_id not in org_context.allowed_org_ids:
+    requested_org_id = payload.get("org_id")
+    if requested_org_id is not None and requested_org_id not in org_context.allowed_org_ids:
         raise HTTPException(status_code=403, detail="Organisation is not available to this user")
+    target_org_id = requested_org_id or org_context.org_id
     if supplier_id:
         supp = db.query(Supplier).filter(
             Supplier.supplier_id == supplier_id,

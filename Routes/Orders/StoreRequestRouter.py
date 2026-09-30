@@ -164,9 +164,10 @@ async def create_store_request(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    target_org_id = payload.get("org_id") or org_context.selected_org_id or current_user.org_id or 1
-    if not org_context.is_root and target_org_id not in org_context.allowed_org_ids:
-        target_org_id = current_user.org_id
+    requested_org_id = payload.get("org_id")
+    if requested_org_id is not None and requested_org_id not in org_context.allowed_org_ids:
+        raise HTTPException(status_code=403, detail="Organisation is not available to this user")
+    target_org_id = requested_org_id or org_context.org_id
 
     req_number = payload.get("request_number") or generate_request_number(db, target_org_id)
     

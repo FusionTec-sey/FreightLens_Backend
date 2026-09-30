@@ -102,7 +102,7 @@ def list_templates(
     items = query.order_by(ReportTemplate.is_system.desc(), ReportTemplate.name.asc()).offset(skip).limit(limit).all()
     for t in items:
         if t.is_system:
-            t.is_active_for_org = bool(org_context.current_org_id in (t.active_org_ids or []))
+            t.is_active_for_org = bool(org_context.org_id in (t.active_org_ids or []))
         else:
             t.is_active_for_org = bool(t.is_active)
     return items, total
@@ -118,11 +118,12 @@ def get_template(db: Session, template_id: int, org_context: OrgContext) -> Repo
     if not template:
         raise HTTPException(status_code=404, detail="Report template not found.")
 
-    if not template.is_system and template.org_id not in org_context.allowed_org_ids:
+    visible_org_ids = [org_context.org_id] if org_context.selected_org_id else org_context.allowed_org_ids
+    if not template.is_system and template.org_id not in visible_org_ids:
         raise HTTPException(status_code=403, detail="Access denied to this report template.")
 
     if template.is_system:
-        template.is_active_for_org = bool(org_context.current_org_id in (template.active_org_ids or []))
+        template.is_active_for_org = bool(org_context.org_id in (template.active_org_ids or []))
     else:
         template.is_active_for_org = bool(template.is_active)
 
@@ -157,7 +158,7 @@ def create_custom_template(
     # Check slug collision within the organization
     existing = db.query(ReportTemplate).filter(
         ReportTemplate.slug == data.slug,
-        ReportTemplate.org_id == org_context.current_org_id,
+        ReportTemplate.org_id == org_context.org_id,
         ReportTemplate.is_deleted == False,
     ).first()
     if existing:
@@ -190,7 +191,7 @@ def create_custom_template(
         is_active=data.is_active if data.is_active is not None else True,
         page_size=data.page_size or "A4",
         orientation=data.orientation or "portrait",
-        org_id=org_context.current_org_id,
+        org_id=org_context.org_id,
         created_by=user.id,
     )
     db.add(template)
@@ -232,12 +233,12 @@ def clone_template(
         raise HTTPException(status_code=400, detail="Source template has no active version to clone.")
 
     target_name = clone_data.name or f"{source.name} (Custom)"
-    target_slug = clone_data.slug or f"{source.slug}_custom_{org_context.current_org_id}"
+    target_slug = clone_data.slug or f"{source.slug}_custom_{org_context.org_id}"
 
     # Ensure unique slug
     existing = db.query(ReportTemplate).filter(
         ReportTemplate.slug == target_slug,
-        ReportTemplate.org_id == org_context.current_org_id,
+        ReportTemplate.org_id == org_context.org_id,
         ReportTemplate.is_deleted == False,
     ).first()
     if existing:
@@ -257,7 +258,7 @@ def clone_template(
         is_active=True,
         page_size=source.page_size,
         orientation=source.orientation,
-        org_id=org_context.current_org_id,
+        org_id=org_context.org_id,
         created_by=user.id,
     )
     db.add(new_template)
@@ -416,7 +417,7 @@ def list_active_templates_for_entity(
     - System Default templates appear ONLY if activated in active_org_ids for current_org_id.
     - Custom organization templates appear if owned by current_org_id and is_active is True.
     """
-    current_org_id = org_context.current_org_id
+    current_org_id = org_context.org_id
 
     # Condition:
     # 1. System templates activated for current_org_id
@@ -474,7 +475,7 @@ def toggle_template_activation(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found.")
 
-    current_org_id = org_context.current_org_id
+    current_org_id = org_context.org_id
 
     if template.is_system:
         active_list = list(template.active_org_ids or [])

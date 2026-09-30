@@ -110,13 +110,15 @@ async def create_packing_list(
     if not po_id:
         raise HTTPException(status_code=422, detail="PO ID is required")
 
-    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False).first()
+    po_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False)
+    po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
     pl_number = payload.get("packing_list_number", "").strip() or f"PL-{po.po_number}"
 
     new_pl = OrderPackingList(
+        org_id=po.org_id,
         po_id=po.id,
         packing_list_number=pl_number,
         supplier_invoice_ref=payload.get("supplier_invoice_ref", "").strip() or None,

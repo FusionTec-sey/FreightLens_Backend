@@ -2,6 +2,13 @@
 
 Newest entries appear first. Every architecture change records why it changed, its commit or release tag, any migration, and how to undo it.
 
+## 2026-10-01 - Phase 2B explicit organisation integrity
+
+- **Why:** `OrgMixin` silently assigned organisation `1`, hiding missing ownership on child records and allowing parent/child tenant mismatches.
+- **Change:** All tenant-owned constructors assign `org_id`; parent-owned queries are scoped; a `before_flush` guard rejects missing ownership; tenant tables have `org_id NOT NULL` with no default.
+- **Migration:** `migrate_20260930_org_id_integrity.py`; local verification repaired 17 PO items, one payment, one lifecycle transition, and assigned six system report templates to root ownership. A second run made no changes.
+- **Undo:** remove the flush guard and restore nullable columns only after review; database rollback is `ALTER COLUMN org_id DROP NOT NULL` per migrated table. Do not restore the silent default.
+
 ## 2026-09-30 - Phase 5 security and legacy cleanup
 
 - **Why:** The carrier webhook and legacy credential-management routes lacked adequate sender authorization, committed configuration contained credentials, and retired MySQL/development paths remained in production code.

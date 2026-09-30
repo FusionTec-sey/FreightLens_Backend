@@ -26,8 +26,17 @@ class FakeQuery:
     def join(self, *args):
         return self
 
+    def order_by(self, *args):
+        return self
+
+    def limit(self, *args):
+        return self
+
     def first(self):
         return self.value
+
+    def all(self):
+        return self.value if isinstance(self.value, list) else [self.value]
 
 
 class FakeSession:
@@ -122,3 +131,56 @@ def test_authorized_document_download_streams_blob(monkeypatch):
         str(uuid4()), db=db, org_context=SimpleNamespace(), current_user=_user("View_Document")
     ))
     assert response.media_type == "application/pdf"
+
+
+def test_document_list_requires_document_permission():
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(order_router.list_documents(
+            defect_report_id=None,
+            purchase_order_id=None,
+            request_id=None,
+            payment_id=None,
+            vendor_quote_id=None,
+            db=FakeSession([]),
+            org_context=SimpleNamespace(),
+            current_user=_user(),
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_document_list_applies_org_scope(monkeypatch):
+    scoped = []
+
+    def apply_scope(query, model, context):
+        scoped.append(model)
+        return query
+
+    monkeypatch.setattr(order_router, "apply_org_filter", apply_scope)
+    result = asyncio.run(order_router.list_documents(
+        defect_report_id=None,
+        purchase_order_id=None,
+        request_id=None,
+        payment_id=None,
+        vendor_quote_id=None,
+        db=FakeSession([]),
+        org_context=SimpleNamespace(),
+        current_user=_user("View_Document"),
+    ))
+
+    assert result == []
+    assert order_router.OrderDocument in scoped
+
+
+def test_payment_document_list_requires_financial_clearance():
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(order_router.list_documents(
+            defect_report_id=None,
+            purchase_order_id=None,
+            request_id=None,
+            payment_id=7,
+            vendor_quote_id=None,
+            db=FakeSession([]),
+            org_context=SimpleNamespace(),
+            current_user=_user("View_Document"),
+        ))
+    assert exc.value.status_code == 403

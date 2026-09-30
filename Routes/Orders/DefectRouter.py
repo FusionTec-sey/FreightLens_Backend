@@ -154,10 +154,16 @@ async def create_defect(
         unload_date = datetime.strptime(payload["unloading_date"][:10], "%Y-%m-%d").date()
 
     po_id = payload.get("po_id")
-    target_org_id = payload.get("org_id") or org_context.selected_org_id or current_user.org_id or 1
+    requested_org_id = payload.get("org_id")
+    if requested_org_id is not None and requested_org_id not in org_context.allowed_org_ids:
+        raise HTTPException(status_code=403, detail="Organisation is not available to this user")
+    target_org_id = requested_org_id or org_context.org_id
 
     if po_id:
-        po_rec = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+        po_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id)
+        po_rec = apply_org_filter(po_query, PurchaseOrder, org_context).first()
+        if not po_rec:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
         if po_rec:
             target_org_id = po_rec.org_id
 

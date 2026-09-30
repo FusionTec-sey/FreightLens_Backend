@@ -490,6 +490,7 @@ class QuoteComparisonService:
 
                 # Create child item
                 child_it = POItem(
+                    org_id=child_po.org_id,
                     po_id=child_po.id,
                     source_rfq_item_id=orig_it.id,
                     awarded_vendor_id=supp_id,

@@ -118,7 +118,6 @@ Design accordingly from day one.
 
 These are tracked exceptions, not approved patterns for new code:
 
-- `OrgMixin.org_id` is still nullable and defaults to organisation `1`; Phase 2 must remove both behaviors after data cleanup.
 - Cross-module routers (reports, master data, dashboard, organisations, reference data, and blobs) intentionally have no single module guard; they must remain authenticated and endpoint-authorized as documented in `docs/ARCHITECTURE.md`.
 - APScheduler starts at import time and FastAPI still uses deprecated startup events; lifecycle migration remains pending.
 - Some large router and frontend page files remain above the maintainable size target.

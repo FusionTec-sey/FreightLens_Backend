@@ -168,6 +168,7 @@ class WebhookService:
             bl_record = db.query(BillOfLanding).filter(BillOfLanding.BillOfLanding == bl_reference).first()
             if not bl_record:
                 bl_record = BillOfLanding(
+                    org_id=org_id,
                     BillOfLanding=bl_reference,
                     Vessel=vessel_id,
                     Provider=provider_id,
@@ -183,8 +184,6 @@ class WebhookService:
                     created_by=user_id,
                     updated_by=user_id
                 )
-                if hasattr(bl_record, "org_id"):
-                    bl_record.org_id = org_id
                 db.add(bl_record)
                 db.flush()
             else:
@@ -266,6 +265,7 @@ class WebhookService:
 
                 if not c_record:
                     c_record = ContainerDetails(
+                        org_id=org_id,
                         container_no=c_num,
                         BillOfLanding=bl_reference,
                         status=c_status,
@@ -283,8 +283,6 @@ class WebhookService:
                         created_by=user_id,
                         updated_by=user_id
                     )
-                    if hasattr(c_record, "org_id"):
-                        c_record.org_id = org_id
                     db.add(c_record)
                     created_containers.append({
                         "container_no": c_num,

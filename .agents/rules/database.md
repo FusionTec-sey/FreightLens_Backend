@@ -33,11 +33,10 @@ Automatically adds:
 
 ### OrgMixin
 Adds:
-- `org_id` — FK to `usercredentials.organisations` with index
+- `org_id` — required FK to `usercredentials.organisations` with index and no default
 
-Current stabilization deviation: `OrgMixin.org_id` remains nullable and defaults to
-organisation `1`. New code must always assign the resolved organisation explicitly.
-Do not rely on that default; Phase 2 will remove it after legacy rows are classified.
+Every constructor for an `OrgMixin` model must assign `org_id` from `OrgContext` or
+the owning parent. The SQLAlchemy `before_flush` guard rejects missing ownership.
 
 ```python
 from Model.mixins import AuditMixin, OrgMixin
