@@ -689,13 +689,14 @@ def ensure_report_templates_schema():
                 ON containermgmt.report_render_jobs(status);
         """))
 
-        # 4. Seed Standard System Templates (org_id = NULL)
+        # 4. Seed owner-backed system templates. is_system controls global
+        # visibility; org_id records the root organisation that owns the row.
         for tpl in DEFAULT_SYSTEM_TEMPLATES:
             existing = conn.execute(
                 text("""
                     SELECT id, active_version_id 
                     FROM containermgmt.report_templates 
-                    WHERE is_system = TRUE AND slug = :slug AND org_id IS NULL AND is_deleted = FALSE
+                    WHERE is_system = TRUE AND slug = :slug AND is_deleted = FALSE
                 """),
                 {"slug": tpl["slug"]}
             ).fetchone()
@@ -709,7 +710,8 @@ def ensure_report_templates_schema():
                             entity_type, is_system, is_active, page_size, orientation,
                             output_format, is_deleted
                         ) VALUES (
-                            NULL, :slug, :name, :description, :category, :resolver_key,
+                            (SELECT min(id) FROM usercredentials.organisations),
+                            :slug, :name, :description, :category, :resolver_key,
                             :entity_type, TRUE, TRUE, :page_size, :orientation,
                             :output_format, FALSE
                         ) RETURNING id;
