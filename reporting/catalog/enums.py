@@ -1,0 +1,25 @@
+from enum import Enum
+
+
+class PurchaseOrderStatus(str, Enum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    SOURCING = "SOURCING"
+    ORDERED = "ORDERED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class PurchaseOrderLifecycle(str, Enum):
+    DRAFT = "DRAFT"
+    CONFIRMED = "CONFIRMED"
+    RFQ_SENT = "RFQ_SENT"
+    QUOTE_RECEIVED = "QUOTE_RECEIVED"
+    QUOTE_APPROVED = "QUOTE_APPROVED"
+    PO_ISSUED = "PO_ISSUED"
+    PROFORMA = "PROFORMA"
+    BOOKED = "BOOKED"
+    SHIPPED = "SHIPPED"
+    PORT_ARRIVAL = "PORT_ARRIVAL"
+    CUSTOMS = "CUSTOMS"
+    DELIVERED = "DELIVERED"

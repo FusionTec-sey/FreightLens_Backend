@@ -36,6 +36,9 @@ from Schema.ReportDatasetSchema import (
 )
 from Utils.excel_exporter import build_excel_workbook
 from Services.report_render_engine import render_html_document, compile_pdf_from_html
+from reporting.catalog.builtin import PURCHASE_ORDER_DATASET
+from reporting.policy import AccessPolicy
+from reporting.query import QueryCompiler, QueryExecutor, QueryFilter, QueryRequest
 
 logger = logging.getLogger("containerMgmt.dataset_service")
 
@@ -733,84 +736,89 @@ def resolve_po_procurement_register(
     org_context: OrgContext,
     user: User,
 ) -> DatasetResult:
-    can_financial = is_financial_user(user, org_context)
-    can_vendor = can_view_supplier_user(user, org_context)
-
-    query = db.query(
-        PurchaseOrder,
-        Supplier.name.label("supplier_name"),
-    ).outerjoin(
-        Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id
-    ).filter(
-        PurchaseOrder.is_deleted == False
-    )
-
-    query = apply_org_filter(query, PurchaseOrder, org_context)
-
-    if spec.date_from:
-        query = query.filter(PurchaseOrder.order_mail_date >= spec.date_from)
-    if spec.date_to:
-        query = query.filter(PurchaseOrder.order_mail_date <= spec.date_to)
-
-    if spec.supplier_ids:
-        query = query.filter(PurchaseOrder.supplier_id.in_(spec.supplier_ids))
-
-    if spec.statuses:
-        query = query.filter(PurchaseOrder.status.in_(spec.statuses))
-
-    if spec.custom_filters and "lifecycle_stages" in spec.custom_filters:
-        stages = spec.custom_filters["lifecycle_stages"]
-        if stages:
-            query = query.filter(PurchaseOrder.lifecycle_stage.in_(stages))
-
-    if spec.search and spec.search.strip():
-        term = f"%{spec.search.strip()}%"
-        query = query.filter(
-            or_(
-                PurchaseOrder.po_number.ilike(term),
-                PurchaseOrder.po_nce.ilike(term),
-                PurchaseOrder.company.ilike(term),
-            )
+    policy = getattr(user, "access_policy", None)
+    if policy is None:
+        permission_names = frozenset(
+            permission.name
+            for role in getattr(user, "roles", ())
+            for permission in getattr(role, "permissions", ())
+        )
+        policy = AccessPolicy(
+            user=user,
+            org_ids=tuple(
+                [org_context.selected_org_id]
+                if org_context.selected_org_id is not None
+                else org_context.allowed_org_ids
+            ),
+            permission_names=permission_names,
+            module_names=frozenset({"ORDERS"}),
+            field_permissions={
+                "FINANCIAL": "View_Financials",
+                "SUPPLIER_IDENTITY": "View_Supplier",
+            },
+            is_platform_admin=any(
+                getattr(role, "name", "").lower() in {"root", "super_admin", "superadmin"}
+                for role in getattr(user, "roles", ())
+            ),
         )
 
-    # Sorting
-    sort_dir = desc if spec.sort_order == "desc" else asc
-    if spec.sort_by == "total_amount":
-        query = query.order_by(sort_dir(PurchaseOrder.total_amount))
-    elif spec.sort_by == "balance_amount":
-        query = query.order_by(sort_dir(PurchaseOrder.balance_amount))
-    elif spec.sort_by == "po_number":
-        query = query.order_by(sort_dir(PurchaseOrder.po_number))
-    elif spec.sort_by == "supplier_name":
-        query = query.order_by(sort_dir(Supplier.name))
-    else:
-        query = query.order_by(nullslast(sort_dir(PurchaseOrder.order_mail_date)))
+    can_financial = policy.allows_field_class("FINANCIAL")
+    can_vendor = policy.allows_field_class("SUPPLIER_IDENTITY")
 
-    rows, total_count = _fetch_query_rows(query, spec)
+    fields = ["id", "po_number", "po_date", "status", "lifecycle_stage", "currency"]
+    if can_vendor:
+        fields.append("supplier_name")
+    if can_financial:
+        fields.extend(("total_amount", "advance_amount", "balance_amount"))
+
+    filters = []
+    if spec.date_from:
+        filters.append(QueryFilter("po_date", "gte", spec.date_from))
+    if spec.date_to:
+        filters.append(QueryFilter("po_date", "lte", spec.date_to))
+    if spec.supplier_ids:
+        filters.append(QueryFilter("supplier_id", "in", spec.supplier_ids))
+    if spec.statuses:
+        filters.append(QueryFilter("status", "in", spec.statuses))
+    stages = (spec.custom_filters or {}).get("lifecycle_stages")
+    if stages:
+        filters.append(QueryFilter("lifecycle_stage", "in", stages))
+
+    requested_limit = spec.limit if spec.format == "json" else PURCHASE_ORDER_DATASET.max_rows
+    offset = (spec.page - 1) * spec.limit if spec.format == "json" else 0
+    compiled = QueryCompiler().compile(
+        PURCHASE_ORDER_DATASET,
+        QueryRequest(
+            fields=tuple(fields),
+            filters=tuple(filters),
+            search=spec.search,
+            sort_by=spec.sort_by if spec.sort_by in PURCHASE_ORDER_DATASET.fields else None,
+            sort_desc=spec.sort_order == "desc",
+            offset=offset,
+            limit=requested_limit,
+        ),
+        policy,
+    )
+    rows, total_count = QueryExecutor().execute(db, compiled)
     records = []
 
-    for po, sup_name in rows:
-        order_date_str = po.order_mail_date.strftime("%Y-%m-%d") if po.order_mail_date else None
-        order_month = po.order_mail_date.strftime("%B %Y") if po.order_mail_date else "No Date"
-        
-        display_supplier = (sup_name or po.company or "N/A") if can_vendor else "[REDACTED]"
-        
-        tot_amt = float(po.total_amount or 0.0) if can_financial else None
-        adv_amt = float(po.advance_amount or 0.0) if can_financial else None
-        bal_amt = float(po.balance_amount or 0.0) if can_financial else None
+    for row in rows:
+        order_date = row.get("po_date")
+        order_date_str = order_date.strftime("%Y-%m-%d") if order_date else None
+        order_month = order_date.strftime("%B %Y") if order_date else "No Date"
 
         records.append({
-            "id": po.id,
-            "po_number": po.po_number,
+            "id": row["id"],
+            "po_number": row["po_number"],
             "po_date": order_date_str,
             "order_month": order_month,
-            "supplier_name": display_supplier,
-            "status": po.status or "DRAFT",
-            "lifecycle_stage": po.lifecycle_stage or "PO_ISSUED",
-            "currency": po.currency or "USD",
-            "total_amount": tot_amt,
-            "advance_amount": adv_amt,
-            "balance_amount": bal_amt,
+            "supplier_name": (row.get("supplier_name") or "N/A") if can_vendor else "[REDACTED]",
+            "status": row.get("status") or "DRAFT",
+            "lifecycle_stage": row.get("lifecycle_stage") or "DRAFT",
+            "currency": row.get("currency") or "USD",
+            "total_amount": float(row.get("total_amount") or 0) if can_financial else None,
+            "advance_amount": float(row.get("advance_amount") or 0) if can_financial else None,
+            "balance_amount": float(row.get("balance_amount") or 0) if can_financial else None,
         })
 
     org_rec = db.query(Organisation).filter(Organisation.id == org_context.org_id).first()

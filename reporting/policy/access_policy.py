@@ -55,6 +55,7 @@ class AccessPolicy:
             org_id=getattr(self.user, "org_id", None),
             allowed_org_ids=list(self.org_ids),
             roles=[role],
+            access_policy=self,
         )
 
     @classmethod
