@@ -822,7 +822,24 @@ def run_dataset_query(
 ) -> DatasetResult:
     """Executes query for a report key and returns standard DatasetResult."""
     resolver = get_dataset_resolver(report_key)
-    return resolver.fn(spec, db, org_context, user)
+    dataset = resolver.fn(spec, db, org_context, user)
+    if spec.layout_columns:
+        allowed_columns = {column.key: column for column in dataset.columns}
+        configured_columns = []
+        for configured in spec.layout_columns:
+            source = allowed_columns.get(configured.key)
+            if not source or not configured.visible:
+                continue
+            configured_columns.append(source.model_copy(update={
+                "label": configured.label or source.label,
+                "align": configured.align,
+                "width": configured.width or source.width,
+                "overflow_mode": configured.overflow_mode,
+                "format": configured.format or source.format,
+            }))
+        if configured_columns:
+            dataset.columns = configured_columns
+    return dataset
 
 
 def export_dataset_excel(

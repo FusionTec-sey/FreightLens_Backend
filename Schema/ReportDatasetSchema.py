@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import date, datetime
 from decimal import Decimal
+from Schema.ReportSchema import TabularColumnLayout
 
 
 class FilterDefinition(BaseModel):
@@ -37,6 +38,9 @@ class DatasetQuerySpec(BaseModel):
     """
     Standardized parameter contract for all tabular and operational reports.
     """
+    template_id: Optional[int] = Field(None, ge=1)
+    layout_columns: Optional[List[TabularColumnLayout]] = None
+
     # Time window filter
     date_field: Optional[str] = None  # e.g., "arrival_date", "order_mail_date", "created_at"
     date_from: Optional[date] = None

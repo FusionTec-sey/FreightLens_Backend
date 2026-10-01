@@ -39,14 +39,10 @@ class ReportTemplate(OrgMixin, AuditMixin, Base):
     render_jobs = relationship("ReportRenderJob", back_populates="template")
 
     @property
-    def active_version(self):
+    def active_version_number(self):
         if self.versions:
             for v in self.versions:
                 if v.id == self.active_version_id:
                     return v.version_number
-        return 1
-
-    @active_version.setter
-    def active_version(self, value):
-        self.active_version_id = value
+        return None
 

@@ -24,6 +24,20 @@ from Services.report_template_validator import validate_template
 logger = logging.getLogger("containerMgmt.report_template_service")
 
 
+def resolve_template_identity(resolver_key: str, template_type: str) -> Tuple[str, str]:
+    """Return the canonical entity type and category declared by a resolver."""
+    if template_type == "OPERATIONAL_TABULAR":
+        from Services.report_dataset_service import get_dataset_resolver
+
+        resolver = get_dataset_resolver(resolver_key)
+        return resolver.key, resolver.category
+
+    from Services.report_data_resolvers import get_resolver
+
+    resolver = get_resolver(resolver_key)
+    return resolver.entity_type, resolver.category
+
+
 def list_templates(
     db: Session,
     org_context: OrgContext,
@@ -139,13 +153,20 @@ def get_active_version_data(db: Session, template: ReportTemplate) -> Optional[R
         ).first()
         if v:
             return v
-    if template.active_version:
-        return db.query(ReportTemplateVersion).filter(
-            ReportTemplateVersion.template_id == template.id,
-            ReportTemplateVersion.version_number == template.active_version,
-            ReportTemplateVersion.is_deleted == False,
-        ).first()
     return None
+
+
+def get_latest_version_data(db: Session, template: ReportTemplate) -> Optional[ReportTemplateVersion]:
+    """Return the newest saved version, including an unpublished draft."""
+    return (
+        db.query(ReportTemplateVersion)
+        .filter(
+            ReportTemplateVersion.template_id == template.id,
+            ReportTemplateVersion.is_deleted == False,
+        )
+        .order_by(ReportTemplateVersion.version_number.desc())
+        .first()
+    )
 
 
 def create_custom_template(
@@ -164,6 +185,13 @@ def create_custom_template(
     if existing:
         raise HTTPException(status_code=400, detail=f"A template with slug '{data.slug}' already exists in your organization.")
 
+    template_type = (data.template_type or "DOCUMENT").upper()
+    entity_type, category = resolve_template_identity(data.resolver_key, template_type)
+    if data.entity_type and data.entity_type != entity_type:
+        raise HTTPException(status_code=422, detail="entity_type does not match the selected resolver")
+    if data.category and data.category.upper() != category.upper():
+        raise HTTPException(status_code=422, detail="category does not match the selected resolver")
+
     # Validate initial version content if provided
     initial_ver = data.initial_version
     if initial_ver:
@@ -181,14 +209,14 @@ def create_custom_template(
         slug=data.slug,
         name=data.name,
         description=data.description,
-        category=data.category.upper(),
+        category=category.upper(),
         resolver_key=data.resolver_key,
-        entity_type=data.entity_type,
-        template_type=data.template_type or "DOCUMENT",
-        table_config=data.table_config,
-        paper_settings=data.paper_settings,
+        entity_type=entity_type,
+        template_type=template_type,
+        table_config=data.table_config.model_dump() if data.table_config else None,
+        paper_settings=data.paper_settings.model_dump() if data.paper_settings else None,
         is_system=False,
-        is_active=data.is_active if data.is_active is not None else True,
+        is_active=(data.is_active if data.is_active is not None else True) if template_type == "OPERATIONAL_TABULAR" else False,
         page_size=data.page_size or "A4",
         orientation=data.orientation or "portrait",
         org_id=org_context.org_id,
@@ -205,13 +233,12 @@ def create_custom_template(
             css_content=initial_ver.css_content,
             header_html=initial_ver.header_html,
             footer_html=initial_ver.footer_html,
-            status="PUBLISHED",
+            status="DRAFT",
             change_notes=initial_ver.changelog or "Initial template version",
             created_by=user.id,
         )
         db.add(ver)
         db.flush()
-        template.active_version_id = ver.id
 
     db.commit()
     db.refresh(template)
@@ -297,7 +324,10 @@ def update_template_metadata(
     if template.is_system:
         raise HTTPException(status_code=400, detail="System templates are read-only. Clone this template to make customizations.")
 
-    for field, val in data.model_dump(exclude_unset=True).items():
+    update_values = data.model_dump(exclude_unset=True)
+    for field in ("resolver_key", "template_type", "entity_type", "category"):
+        update_values.pop(field, None)
+    for field, val in update_values.items():
         if hasattr(template, field):
             setattr(template, field, val)
 
@@ -398,6 +428,7 @@ def publish_template_version(
 
     target_ver.status = "PUBLISHED"
     template.active_version_id = target_ver.id
+    template.is_active = True
     template.updated_by = user.id
 
     db.commit()

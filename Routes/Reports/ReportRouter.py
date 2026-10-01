@@ -53,6 +53,7 @@ from Services.report_template_service import (
     list_templates,
     get_template,
     get_active_version_data,
+    get_latest_version_data,
     create_custom_template,
     clone_template,
     update_template_metadata,
@@ -74,6 +75,42 @@ from Services.report_context_generator import generate_context_file
 logger = logging.getLogger("containerMgmt.report_router")
 
 ReportRouter = APIRouter(prefix="/reports", tags=["Report Templates & Print Engine"])
+
+
+def _apply_saved_dataset_template(
+    report_key: str,
+    spec: DatasetQuerySpec,
+    db: Session,
+    org_context: OrgContext,
+) -> DatasetQuerySpec:
+    if spec.template_id is None:
+        return spec
+
+    template = get_template(db, spec.template_id, org_context)
+    if template.template_type != "OPERATIONAL_TABULAR" or template.resolver_key != report_key:
+        raise HTTPException(status_code=422, detail="Saved template does not match this dataset")
+    if not template.is_active_for_org:
+        raise HTTPException(status_code=403, detail="Saved template is not active for this organisation")
+
+    values = spec.model_dump()
+    table = template.table_config or {}
+    paper = template.paper_settings or {}
+    values.update({
+        "group_by": table.get("group_by") or values.get("group_by"),
+        "sort_by": table.get("sort_by") or values.get("sort_by"),
+        "sort_order": table.get("sort_order") or values.get("sort_order"),
+        "layout_columns": table.get("columns") or values.get("layout_columns"),
+        "page_size": paper.get("page_size") or values.get("page_size"),
+        "orientation": paper.get("orientation") or values.get("orientation"),
+        "margin_top": paper.get("margin_top") or values.get("margin_top"),
+        "margin_bottom": paper.get("margin_bottom") or values.get("margin_bottom"),
+        "margin_left": paper.get("margin_left") or values.get("margin_left"),
+        "margin_right": paper.get("margin_right") or values.get("margin_right"),
+        "repeat_header": paper.get("repeat_header", values.get("repeat_header")),
+        "break_per_group": paper.get("break_per_group", values.get("break_per_group")),
+        "sheet_per_group": paper.get("sheet_per_group", values.get("sheet_per_group")),
+    })
+    return DatasetQuerySpec.model_validate(values)
 
 
 # ── Template Catalog & CRUD Endpoints ────────────────────────────────────────
@@ -173,6 +210,9 @@ def get_template_detail(
     """Retrieves full details of a template including active version content and version list."""
     template = get_template(db, template_id, org_context)
     active_ver = get_active_version_data(db, template)
+    latest_ver = get_latest_version_data(db, template)
+    if latest_ver and (not active_ver or latest_ver.version_number > active_ver.version_number):
+        active_ver = latest_ver
 
     versions = (
         db.query(ReportTemplateVersion)
@@ -304,10 +344,15 @@ def create_new_template_version(
     template_id: int,
     payload: ReportTemplateVersionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Creates a new draft version for a tenant-owned template."""
+    if not (
+        has_permission(current_user, "Manage_Report_Template")
+        or has_permission(current_user, "Manage_Operational_Template")
+    ):
+        raise HTTPException(status_code=403, detail="Missing template management permission")
     return create_template_version(db, template_id, payload, current_user, org_context)
 
 
@@ -316,10 +361,15 @@ def publish_version(
     template_id: int,
     version_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("Manage_Report_Template")),
+    current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
 ):
     """Activates and publishes a specific version of a template."""
+    if not (
+        has_permission(current_user, "Manage_Report_Template")
+        or has_permission(current_user, "Manage_Operational_Template")
+    ):
+        raise HTTPException(status_code=403, detail="Missing template management permission")
     return publish_template_version(db, template_id, version_id, current_user, org_context)
 
 
@@ -630,6 +680,7 @@ def run_dataset_report_query(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Missing required permission 'Run_Operational_Register'."
         )
+    spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     return run_dataset_query(report_key, spec, db, org_context, current_user)
 
 
@@ -650,6 +701,7 @@ def render_dataset_report_pdf(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Missing required permission 'Run_Operational_Register'."
         )
+    spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, current_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
@@ -676,6 +728,7 @@ def export_dataset_report_excel(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Missing required permission 'Run_Operational_Register'."
         )
+    spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     excel_bytes = export_dataset_excel(report_key, spec, db, org_context, current_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(
