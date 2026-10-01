@@ -5,7 +5,6 @@ Pydantic schemas for the Customer-Configurable Report & Print Template System.
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
-from uuid import UUID
 
 
 class ReportTemplateVersionBase(BaseModel):
@@ -218,12 +217,12 @@ class ResolverSchemaOut(BaseModel):
 class ReportRenderJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: str
     template_id: int
     entity_type: Optional[str] = None
-    entity_id: int
+    entity_id: Optional[int] = None
     status: str
     error_message: Optional[str] = None
     download_url: Optional[str] = None
-    created_at: Optional[datetime] = None
+    requested_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

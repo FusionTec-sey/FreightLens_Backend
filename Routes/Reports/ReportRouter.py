@@ -11,11 +11,13 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from Model.db import get_db
 from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
+from Model.containermgmt.Report.ReportRenderJob import ReportRenderJob
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import require_permission, has_permission
@@ -45,6 +47,7 @@ from Schema.ReportSchema import (
     ReportTemplateVersionCreate,
     ReportTemplateVersionOut,
     ReportRenderRequest,
+    ReportRenderJobOut,
     ReportPreviewRequest,
     ReportValidateRequest,
     ReportValidateResponse,
@@ -72,6 +75,7 @@ from Services.report_data_resolvers import (
 from Services.report_template_validator import validate_template
 from Services.report_render_engine import render_html_document, compile_pdf_from_html
 from Services.report_context_generator import generate_context_file
+from Utils.blob_storage import blob_storage
 
 logger = logging.getLogger("containerMgmt.report_router")
 
@@ -407,12 +411,109 @@ def validate_template_code(
 
 # ── Report Rendering Pipeline ────────────────────────────────────────────────
 
+def _render_job_payload(job: ReportRenderJob) -> dict:
+    return {
+        "id": job.id,
+        "template_id": job.template_id,
+        "entity_type": job.entity_type,
+        "entity_id": job.entity_id,
+        "status": job.status,
+        "error_message": job.error_message,
+        "download_url": (
+            blob_storage.signed_url(job.output_key, ttl=15 * 60)
+            if job.status == "COMPLETED" and job.output_key
+            else None
+        ),
+        "requested_at": job.requested_at,
+        "completed_at": job.completed_at,
+    }
+
+
+@ReportRouter.post("/render/jobs", response_model=ReportRenderJobOut, status_code=202)
+def enqueue_report_render(
+    req: ReportRenderRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    if org_context.selected_org_id is None and len(org_context.allowed_org_ids) > 1:
+        raise HTTPException(status_code=400, detail="Select an organisation before rendering a document")
+    template = None
+    if req.template_id:
+        template = get_template(db, req.template_id, org_context)
+    elif req.template_slug:
+        template = (
+            db.query(ReportTemplate)
+            .filter(
+                ReportTemplate.slug == req.template_slug,
+                ReportTemplate.is_deleted.is_(False),
+                or_(
+                    ReportTemplate.org_id == org_context.org_id,
+                    ReportTemplate.is_system.is_(True),
+                ),
+            )
+            .order_by(ReportTemplate.is_system.asc())
+            .first()
+        )
+    if template is None:
+        raise HTTPException(status_code=404, detail="Requested report template was not found")
+
+    _authorize_document_render(template, access_policy.scoped_user, org_context)
+    version = get_active_version_data(db, template)
+    if version is None:
+        raise HTTPException(status_code=400, detail="The template has no published version")
+
+    job = ReportRenderJob(
+        template_id=template.id,
+        version_id=version.id,
+        org_id=org_context.org_id,
+        entity_type=template.entity_type,
+        entity_id=req.entity_id,
+        render_params={"params": req.params or {}, "format": "pdf"},
+        requested_by=current_user.id,
+        status="PENDING",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return _render_job_payload(job)
+
+
+@ReportRouter.get("/render/jobs/{job_id}", response_model=ReportRenderJobOut)
+def get_report_render_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    job = db.query(ReportRenderJob).filter(
+        ReportRenderJob.id == job_id,
+        ReportRenderJob.org_id.in_(org_context.allowed_org_ids),
+    ).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    job_policy = get_access_policy(
+        current_user,
+        OrgContext(
+            current_org_id=job.org_id,
+            allowed_org_ids=[job.org_id],
+            selected_org_id=job.org_id,
+            is_root=org_context.is_root,
+        ),
+        db,
+    )
+    if job.requested_by != current_user.id and not job_policy.has("Manage_Report_Template"):
+        raise HTTPException(status_code=403, detail="Render job access denied")
+    return _render_job_payload(job)
+
 @ReportRouter.post("/render")
 def render_report_pdf(
     req: ReportRenderRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """
     Renders a report to a binary PDF stream using sandboxed Jinja2 and WeasyPrint.
@@ -446,7 +547,7 @@ def render_report_pdf(
     if not template:
         raise HTTPException(status_code=404, detail="Requested report template was not found.")
 
-    _authorize_document_render(template, current_user, org_context)
+    _authorize_document_render(template, access_policy.scoped_user, org_context)
 
     version = get_active_version_data(db, template)
     if not version:
@@ -458,7 +559,7 @@ def render_report_pdf(
         entity_id=req.entity_id,
         db=db,
         org_context=org_context,
-        user=current_user,
+        user=access_policy.scoped_user,
         params=req.params,
     )
 

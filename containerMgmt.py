@@ -149,6 +149,8 @@ async def startup_event():
     ensure_sourcing_and_quote_templates_schema()
     from Utils.migrate_reporting_foundation import ensure_reporting_foundation_schema
     ensure_reporting_foundation_schema()
+    from Utils.migrate_reporting_worker import ensure_reporting_worker_schema
+    ensure_reporting_worker_schema()
     from Utils.migrate_20260930_org_id_integrity import ensure_org_id_integrity
     ensure_org_id_integrity()
     logger.info("Database tables are ready.")
