@@ -1,4 +1,5 @@
 import logging
+import os
 import warnings
 from datetime import datetime
 
@@ -81,8 +82,11 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # ── Background scheduler ──────────────────────────────────────────────────────
-scheduler = create_scheduler()
-scheduler.start()
+# Tests and one-off maintenance commands must not start recurring production work.
+scheduler = None
+if os.getenv("DISABLE_SCHEDULER", "0") != "1":
+    scheduler = create_scheduler()
+    scheduler.start()
 
 
 # ── Lifecycle events ──────────────────────────────────────────────────────────
@@ -186,7 +190,8 @@ async def startup_event():
 
 @app.on_event("shutdown")
 def shutdown_event():
-    scheduler.shutdown()
+    if scheduler is not None and scheduler.running:
+        scheduler.shutdown()
     logger.info("Application shutdown complete.")
 
 
