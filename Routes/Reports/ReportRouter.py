@@ -113,6 +113,21 @@ def _apply_saved_dataset_template(
     return DatasetQuerySpec.model_validate(values)
 
 
+def _authorize_document_render(template, current_user: User, org_context: OrgContext):
+    if org_context.selected_org_id is None and len(org_context.allowed_org_ids) > 1:
+        raise HTTPException(status_code=400, detail="Select an organisation before rendering a document")
+    if not template.is_active_for_org:
+        raise HTTPException(status_code=403, detail="Report template is not active for this organisation")
+
+    resolver = get_resolver(template.resolver_key)
+    if not any(has_permission(current_user, permission) for permission in resolver.print_permissions):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing print permission for resolver '{resolver.key}'.",
+        )
+    return resolver
+
+
 # ── Template Catalog & CRUD Endpoints ────────────────────────────────────────
 
 @ReportRouter.get("/templates", response_model=ReportTemplatePaginatedResponse)
@@ -430,20 +445,7 @@ def render_report_pdf(
     if not template:
         raise HTTPException(status_code=404, detail="Requested report template was not found.")
 
-    # Contextual entity print permission check
-    entity_type = template.entity_type or req.entity_type
-    if entity_type in ("PurchaseOrder", "RFQ"):
-        if not (has_permission(current_user, "Print_PurchaseOrder") or has_permission(current_user, "View_Order") or has_permission(current_user, "Send_RFQ")):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_PurchaseOrder'.")
-    elif entity_type == "QuoteComparison":
-        if not (has_permission(current_user, "Compare_Quote") or has_permission(current_user, "View_VendorQuote") or has_permission(current_user, "Print_PurchaseOrder") or has_permission(current_user, "View_Order")):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Compare_Quote'.")
-    elif entity_type == "ContainerDetails":
-        if not (has_permission(current_user, "Print_Container") or has_permission(current_user, "View_Container")):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_Container'.")
-    elif entity_type == "BillOfLanding":
-        if not (has_permission(current_user, "Print_BillOfLanding") or has_permission(current_user, "View_BL")):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing required permission 'Print_BillOfLanding'.")
+    _authorize_document_render(template, current_user, org_context)
 
     version = get_active_version_data(db, template)
     if not version:
@@ -702,6 +704,7 @@ def render_dataset_report_pdf(
             detail="Missing required permission 'Run_Operational_Register'."
         )
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
+    spec = spec.model_copy(update={"format": "pdf"})
     pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, current_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
@@ -729,6 +732,7 @@ def export_dataset_report_excel(
             detail="Missing required permission 'Run_Operational_Register'."
         )
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
+    spec = spec.model_copy(update={"format": "xlsx"})
     excel_bytes = export_dataset_excel(report_key, spec, db, org_context, current_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(

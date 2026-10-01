@@ -39,6 +39,39 @@ from Services.report_render_engine import render_html_document, compile_pdf_from
 
 logger = logging.getLogger("containerMgmt.dataset_service")
 
+DEFAULT_FREE_DAYS = 14
+PDF_ROW_LIMIT = 20_000
+EXCEL_ROW_LIMIT = 200_000
+
+
+def _fetch_query_rows(query, spec: DatasetQuerySpec) -> Tuple[List[Any], int]:
+    """Apply screen pagination and deterministic export caps to a resolved query."""
+    total_count = query.count()
+    if spec.format == "json":
+        rows = query.offset((spec.page - 1) * spec.limit).limit(spec.limit).all()
+        return rows, total_count
+
+    row_limit = EXCEL_ROW_LIMIT if spec.format == "xlsx" else PDF_ROW_LIMIT
+    if total_count > row_limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Report contains {total_count} rows; narrow the filters below the {row_limit} row export limit.",
+        )
+    return query.limit(row_limit).all(), total_count
+
+
+def _apply_container_date_range(query, spec: DatasetQuerySpec):
+    """Filter both bounds against the same effective arrival date expression."""
+    effective_arrival_date = func.coalesce(
+        func.date(BillOfLanding.ArrivalDate),
+        ContainerDetails.unloaded_at_port,
+    )
+    if spec.date_from:
+        query = query.filter(effective_arrival_date >= spec.date_from)
+    if spec.date_to:
+        query = query.filter(effective_arrival_date <= spec.date_to)
+    return query
+
 
 # ── Dataset Resolver Registration ────────────────────────────────────────────
 
@@ -294,11 +327,8 @@ def resolve_containers_by_vendor(
 
     query = apply_org_filter(query, ContainerDetails, org_context)
 
-    # 1. Apply Date Filter
-    if spec.date_from:
-        query = query.filter(or_(BillOfLanding.ArrivalDate >= spec.date_from, ContainerDetails.unloaded_at_port >= spec.date_from))
-    if spec.date_to:
-        query = query.filter(or_(BillOfLanding.ArrivalDate <= spec.date_to, ContainerDetails.unloaded_at_port <= spec.date_to))
+    # 1. Apply Date Filter against one effective arrival date.
+    query = _apply_container_date_range(query, spec)
 
     # 2. Supplier Filter
     if spec.supplier_ids and len(spec.supplier_ids) > 0:
@@ -340,8 +370,7 @@ def resolve_containers_by_vendor(
         # Default arrival_date
         query = query.order_by(nullslast(sort_dir(BillOfLanding.ArrivalDate)))
 
-    total_count = query.count()
-    rows = query.all()
+    rows, total_count = _fetch_query_rows(query, spec)
 
     # Build Records List
     records = []
@@ -355,7 +384,7 @@ def resolve_containers_by_vendor(
         c_type = str(type_name or "20GP").upper()
         teu_val = 2.0 if ("40" in c_type or "45" in c_type) else 1.0
 
-        free_days = c.FreeDays or 7
+        free_days = c.FreeDays or DEFAULT_FREE_DAYS
         days_elapsed = 0
         if c.unloaded_at_port:
             end_d = c.empty_date or datetime.utcnow().date()
@@ -417,16 +446,19 @@ def resolve_containers_by_vendor(
         filters_applied=filters_applied,
         columns=CONTAINERS_BY_VENDOR_COLUMNS,
         records=records,
-        total_records=len(records),
+        total_records=total_count,
         is_grouped=is_grouped,
         group_field=spec.group_by,
         groups=groups,
         grand_totals=grand_totals,
         summary_metrics={
-            "total_containers": len(records),
+            "total_containers": total_count,
             "total_teus": grand_totals.get("teus", 0),
             "total_weight_kg": grand_totals.get("weight", 0),
         },
+        page=spec.page,
+        pages=max(1, (total_count + spec.limit - 1) // spec.limit) if spec.format == "json" else 1,
+        limit=spec.limit,
     )
 
 
@@ -530,7 +562,14 @@ def resolve_demurrage_aging_risk(
     if spec.supplier_ids:
         query = query.filter(BillOfLanding.Supplier.in_(spec.supplier_ids))
 
-    rows = query.all()
+    raw_count = query.count()
+    raw_limit = EXCEL_ROW_LIMIT if spec.format == "xlsx" else PDF_ROW_LIMIT
+    if raw_count > raw_limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Report contains {raw_count} candidate rows; narrow the filters below the {raw_limit} row limit.",
+        )
+    rows = query.limit(raw_limit).all()
     records = []
     now = datetime.utcnow().date()
 
@@ -550,7 +589,7 @@ def resolve_demurrage_aging_risk(
             risk_tier = "MODERATE (>7 Days)"
 
         # Standard estimated daily demurrage rate: $85/day after 7 free days
-        free_days = c.FreeDays or 7
+        free_days = c.FreeDays or DEFAULT_FREE_DAYS
         chargeable_days = max(0, days_on_port - free_days)
         daily_rate = 85.0
         est_demurrage = chargeable_days * daily_rate if can_financial else 0.0
@@ -577,6 +616,11 @@ def resolve_demurrage_aging_risk(
     else:
         # Default: estimated_demurrage DESC
         records.sort(key=lambda r: (r["estimated_demurrage"] or 0, r["days_on_port"] or 0), reverse=reverse)
+
+    total_count = len(records)
+    if spec.format == "json":
+        start = (spec.page - 1) * spec.limit
+        records = records[start:start + spec.limit]
 
     org_rec = db.query(Organisation).filter(Organisation.id == org_context.org_id).first()
     org_name = org_rec.name if org_rec else "Sahaj Holding Corp"
@@ -605,15 +649,18 @@ def resolve_demurrage_aging_risk(
         filters_applied={"min_days_threshold": f"> {min_days} Days"},
         columns=DEMURRAGE_COLUMNS,
         records=records,
-        total_records=len(records),
+        total_records=total_count,
         is_grouped=is_grouped,
         group_field=spec.group_by,
         groups=groups,
         grand_totals=grand_totals,
         summary_metrics={
-            "overdue_containers_count": len(records),
+            "overdue_containers_count": total_count,
             "total_estimated_demurrage": grand_totals.get("estimated_demurrage", 0),
         },
+        page=spec.page,
+        pages=max(1, (total_count + spec.limit - 1) // spec.limit) if spec.format == "json" else 1,
+        limit=spec.limit,
     )
 
 
@@ -739,7 +786,7 @@ def resolve_po_procurement_register(
     else:
         query = query.order_by(nullslast(sort_dir(PurchaseOrder.order_mail_date)))
 
-    rows = query.all()
+    rows, total_count = _fetch_query_rows(query, spec)
     records = []
 
     for po, sup_name in rows:
@@ -798,16 +845,19 @@ def resolve_po_procurement_register(
         filters_applied=filters_applied,
         columns=PO_REGISTER_COLUMNS,
         records=records,
-        total_records=len(records),
+        total_records=total_count,
         is_grouped=is_grouped,
         group_field=spec.group_by,
         groups=groups,
         grand_totals=grand_totals,
         summary_metrics={
-            "total_po_count": len(records),
+            "total_po_count": total_count,
             "total_commitment_amount": grand_totals.get("total_amount", 0),
             "total_balance_outstanding": grand_totals.get("balance_amount", 0),
         },
+        page=spec.page,
+        pages=max(1, (total_count + spec.limit - 1) // spec.limit) if spec.format == "json" else 1,
+        limit=spec.limit,
     )
 
 

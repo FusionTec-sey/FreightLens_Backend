@@ -29,6 +29,7 @@ class ResolverDefinition:
         fn: Callable,
         schema_meta: Dict[str, Any],
         sample_context: Dict[str, Any],
+        print_permissions: List[str],
     ):
         self.key = key
         self.name = name
@@ -38,6 +39,7 @@ class ResolverDefinition:
         self.fn = fn
         self.schema_meta = schema_meta
         self.sample_context = sample_context
+        self.print_permissions = tuple(print_permissions)
 
 
 _RESOLVER_REGISTRY: Dict[str, ResolverDefinition] = {}
@@ -51,6 +53,7 @@ def register_resolver(
     description: str,
     schema_meta: Dict[str, Any],
     sample_context: Dict[str, Any],
+    print_permissions: List[str],
 ):
     """Decorator to register a data resolver function in the registry."""
     def decorator(fn: Callable):
@@ -63,6 +66,7 @@ def register_resolver(
             fn=fn,
             schema_meta=schema_meta,
             sample_context=sample_context,
+            print_permissions=print_permissions,
         )
         return fn
     return decorator
@@ -239,6 +243,7 @@ PO_SAMPLE_CONTEXT = {
     description="Resolves Purchase Order or RFQ headers, line items, supplier contacts, and financial summaries.",
     schema_meta=PO_SCHEMA_META,
     sample_context=PO_SAMPLE_CONTEXT,
+    print_permissions=["Print_PurchaseOrder", "View_Order"],
 )
 def resolve_purchase_order(
     entity_id: int,
@@ -462,6 +467,7 @@ DEFECT_SAMPLE_CONTEXT = {
     description="Resolves material defects, damage inspections, affected quantities, photos, and claim resolutions.",
     schema_meta=DEFECT_SCHEMA_META,
     sample_context=DEFECT_SAMPLE_CONTEXT,
+    print_permissions=["View_Defect"],
 )
 def resolve_defect_report(
     entity_id: int,
@@ -596,6 +602,7 @@ BL_SAMPLE_CONTEXT = {
     description="Resolves ocean manifest, port-to-port voyage dates, carrier details, and container manifests.",
     schema_meta=BL_SCHEMA_META,
     sample_context=BL_SAMPLE_CONTEXT,
+    print_permissions=["Print_BillOfLanding", "View_BL"],
 )
 def resolve_bl_summary(
     entity_id: Any,
@@ -727,6 +734,7 @@ CONTAINER_SAMPLE_CONTEXT = {
     description="Resolves container tracking status, associated bill of lading, vessel, arrival date, free days, and cargo details.",
     schema_meta=CONTAINER_SCHEMA_META,
     sample_context=CONTAINER_SAMPLE_CONTEXT,
+    print_permissions=["Print_Container", "View_Container"],
 )
 def resolve_container_details(
     entity_id: Any,
@@ -991,6 +999,7 @@ RFQ_SAMPLE_CONTEXT = {
     description="Resolves material procurement requisitions, technical item specifications, submission deadlines, and bidding instructions for suppliers.",
     schema_meta=RFQ_SCHEMA_META,
     sample_context=RFQ_SAMPLE_CONTEXT,
+    print_permissions=["Print_PurchaseOrder", "View_RFQ", "Send_RFQ"],
 )
 def resolve_sourcing_rfq(
     entity_id: Any,
@@ -1426,6 +1435,7 @@ QUOTE_COMPARISON_SAMPLE_CONTEXT = {
     description="Resolves comparative supplier bid matrices, line-by-line item quotations, lowest bidder highlights, lead times, and commercial award selections.",
     schema_meta=QUOTE_COMPARISON_SCHEMA_META,
     sample_context=QUOTE_COMPARISON_SAMPLE_CONTEXT,
+    print_permissions=["Compare_Quote", "View_VendorQuote"],
 )
 def resolve_quote_comparison(
     entity_id: Any,

@@ -131,6 +131,20 @@ BASE_PRINT_CSS = """
         font-size: 8pt;
         color: #64748b;
     }
+    @top-center {
+        content: element(report-header);
+    }
+    @bottom-center {
+        content: element(report-footer);
+    }
+}
+
+.report-header {
+    position: running(report-header);
+}
+
+.report-footer {
+    position: running(report-footer);
 }
 
 *, *::before, *::after {
