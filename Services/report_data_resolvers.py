@@ -4,6 +4,7 @@ Data Resolver Registry and Built-in Resolvers for the Report & Print Template Sy
 Resolvers query the database with multi-tenant row isolation and permission-aware field redaction.
 """
 import logging
+import base64
 from typing import Dict, Any, Optional, Callable, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -104,6 +105,22 @@ def _clean_val(v: Any) -> Any:
     return v
 
 
+def _asset_data_uri(key: Optional[str]) -> Optional[str]:
+    if not key:
+        return None
+    try:
+        from Utils.blob_storage import blob_storage
+
+        body, content_type, _ = blob_storage.get_file(key)
+        if body is None:
+            return None
+        content = body.read()
+        return f"data:{content_type};base64,{base64.b64encode(content).decode('ascii')}"
+    except Exception:
+        logger.warning("Unable to resolve report asset %s", key, exc_info=True)
+        return None
+
+
 def _resolve_company_profile(db: Session, org_id: Optional[int]) -> Dict[str, Any]:
     """Resolve tenant-owned print identity without leaking another organisation's data."""
     organisation = None
@@ -121,6 +138,9 @@ def _resolve_company_profile(db: Session, org_id: Optional[int]) -> Dict[str, An
         or getattr(organisation, "name", None)
         or "Organisation"
     )
+    logo_key = getattr(profile, "logo_asset_key", None)
+    stamp_key = getattr(profile, "stamp_asset_key", None)
+    signature_key = getattr(profile, "signature_asset_key", None)
     return {
         "name": name,
         "legal_name": getattr(profile, "legal_name", None) or name,
@@ -128,9 +148,12 @@ def _resolve_company_profile(db: Session, org_id: Optional[int]) -> Dict[str, An
         "tax_id": getattr(profile, "tax_id", None),
         "phone": getattr(profile, "contact_phone", None),
         "email": getattr(profile, "contact_email", None),
-        "logo_asset_key": getattr(profile, "logo_asset_key", None),
-        "stamp_asset_key": getattr(profile, "stamp_asset_key", None),
-        "signature_asset_key": getattr(profile, "signature_asset_key", None),
+        "logo_asset_key": logo_key,
+        "stamp_asset_key": stamp_key,
+        "signature_asset_key": signature_key,
+        "logo_data_uri": _asset_data_uri(logo_key),
+        "stamp_data_uri": _asset_data_uri(stamp_key),
+        "signature_data_uri": _asset_data_uri(signature_key),
         "bank_details": dict(getattr(profile, "bank_details", None) or {}),
         "default_terms": dict(getattr(profile, "default_terms", None) or {}),
         "brand_color": getattr(profile, "brand_color", None) or "#1E40AF",

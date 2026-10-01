@@ -7,6 +7,14 @@ from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateAssignment import ReportTemplateAssignment
 from Schema.ReportSchema import OrgPrintProfileUpdate, ReportTemplateAssignmentUpdate
 from Utils.org_filter import OrgContext
+from Utils.blob_storage import blob_storage
+
+
+PRINT_ASSET_FIELDS = {
+    "logo": "logo_asset_key",
+    "stamp": "stamp_asset_key",
+    "signature": "signature_asset_key",
+}
 
 
 def get_print_profile(db: Session, org_context: OrgContext) -> OrgPrintProfile:
@@ -31,6 +39,30 @@ def update_print_profile(
     profile = get_print_profile(db, org_context)
     for field, value in payload.model_dump().items():
         setattr(profile, field, value)
+    profile.updated_by = user_id
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def upload_print_asset(
+    db: Session,
+    org_context: OrgContext,
+    asset_type: str,
+    content: bytes,
+    filename: str,
+    user_id: int,
+) -> OrgPrintProfile:
+    field = PRINT_ASSET_FIELDS.get(asset_type)
+    if field is None:
+        raise HTTPException(status_code=422, detail="Unsupported print asset type")
+    key = blob_storage.upload_file(
+        file_obj=content,
+        folder=f"reports/org-{org_context.org_id}/{asset_type}",
+        original_filename=filename,
+    )
+    profile = get_print_profile(db, org_context)
+    setattr(profile, field, key)
     profile.updated_by = user_id
     db.commit()
     db.refresh(profile)

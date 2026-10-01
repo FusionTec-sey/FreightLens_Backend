@@ -9,7 +9,7 @@ import math
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -84,12 +84,27 @@ from Services.report_customization_service import (
     get_template_assignment,
     update_print_profile,
     update_template_assignment,
+    upload_print_asset,
 )
 from Utils.blob_storage import blob_storage
 
 logger = logging.getLogger("containerMgmt.report_router")
 
 ReportRouter = APIRouter(prefix="/reports", tags=["Report Templates & Print Engine"])
+
+
+def _print_asset_extension(content: bytes) -> Optional[str]:
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if content.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if content.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return ".webp"
+    if len(content) >= 12 and content[4:12] in (b"ftypavif", b"ftypavis"):
+        return ".avif"
+    return None
 
 
 def _apply_saved_dataset_template(
@@ -165,6 +180,31 @@ def save_print_profile(
 ):
     access_policy.require_any("Manage_Print_Profile", "Manage_Report_Template")
     return update_print_profile(db, org_context, payload, current_user.id)
+
+
+@ReportRouter.post("/settings/print-profile/assets/{asset_type}", response_model=OrgPrintProfileOut)
+async def save_print_profile_asset(
+    asset_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    access_policy.require_any("Manage_Print_Profile", "Manage_Report_Template")
+    if asset_type not in {"logo", "stamp", "signature"}:
+        raise HTTPException(status_code=422, detail="Unsupported print asset type")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if not content:
+        raise HTTPException(status_code=422, detail="Uploaded image is empty")
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Print assets are limited to 5 MB")
+    extension = _print_asset_extension(content)
+    if extension is None:
+        raise HTTPException(status_code=415, detail="Use a valid PNG, JPEG, GIF, WebP, or AVIF image")
+    return upload_print_asset(
+        db, org_context, asset_type, content, f"{asset_type}{extension}", current_user.id
+    )
 
 
 @ReportRouter.get(

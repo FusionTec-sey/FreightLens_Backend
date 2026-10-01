@@ -80,6 +80,14 @@ def ensure_reporting_foundation_schema() -> None:
                 ON containermgmt.product_categories(is_shared);
         """))
 
+        # Legacy scope used NULL org_id for shared suppliers. The normalized
+        # model keeps an explicit owner for every row and uses is_shared only
+        # as the visibility decision, so remove the old constraint first.
+        conn.execute(text("""
+            ALTER TABLE containermgmt.supplier
+                DROP CONSTRAINT IF EXISTS ck_supplier_scope;
+        """))
+
         conn.execute(text("""
             DO $$
             DECLARE owner_org_id INTEGER;
