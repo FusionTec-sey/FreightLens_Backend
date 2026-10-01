@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import json
 import logging
 from typing import Dict, List, Optional, Any
-from sqlalchemy import func, text, extract
+from sqlalchemy import Date, cast, extract, func, text
 from sqlalchemy.orm import Session
 
 from Model.containermgmt.Container.ContainerDetails import ContainerDetails
@@ -21,6 +21,20 @@ from auth.security_guards import has_permission
 from Utils.org_filter import apply_org_filter, OrgContext
 
 logger = logging.getLogger(__name__)
+
+ACTIVE_PO_EXCLUDED_STATUSES = ("COMPLETED", "CANCELLED", "DRAFT")
+PENDING_PO_STATUSES = ("DRAFT", "SUBMITTED", "PENDING_APPROVAL")
+
+
+def build_demurrage_overdue_clause():
+    """Return the ORM expression used to identify containers past their free days."""
+    return (
+        func.current_date() - cast(BillOfLanding.ArrivalDate, Date)
+    ) > func.coalesce(
+        ContainerDetails.FreeDays,
+        BillOfLanding.FreeDays,
+        14,
+    )
 
 # ==============================================================================
 # WIDGET REGISTRY CATALOG
@@ -574,7 +588,7 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
                         ContainerDetails.is_deleted == False,
                         ContainerDetails.status.notin_([1, 4]),  # Exclude in-transit and completed
                         BillOfLanding.ArrivalDate.isnot(None),
-                        text("CURRENT_DATE - CAST(\"BillOfLanding\".\"ArrivalDate\" AS DATE) > COALESCE(\"ContainerDetails\".\"free_days\", \"BillOfLanding\".\"free_days\", 14)")
+                        build_demurrage_overdue_clause(),
                     )
                 )
                 demurrage_q = apply_org_filter(demurrage_q, ContainerDetails, org_context)
@@ -669,8 +683,9 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
             po_query = db.query(PurchaseOrder).filter(PurchaseOrder.is_deleted == False)
             po_query = apply_org_filter(po_query, PurchaseOrder, org_context)
 
-            active_pos = po_query.filter(PurchaseOrder.status.notin_(["completed", "cancelled", "draft"])).count()
-            pending_pos = po_query.filter(PurchaseOrder.status.in_(["draft", "submitted", "pending_approval"])).count()
+            normalized_status = func.upper(PurchaseOrder.status)
+            active_pos = po_query.filter(normalized_status.notin_(ACTIVE_PO_EXCLUDED_STATUSES)).count()
+            pending_pos = po_query.filter(normalized_status.in_(PENDING_PO_STATUSES)).count()
 
             data["po_active_orders"] = {"value": active_pos, "unit": "Orders"}
             data["po_pending_approval"] = {"value": pending_pos, "unit": "Orders", "alert": pending_pos > 0}
@@ -682,7 +697,7 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
                         func.sum(PurchaseOrder.total_amount)
                     ).filter(
                         PurchaseOrder.is_deleted == False,
-                        PurchaseOrder.status != "cancelled",
+                        func.upper(PurchaseOrder.status) != "CANCELLED",
                         extract('year', func.coalesce(PurchaseOrder.order_mail_date, PurchaseOrder.created_at)) == current_year
                     )
                     spend_result = apply_org_filter(spend_result, PurchaseOrder, org_context).scalar()

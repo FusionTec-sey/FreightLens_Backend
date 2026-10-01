@@ -475,6 +475,16 @@ def render_report_preview(
     if not resolver_key:
         raise HTTPException(status_code=400, detail="resolver_key is required to resolve preview context data.")
 
+    is_valid, errors, _ = validate_template(
+        html_content=html_content,
+        css_content=css_content,
+        header_html=header_html,
+        footer_html=footer_html,
+        resolver_key=resolver_key,
+    )
+    if not is_valid:
+        raise HTTPException(status_code=422, detail={"message": "Unsafe report preview", "errors": errors})
+
     context = resolve_report_data(
         resolver_key=resolver_key,
         entity_id=req.entity_id,

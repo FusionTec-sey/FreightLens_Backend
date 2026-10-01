@@ -4,7 +4,7 @@ Pydantic schemas for FreightLens Tabular & Dataset Operational Reporting Engine.
 Supports parametric multi-record queries, dynamic filtering, multi-level grouping,
 subtotals, paper geometry, and multi-format exports (JSON, PDF, Excel).
 """
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import date, datetime
 from decimal import Decimal
@@ -73,10 +73,6 @@ class DatasetQuerySpec(BaseModel):
     custom_width_mm: Optional[float] = None
     custom_height_mm: Optional[float] = None
 
-    # HTML/CSS Code Designer Override
-    custom_html: Optional[str] = None
-    custom_css: Optional[str] = None
-
     # Excel Output Settings
     sheet_per_group: Optional[bool] = False  # In Excel export, create one tab per group
 
@@ -86,6 +82,19 @@ class DatasetQuerySpec(BaseModel):
 
     # Format
     format: Optional[str] = "json"  # "json", "pdf", "xlsx", "csv"
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("margin_top", "margin_bottom", "margin_left", "margin_right")
+    @classmethod
+    def validate_css_dimension(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        import re
+
+        if not re.fullmatch(r"\d+(?:\.\d+)?(?:mm|cm|in|pt)", value.strip(), re.IGNORECASE):
+            raise ValueError("margin must be a positive CSS length using mm, cm, in, or pt")
+        return value.strip().lower()
 
 
 class DatasetSubtotalGroup(BaseModel):

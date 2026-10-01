@@ -4,14 +4,29 @@ Sandboxed Jinja2 rendering engine and WeasyPrint PDF compilation pipeline.
 Executes templates within an ImmutableSandboxedEnvironment with strict helper functions.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Callable, Optional
 from datetime import datetime, date
 from decimal import Decimal
+from urllib.parse import unquote, urlparse
+
+import nh3
 import weasyprint
 from jinja2.sandbox import SandboxedEnvironment
 from jinja2 import Undefined
 
 logger = logging.getLogger("containerMgmt.report_render_engine")
+
+SAFE_HTML_TAGS = set(nh3.ALLOWED_TAGS) | {"main", "section"}
+SAFE_HTML_ATTRIBUTES = {
+    tag: set(attributes) | {"class", "id", "style", "title"}
+    for tag, attributes in nh3.ALLOWED_ATTRIBUTES.items()
+}
+SAFE_HTML_ATTRIBUTES["*"] = {"class", "id", "style", "title"}
+SAFE_HTML_ATTRIBUTES["img"] = SAFE_HTML_ATTRIBUTES.get("img", set()) | {
+    "src", "alt", "width", "height"
+}
+SAFE_URL_SCHEMES = {"asset", "data"}
+BLOCKED_HTML_TAGS = {"script", "iframe", "object", "embed", "form"}
 
 
 # ── Helper filters & formatters ──────────────────────────────────────────────
@@ -67,6 +82,41 @@ def get_sandboxed_env() -> SandboxedEnvironment:
     env.filters["default_na"] = default_na_filter
     env.globals["now"] = datetime.utcnow
     return env
+
+
+def sanitize_html_fragment(fragment: Optional[str]) -> Optional[str]:
+    """Remove executable markup and external resource URLs from rendered fragments."""
+    if not fragment:
+        return fragment
+    return nh3.clean(
+        fragment,
+        tags=SAFE_HTML_TAGS,
+        attributes=SAFE_HTML_ATTRIBUTES,
+        clean_content_tags=BLOCKED_HTML_TAGS,
+        url_schemes=SAFE_URL_SCHEMES,
+        generic_attribute_prefixes={"data-", "aria-"},
+        url_relative="deny",
+        link_rel=None,
+    )
+
+
+def build_safe_url_fetcher(
+    asset_loader: Optional[Callable[[str], Dict[str, Any]]] = None,
+) -> Callable[[str], Dict[str, Any]]:
+    """Create a deny-by-default WeasyPrint fetcher for inline and scoped assets."""
+    def safe_url_fetcher(url: str) -> Dict[str, Any]:
+        parsed = urlparse(url)
+        scheme = parsed.scheme.lower()
+        if scheme == "data":
+            return weasyprint.default_url_fetcher(url)
+        if scheme == "asset" and asset_loader is not None:
+            asset_key = unquote(f"{parsed.netloc}{parsed.path}").lstrip("/")
+            if not asset_key or ".." in asset_key.split("/"):
+                raise ValueError("Invalid report asset key")
+            return asset_loader(asset_key)
+        raise ValueError(f"Blocked report resource URL scheme: {scheme or 'relative'}")
+
+    return safe_url_fetcher
 
 
 # ── Document Assembly & Rendering ────────────────────────────────────────────
@@ -186,17 +236,17 @@ def render_html_document(
     env = get_sandboxed_env()
 
     body_tmpl = env.from_string(html_template)
-    rendered_body = body_tmpl.render(context)
+    rendered_body = sanitize_html_fragment(body_tmpl.render(context))
 
     rendered_header = None
     if header_template and header_template.strip():
         hdr_tmpl = env.from_string(header_template)
-        rendered_header = hdr_tmpl.render(context)
+        rendered_header = sanitize_html_fragment(hdr_tmpl.render(context))
 
     rendered_footer = None
     if footer_template and footer_template.strip():
         ftr_tmpl = env.from_string(footer_template)
-        rendered_footer = ftr_tmpl.render(context)
+        rendered_footer = sanitize_html_fragment(ftr_tmpl.render(context))
 
     return build_full_html(
         html_body=rendered_body,
@@ -208,10 +258,16 @@ def render_html_document(
     )
 
 
-def compile_pdf_from_html(full_html: str) -> bytes:
+def compile_pdf_from_html(
+    full_html: str,
+    asset_loader: Optional[Callable[[str], Dict[str, Any]]] = None,
+) -> bytes:
     """Compiles a complete HTML string into a PDF binary byte stream using WeasyPrint."""
     try:
-        html_doc = weasyprint.HTML(string=full_html)
+        html_doc = weasyprint.HTML(
+            string=full_html,
+            url_fetcher=build_safe_url_fetcher(asset_loader),
+        )
         pdf_bytes = html_doc.write_pdf()
         return pdf_bytes
     except Exception as e:

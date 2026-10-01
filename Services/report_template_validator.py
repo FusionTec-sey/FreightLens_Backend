@@ -5,6 +5,7 @@ and Jinja2 syntax correctness before saving or rendering.
 """
 import re
 import logging
+from html import unescape
 from typing import Tuple, List, Optional
 from jinja2 import Environment
 from jinja2.sandbox import SandboxedEnvironment
@@ -76,7 +77,9 @@ def validate_template(
             errors.append(f"CSS content exceeds maximum allowed size of {MAX_CSS_BYTES // 1024} KB (Current: {css_size // 1024} KB).")
 
     # 2. SSTI Pattern Scans across all text fragments
-    all_content = f"{html_content}\n{css_content or ''}\n{header_html or ''}\n{footer_html or ''}"
+    all_content = unescape(
+        f"{html_content}\n{css_content or ''}\n{header_html or ''}\n{footer_html or ''}"
+    )
     for pat in FORBIDDEN_SSTI_PATTERNS:
         match = re.search(pat, all_content, re.IGNORECASE)
         if match:
@@ -84,19 +87,24 @@ def validate_template(
 
     # 3. HTML/XSS tag scans
     for pat, msg in FORBIDDEN_HTML_PATTERNS:
-        if re.search(pat, html_content, re.IGNORECASE):
+        if re.search(pat, unescape(html_content), re.IGNORECASE):
             errors.append(msg)
-        if header_html and re.search(pat, header_html, re.IGNORECASE):
+        if header_html and re.search(pat, unescape(header_html), re.IGNORECASE):
             errors.append(f"In header: {msg}")
-        if footer_html and re.search(pat, footer_html, re.IGNORECASE):
+        if footer_html and re.search(pat, unescape(footer_html), re.IGNORECASE):
             errors.append(f"In footer: {msg}")
 
     # 4. CSS Quality & Layout warnings
     if css_content:
         if "position: fixed" in css_content.lower():
             warnings.append("Using 'position: fixed' in WeasyPrint CSS can cause page overlap. Use @page margins or margin boxes for repeating headers/footers.")
-        if re.search(r"url\s*\(\s*['\"]?http", css_content, re.IGNORECASE):
-            warnings.append("External web URLs detected in CSS url(...). External network requests may slow down PDF generation or fail if disconnected.")
+        unsafe_css_url = re.search(
+            r"url\s*\(\s*['\"]?(?!data:|asset:)[^)]+",
+            unescape(css_content),
+            re.IGNORECASE,
+        )
+        if unsafe_css_url:
+            errors.append("CSS resource URLs must use the approved data: or asset: scheme.")
 
     # 5. Jinja2 Syntax Validation
     sandbox = SandboxedEnvironment()

@@ -65,6 +65,14 @@ def _sanitize_sheet_title(name: str) -> str:
     return clean[:31] if clean else "Sheet1"
 
 
+def _safe_excel_text(value: Any) -> str:
+    """Prevent untrusted text from being interpreted as an Excel formula."""
+    text_value = str(value)
+    if text_value.lstrip().startswith(("=", "+", "-", "@")):
+        return f"'{text_value}"
+    return text_value
+
+
 def _format_cell_value(cell, val: Any, col_def: ColumnDefinition):
     """Sets cell value and proper Excel number/date formatting."""
     if val is None or val == "":
@@ -79,7 +87,7 @@ def _format_cell_value(cell, val: Any, col_def: ColumnDefinition):
             cell.number_format = "#,##0.00" if (isinstance(val, float) or "." in str(val)) else "#,##0"
             cell.alignment = ALIGN_RIGHT
         except (ValueError, TypeError):
-            cell.value = str(val)
+            cell.value = _safe_excel_text(val)
             cell.alignment = ALIGN_LEFT
     elif data_type == "currency":
         try:
@@ -87,19 +95,19 @@ def _format_cell_value(cell, val: Any, col_def: ColumnDefinition):
             cell.number_format = "$#,##0.00"
             cell.alignment = ALIGN_RIGHT
         except (ValueError, TypeError):
-            cell.value = str(val)
+            cell.value = _safe_excel_text(val)
             cell.alignment = ALIGN_LEFT
     elif data_type == "date":
         if isinstance(val, (datetime, date)):
             cell.value = val.strftime("%Y-%m-%d")
         else:
-            cell.value = str(val)
+            cell.value = _safe_excel_text(val)
         cell.alignment = ALIGN_CENTER
     elif data_type == "boolean":
         cell.value = "YES" if bool(val) else "NO"
         cell.alignment = ALIGN_CENTER
     else:
-        cell.value = str(val)
+        cell.value = _safe_excel_text(val)
         cell.alignment = ALIGN_RIGHT if col_def.align == "right" else (ALIGN_CENTER if col_def.align == "center" else ALIGN_LEFT)
 
 

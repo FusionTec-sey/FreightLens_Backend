@@ -850,6 +850,19 @@ def render_dataset_pdf(
     """
     dataset = run_dataset_query(report_key, spec, db, org_context, user)
 
+    def css_string(value: object) -> str:
+        return (
+            str(value or "")
+            .replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\r", " ")
+            .replace("\n", " ")
+        )
+
+    css_org_name = css_string(dataset.org_name)
+    css_report_title = css_string(dataset.report_title)
+    css_generated_at = css_string(dataset.generated_at)
+
     # Declarative Landscape CSS
     css_content = f"""
     @page {{
@@ -857,19 +870,19 @@ def render_dataset_pdf(
         margin: {spec.margin_top or '12mm'} {spec.margin_right or '10mm'} {spec.margin_bottom or '12mm'} {spec.margin_left or '10mm'};
 
         @top-left {{
-            content: "{dataset.org_name}";
+            content: "{css_org_name}";
             font-size: 8pt;
             font-family: 'Inter', sans-serif;
             color: #64748b;
         }}
         @top-center {{
-            content: "{dataset.report_title}";
+            content: "{css_report_title}";
             font-size: 8.5pt;
             font-weight: bold;
             color: #1e293b;
         }}
         @top-right {{
-            content: "Generated: {dataset.generated_at}";
+            content: "Generated: {css_generated_at}";
             font-size: 8pt;
             color: #64748b;
         }}
@@ -1088,13 +1101,10 @@ def render_dataset_pdf(
     """
 
     context = dataset.model_dump()
-    final_html = spec.custom_html if (spec.custom_html and spec.custom_html.strip()) else html_template
-    final_css = f"{css_content}\n{spec.custom_css}" if spec.custom_css else css_content
-
     full_html = render_html_document(
-        html_template=final_html,
+        html_template=html_template,
         context=context,
-        css_content=final_css,
+        css_content=css_content,
         page_size=spec.page_size or "A4",
         orientation=spec.orientation or "landscape",
     )

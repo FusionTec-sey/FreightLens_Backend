@@ -1,27 +1,34 @@
-from weasyprint import HTML # type: ignore
+from html import escape
+
 from jinja2 import Environment, FileSystemLoader
 import os
 
+from Services.report_render_engine import compile_pdf_from_html
+
 def generate_damage_report_pdf(data: dict) -> bytes:
     template_dir = os.path.join("templates", "report")
-    env = Environment(loader=FileSystemLoader(template_dir))
+    env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
     template = env.get_template("damage_report.html")
 
     html_content = template.render(data)
-    pdf_bytes = HTML(string=html_content, base_url=".").write_pdf()
+    pdf_bytes = compile_pdf_from_html(html_content)
 
     return pdf_bytes
 
 def generate_defect_report_pdf(d) -> bytes:
+    def safe(value, fallback="") -> str:
+        resolved = fallback if value is None or value == "" else value
+        return escape(str(resolved), quote=True)
+
     items_html = ""
     for idx, it in enumerate(d.items or [], 1):
         if not it.is_deleted:
             items_html += f"""
             <tr>
                 <td style="text-align:center;">{idx}</td>
-                <td><strong>{it.item_description}</strong></td>
-                <td>{it.quantity_affected or 1} {it.unit or 'PCS'}</td>
-                <td>{it.notes or '—'}</td>
+                <td><strong>{safe(it.item_description)}</strong></td>
+                <td>{safe(it.quantity_affected, 1)} {safe(it.unit, 'PCS')}</td>
+                <td>{safe(it.notes, '—')}</td>
             </tr>
             """
 
@@ -40,8 +47,8 @@ def generate_defect_report_pdf(d) -> bytes:
         resolution_html = f"""
         <div style="font-size: 15px; font-weight: 600; color: #0f172a; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Resolution</div>
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-top: 8px; font-size: 13px;">
-            <strong>Status: {d.status}</strong> · {d.resolution_type or 'Pending Review'}<br/>
-            {d.resolution_notes or ''}
+            <strong>Status: {safe(d.status)}</strong> · {safe(d.resolution_type, 'Pending Review')}<br/>
+            {safe(d.resolution_notes)}
         </div>
         """
 
@@ -49,7 +56,7 @@ def generate_defect_report_pdf(d) -> bytes:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{d.defect_number}</title>
+    <title>{safe(d.defect_number)}</title>
     <style>
         @page {{ size: A4 portrait; margin: 20mm; }}
         body {{ font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; line-height: 1.5; font-size: 13px; }}
@@ -71,36 +78,36 @@ def generate_defect_report_pdf(d) -> bytes:
 <body>
     <div class="header">
         <div class="title">Damage & Defect Report</div>
-        <div class="ref">{d.defect_number} · <span class="badge">{d.status}</span></div>
+        <div class="ref">{safe(d.defect_number)} · <span class="badge">{safe(d.status)}</span></div>
     </div>
 
     <table class="meta-table">
         <tr>
             <td>
                 <div class="meta-label">Report Type</div>
-                <div class="meta-val">{report_type_str}</div>
+                <div class="meta-val">{safe(report_type_str)}</div>
             </td>
             <td>
                 <div class="meta-label">Discovery Date</div>
-                <div class="meta-val">{disc_date}</div>
+                <div class="meta-val">{safe(disc_date)}</div>
             </td>
         </tr>
         <tr>
             <td>
                 <div class="meta-label">Container / Order Reference</div>
-                <div class="meta-val">{cont_or_po}</div>
+                <div class="meta-val">{safe(cont_or_po)}</div>
             </td>
             <td>
                 <div class="meta-label">Bill of Lading</div>
-                <div class="meta-val">{d.bill_of_lading_no or '—'}</div>
+                <div class="meta-val">{safe(d.bill_of_lading_no, '—')}</div>
             </td>
         </tr>
     </table>
 
     <div class="section-title">Summary & Description</div>
     <div class="notes-box">
-        <strong>{d.title or 'Defect Details'}</strong><br/>
-        {d.description or 'No additional description provided.'}
+        <strong>{safe(d.title, 'Defect Details')}</strong><br/>
+        {safe(d.description, 'No additional description provided.')}
     </div>
 
     <div class="section-title">Affected Goods & Observations</div>
@@ -121,8 +128,8 @@ def generate_defect_report_pdf(d) -> bytes:
     {resolution_html}
 
     <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 11px; color: #94a3b8; text-align: right;">
-        FreightLens Defect Register · Generated on {disc_date}
+        FreightLens Defect Register · Generated on {safe(disc_date)}
     </div>
 </body>
 </html>"""
-    return HTML(string=html).write_pdf()
+    return compile_pdf_from_html(html)

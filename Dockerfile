@@ -12,6 +12,8 @@ RUN apt-get update && \
         libpango-1.0-0 \
         libpangocairo-1.0-0 \
         libffi-dev \
+        fonts-dejavu-core \
+        fonts-noto-core \
         build-essential \
         pkg-config && \
     rm -rf /var/lib/apt/lists/*
