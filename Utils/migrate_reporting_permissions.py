@@ -20,6 +20,7 @@ NEW_REPORTING_PERMISSIONS = [
     ("Run_Operational_Register", "Execute operational registers, view interactive grids, and export to Excel/PDF"),
     ("Manage_Operational_Template", "Visually design, customize columns/groupings/geometry, and save tabular templates"),
     ("Cross_Org_Report", "Run reports across more than one assigned organisation"),
+    ("Manage_Print_Profile", "Manage organisation branding and print defaults"),
     ("Print_PurchaseOrder", "Access contextual print modal and print Purchase Orders"),
     ("Print_Container", "Access contextual print modal and print Container gate passes / delivery notes"),
     ("Print_BillOfLanding", "Access contextual print modal and print Bill of Lading manifests"),

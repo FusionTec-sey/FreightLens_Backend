@@ -11,6 +11,7 @@ from Model.containermgmt.Report.OrgPrintProfile import OrgPrintProfile
 from Model.containermgmt.Report.ReportFieldClass import ReportFieldClass
 from Model.containermgmt.Report.ReportTemplateAssignment import ReportTemplateAssignment
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
+from Utils import migrate_reporting_foundation
 from Utils.migrate_reporting_foundation import FIELD_CLASSES
 
 
@@ -37,6 +38,13 @@ def test_reporting_foundation_tables_expose_required_contract():
         "BUDGET",
         "PERSONAL",
     }
+
+
+def test_foundation_migration_enforces_one_default_per_org_entity():
+    source = open(migrate_reporting_foundation.__file__, encoding="utf-8").read()
+
+    assert "uq_report_template_default_org_entity" in source
+    assert "WHERE is_default = TRUE AND is_deleted = FALSE" in source
 
 
 def test_roles_can_be_assigned_per_organisation():

@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
+from Model.containermgmt.Report.ReportTemplateAssignment import ReportTemplateAssignment
 from Model.Credentials.users import User
 from Utils.org_filter import OrgContext
 from Schema.ReportSchema import (
@@ -22,6 +23,27 @@ from Schema.ReportSchema import (
 from Services.report_template_validator import validate_template
 
 logger = logging.getLogger("containerMgmt.report_template_service")
+
+
+def _apply_assignment_state(db: Session, templates: List[ReportTemplate], org_id: int) -> None:
+    template_ids = [template.id for template in templates]
+    assignments = (
+        db.query(ReportTemplateAssignment)
+        .filter(
+            ReportTemplateAssignment.org_id == org_id,
+            ReportTemplateAssignment.template_id.in_(template_ids),
+            ReportTemplateAssignment.is_deleted.is_(False),
+        )
+        .all()
+        if template_ids
+        else []
+    )
+    by_template = {assignment.template_id: assignment for assignment in assignments}
+    for template in templates:
+        assignment = by_template.get(template.id)
+        template.is_active_for_org = bool(assignment and assignment.is_active)
+        template.is_default_for_org = bool(assignment and assignment.is_default)
+        template.default_options = dict(assignment.default_options or {}) if assignment else {}
 
 
 def resolve_template_identity(resolver_key: str, template_type: str) -> Tuple[str, str]:
@@ -100,7 +122,21 @@ def list_templates(
             )
 
     if is_active is not None:
-        query = query.filter(ReportTemplate.is_active == is_active)
+        query = query.outerjoin(
+            ReportTemplateAssignment,
+            and_(
+                ReportTemplateAssignment.template_id == ReportTemplate.id,
+                ReportTemplateAssignment.org_id == org_context.org_id,
+                ReportTemplateAssignment.is_deleted.is_(False),
+            ),
+        )
+        if is_active:
+            query = query.filter(ReportTemplateAssignment.is_active.is_(True))
+        else:
+            query = query.filter(or_(
+                ReportTemplateAssignment.id.is_(None),
+                ReportTemplateAssignment.is_active.is_(False),
+            ))
 
     if search and search.strip():
         term = f"%{search.strip()}%"
@@ -114,11 +150,7 @@ def list_templates(
 
     total = query.count()
     items = query.order_by(ReportTemplate.is_system.desc(), ReportTemplate.name.asc()).offset(skip).limit(limit).all()
-    for t in items:
-        if t.is_system:
-            t.is_active_for_org = bool(org_context.org_id in (t.active_org_ids or []))
-        else:
-            t.is_active_for_org = bool(t.is_active)
+    _apply_assignment_state(db, items, org_context.org_id)
     return items, total
 
 
@@ -136,10 +168,7 @@ def get_template(db: Session, template_id: int, org_context: OrgContext) -> Repo
     if not template.is_system and template.org_id not in visible_org_ids:
         raise HTTPException(status_code=403, detail="Access denied to this report template.")
 
-    if template.is_system:
-        template.is_active_for_org = bool(org_context.org_id in (template.active_org_ids or []))
-    else:
-        template.is_active_for_org = bool(template.is_active)
+    _apply_assignment_state(db, [template], org_context.org_id)
 
     return template
 
@@ -224,6 +253,15 @@ def create_custom_template(
     )
     db.add(template)
     db.flush()
+    db.add(ReportTemplateAssignment(
+        org_id=org_context.org_id,
+        template_id=template.id,
+        entity_type=template.entity_type,
+        is_active=bool(data.is_active),
+        is_default=False,
+        default_options={},
+        created_by=user.id,
+    ))
 
     if initial_ver:
         ver = ReportTemplateVersion(
@@ -290,6 +328,15 @@ def clone_template(
     )
     db.add(new_template)
     db.flush()
+    db.add(ReportTemplateAssignment(
+        org_id=org_context.org_id,
+        template_id=new_template.id,
+        entity_type=new_template.entity_type,
+        is_active=True,
+        is_default=False,
+        default_options={},
+        created_by=user.id,
+    ))
 
     new_version = ReportTemplateVersion(
         template_id=new_template.id,
@@ -430,6 +477,14 @@ def publish_template_version(
     template.active_version_id = target_ver.id
     template.is_active = True
     template.updated_by = user.id
+    assignment = db.query(ReportTemplateAssignment).filter(
+        ReportTemplateAssignment.org_id == org_context.org_id,
+        ReportTemplateAssignment.template_id == template.id,
+        ReportTemplateAssignment.is_deleted.is_(False),
+    ).first()
+    if assignment:
+        assignment.is_active = True
+        assignment.updated_by = user.id
 
     db.commit()
     db.refresh(template)
@@ -453,18 +508,6 @@ def list_active_templates_for_entity(
     # Condition:
     # 1. System templates activated for current_org_id
     # 2. Org custom templates owned by current_org_id and is_active is True
-    active_condition = or_(
-        and_(
-            ReportTemplate.is_system == True,
-            ReportTemplate.active_org_ids.any(current_org_id),
-        ),
-        and_(
-            ReportTemplate.is_system == False,
-            ReportTemplate.org_id == current_org_id,
-            ReportTemplate.is_active == True,
-        ),
-    )
-
     allowed_types = [entity_type]
     if entity_type == "RFQ":
         allowed_types = ["RFQ", "PurchaseOrder"]
@@ -473,18 +516,26 @@ def list_active_templates_for_entity(
 
     query = (
         db.query(ReportTemplate)
+        .join(
+            ReportTemplateAssignment,
+            and_(
+                ReportTemplateAssignment.template_id == ReportTemplate.id,
+                ReportTemplateAssignment.org_id == current_org_id,
+                ReportTemplateAssignment.is_deleted.is_(False),
+                ReportTemplateAssignment.is_active.is_(True),
+            ),
+        )
         .filter(
             ReportTemplate.is_deleted == False,
             ReportTemplate.entity_type.in_(allowed_types),
             ReportTemplate.template_type == template_type,
-            active_condition,
+            or_(ReportTemplate.is_system == True, ReportTemplate.org_id == current_org_id),
         )
         .order_by(ReportTemplate.is_system.desc(), ReportTemplate.name.asc())
     )
 
     templates = query.all()
-    for t in templates:
-        t.is_active_for_org = True
+    _apply_assignment_state(db, templates, current_org_id)
     return templates
 
 
@@ -508,26 +559,31 @@ def toggle_template_activation(
 
     current_org_id = org_context.org_id
 
-    if template.is_system:
-        active_list = list(template.active_org_ids or [])
-        if current_org_id in active_list:
-            active_list.remove(current_org_id)
-            is_now_active = False
-        else:
-            active_list.append(current_org_id)
-            is_now_active = True
-        template.active_org_ids = active_list
+    if not template.is_system and template.org_id != current_org_id:
+        raise HTTPException(status_code=403, detail="Cannot configure another organisation's template")
+    assignment = db.query(ReportTemplateAssignment).filter(
+        ReportTemplateAssignment.org_id == current_org_id,
+        ReportTemplateAssignment.template_id == template.id,
+        ReportTemplateAssignment.is_deleted.is_(False),
+    ).first()
+    if assignment is None:
+        assignment = ReportTemplateAssignment(
+            org_id=current_org_id,
+            template_id=template.id,
+            entity_type=template.entity_type,
+            is_active=True,
+            is_default=False,
+            default_options={},
+            created_by=user.id,
+        )
+        db.add(assignment)
+        is_now_active = True
     else:
-        # Check ownership
-        if template.org_id != current_org_id and not getattr(user, "is_root", False):
-            raise HTTPException(
-                status_code=403,
-                detail="Cannot toggle status of templates owned by another organization."
-            )
-        template.is_active = not bool(template.is_active)
-        is_now_active = template.is_active
-
-    template.updated_by = user.id
+        assignment.is_active = not assignment.is_active
+        assignment.updated_by = user.id
+        is_now_active = assignment.is_active
+        if not is_now_active:
+            assignment.is_default = False
     db.commit()
     db.refresh(template)
     return {

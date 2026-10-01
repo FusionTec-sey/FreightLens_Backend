@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from Utils.org_filter import OrgContext, apply_org_filter
 from Model.Credentials.users import User
 from Model.Credentials.Organisation import Organisation
+from Model.containermgmt.Report.OrgPrintProfile import OrgPrintProfile
 from auth.security_guards import is_financial_user, can_view_supplier_user
 
 logger = logging.getLogger("containerMgmt.report_resolvers")
@@ -101,6 +102,42 @@ def _clean_val(v: Any) -> Any:
     if isinstance(v, Decimal):
         return float(v)
     return v
+
+
+def _resolve_company_profile(db: Session, org_id: Optional[int]) -> Dict[str, Any]:
+    """Resolve tenant-owned print identity without leaking another organisation's data."""
+    organisation = None
+    profile = None
+    if org_id:
+        organisation = db.query(Organisation).filter(Organisation.id == org_id).first()
+        profile = db.query(OrgPrintProfile).filter(
+            OrgPrintProfile.org_id == org_id,
+            OrgPrintProfile.is_deleted.is_(False),
+        ).first()
+
+    name = (
+        getattr(profile, "legal_name", None)
+        or getattr(organisation, "display_name", None)
+        or getattr(organisation, "name", None)
+        or "Organisation"
+    )
+    return {
+        "name": name,
+        "legal_name": getattr(profile, "legal_name", None) or name,
+        "address": getattr(profile, "address", None),
+        "tax_id": getattr(profile, "tax_id", None),
+        "phone": getattr(profile, "contact_phone", None),
+        "email": getattr(profile, "contact_email", None),
+        "logo_asset_key": getattr(profile, "logo_asset_key", None),
+        "stamp_asset_key": getattr(profile, "stamp_asset_key", None),
+        "signature_asset_key": getattr(profile, "signature_asset_key", None),
+        "bank_details": dict(getattr(profile, "bank_details", None) or {}),
+        "default_terms": dict(getattr(profile, "default_terms", None) or {}),
+        "brand_color": getattr(profile, "brand_color", None) or "#1E40AF",
+        "font_family": getattr(profile, "font_family", None) or "Arial",
+        "locale": getattr(profile, "locale", None) or "en-SC",
+        "timezone": getattr(profile, "timezone", None) or "Indian/Mahe",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -272,18 +309,7 @@ def resolve_purchase_order(
     # RFQs never show final financials even to financial users
     allow_financials = can_financial and (not is_rfq)
 
-    # Fetch Issuing Organisation branding
-    company_data = {
-        "name": "Sahaj Holding Corp",
-        "address": "Victoria, Mahe, Seychelles",
-        "tax_id": None,
-        "phone": None,
-        "email": None,
-    }
-    if po.org_id:
-        org_rec = db.query(Organisation).filter(Organisation.id == po.org_id).first()
-        if org_rec:
-            company_data["name"] = org_rec.name or company_data["name"]
+    company_data = _resolve_company_profile(db, po.org_id)
 
     # Supplier info
     supplier_data = {}
@@ -1026,18 +1052,7 @@ def resolve_sourcing_rfq(
     show_budget = bool(params.get("show_budget", False)) and can_financial
     can_vendor = can_view_supplier_user(user, org_context)
 
-    # Company info
-    company_data = {
-        "name": "Sahaj Holding Corp",
-        "address": "Victoria Commercial Center, Mahe, Seychelles",
-        "tax_id": None,
-        "phone": "+248 4 123 456",
-        "email": "procurement@sahaj.sc",
-    }
-    if po.org_id:
-        org_rec = db.query(Organisation).filter(Organisation.id == po.org_id).first()
-        if org_rec:
-            company_data["name"] = org_rec.name or company_data["name"]
+    company_data = _resolve_company_profile(db, po.org_id)
 
     supplier_data = {}
     if can_vendor and po.supplier_rel:
@@ -1105,7 +1120,7 @@ def resolve_sourcing_rfq(
         "consignee_name": po.consignee,
         "destination_port": getattr(po, "destination_port", None) or "Port Victoria, Seychelles",
         "freight_type": po.freight_type or "Sea Freight",
-        "buyer_contact": company_data.get("email") or "procurement@sahaj.sc",
+        "buyer_contact": company_data.get("email"),
         "generated_by": getattr(user, "username", "System"),
         "org_name": company_data.get("name"),
         "remark": po.remark or "Please submit best commercial offer in accordance with attached specifications.",
@@ -1116,10 +1131,10 @@ def resolve_sourcing_rfq(
         "items": items_list,
         "total_items": len(items_list),
         "estimated_budget_total": float(total_est) if show_budget else None,
-        "instructions": [
+        "instructions": company_data.get("default_terms", {}).get("rfq") or [
             "Please provide firm quotation specifying Unit Price, Total Price, Currency, and Delivery Terms (CIF Port Victoria preferred).",
             "State manufacturer name, country of origin, and expected delivery lead time in calendar days.",
-            "Quotations must be submitted via email to procurement@sahaj.sc prior to the closing deadline.",
+            f"Quotations must be submitted to {company_data.get('email') or 'the issuing organisation'} prior to the closing deadline.",
             "Prices must remain fixed and valid for at least 30 calendar days from the bid submission date.",
             "Include technical data sheets and material compliance certifications with your offer.",
         ],

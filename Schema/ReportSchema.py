@@ -141,6 +141,8 @@ class ReportTemplateOut(ReportTemplateBase):
     template_type: Optional[str] = "DOCUMENT"
     active_org_ids: Optional[List[int]] = None
     is_active_for_org: Optional[bool] = None
+    is_default_for_org: bool = False
+    default_options: Dict[str, Any] = Field(default_factory=dict)
     table_config: Optional[TabularLayout] = None
     paper_settings: Optional[ReportPaperSettings] = None
     created_at: Optional[datetime] = None
@@ -167,6 +169,50 @@ class ReportRenderRequest(BaseModel):
     entity_id: Optional[int] = None
     format: Optional[str] = Field("pdf", description="'pdf' or 'html'")
     params: Optional[Dict[str, Any]] = None
+
+
+class OrgPrintProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    legal_name: Optional[str] = Field(None, max_length=255)
+    address: Optional[str] = Field(None, max_length=2000)
+    tax_id: Optional[str] = Field(None, max_length=100)
+    contact_email: Optional[str] = Field(None, max_length=255)
+    contact_phone: Optional[str] = Field(None, max_length=100)
+    logo_asset_key: Optional[str] = Field(None, max_length=500)
+    stamp_asset_key: Optional[str] = Field(None, max_length=500)
+    signature_asset_key: Optional[str] = Field(None, max_length=500)
+    bank_details: Dict[str, Any] = Field(default_factory=dict)
+    default_terms: Dict[str, Any] = Field(default_factory=dict)
+    brand_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    font_family: Optional[str] = Field(None, max_length=100)
+    locale: str = Field("en-SC", min_length=2, max_length=20)
+    timezone: str = Field("Indian/Mahe", min_length=3, max_length=100)
+
+
+class OrgPrintProfileOut(OrgPrintProfileUpdate):
+    model_config = ConfigDict(from_attributes=True)
+
+    org_id: int
+
+
+class ReportTemplateAssignmentUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_active: Optional[bool] = None
+    is_default: Optional[bool] = None
+    default_options: Optional[Dict[str, Any]] = None
+
+
+class ReportTemplateAssignmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    template_id: int
+    org_id: int
+    entity_type: str
+    is_active: bool
+    is_default: bool
+    default_options: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ReportPreviewRequest(BaseModel):

@@ -48,6 +48,10 @@ from Schema.ReportSchema import (
     ReportTemplateVersionOut,
     ReportRenderRequest,
     ReportRenderJobOut,
+    OrgPrintProfileUpdate,
+    OrgPrintProfileOut,
+    ReportTemplateAssignmentUpdate,
+    ReportTemplateAssignmentOut,
     ReportPreviewRequest,
     ReportValidateRequest,
     ReportValidateResponse,
@@ -75,6 +79,12 @@ from Services.report_data_resolvers import (
 from Services.report_template_validator import validate_template
 from Services.report_render_engine import render_html_document, compile_pdf_from_html
 from Services.report_context_generator import generate_context_file
+from Services.report_customization_service import (
+    get_print_profile,
+    get_template_assignment,
+    update_print_profile,
+    update_template_assignment,
+)
 from Utils.blob_storage import blob_storage
 
 logger = logging.getLogger("containerMgmt.report_router")
@@ -134,6 +144,61 @@ def _authorize_document_render(template, current_user: User, org_context: OrgCon
 
 
 # ── Template Catalog & CRUD Endpoints ────────────────────────────────────────
+
+@ReportRouter.get("/settings/print-profile", response_model=OrgPrintProfileOut)
+def read_print_profile(
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    access_policy.require_any("View_Report", "Manage_Print_Profile")
+    return get_print_profile(db, org_context)
+
+
+@ReportRouter.put("/settings/print-profile", response_model=OrgPrintProfileOut)
+def save_print_profile(
+    payload: OrgPrintProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    access_policy.require_any("Manage_Print_Profile", "Manage_Report_Template")
+    return update_print_profile(db, org_context, payload, current_user.id)
+
+
+@ReportRouter.get(
+    "/templates/{template_id}/assignment",
+    response_model=ReportTemplateAssignmentOut,
+)
+def read_template_assignment(
+    template_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    access_policy.require_any("View_Report", "Toggle_Report_Template")
+    return get_template_assignment(db, org_context, template_id)
+
+
+@ReportRouter.put(
+    "/templates/{template_id}/assignment",
+    response_model=ReportTemplateAssignmentOut,
+)
+def save_template_assignment(
+    template_id: int,
+    payload: ReportTemplateAssignmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    access_policy.require_any(
+        "Toggle_Report_Template",
+        "Manage_Report_Template",
+        "Manage_Operational_Template",
+    )
+    return update_template_assignment(db, org_context, template_id, payload, current_user.id)
 
 @ReportRouter.get("/templates", response_model=ReportTemplatePaginatedResponse)
 def get_templates_catalog(
@@ -197,21 +262,17 @@ def toggle_active_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """
     Toggles activation of a template for the current organization.
-    For system templates: adds/removes org_id from active_org_ids.
-    For custom templates: toggles is_active.
+    Activation is stored in the normalized per-organization assignment record.
     """
-    if not (
-        has_permission(current_user, "Toggle_Report_Template")
-        or has_permission(current_user, "Manage_Report_Template")
-        or has_permission(current_user, "Manage_Operational_Template")
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission 'Toggle_Report_Template'."
-        )
+    access_policy.require_any(
+        "Toggle_Report_Template",
+        "Manage_Report_Template",
+        "Manage_Operational_Template",
+    )
     return toggle_template_activation(
         db=db,
         org_context=org_context,

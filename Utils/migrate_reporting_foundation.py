@@ -173,6 +173,9 @@ def ensure_reporting_foundation_schema() -> None:
                 ON containermgmt.report_template_assignments(org_id, entity_type);
             CREATE INDEX IF NOT EXISTS ix_report_template_assignments_template_id
                 ON containermgmt.report_template_assignments(template_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_report_template_default_org_entity
+                ON containermgmt.report_template_assignments(org_id, entity_type)
+                WHERE is_default = TRUE AND is_deleted = FALSE;
 
             CREATE TABLE IF NOT EXISTS containermgmt.report_field_classes (
                 code VARCHAR(50) PRIMARY KEY,
@@ -301,6 +304,17 @@ def seed_reporting_foundation(db: Session) -> None:
             AS active_org_id
         JOIN usercredentials.organisations AS organisation
             ON organisation.id = active_org_id
+        ON CONFLICT (org_id, template_id) DO NOTHING
+    """))
+    db.execute(text("""
+        INSERT INTO containermgmt.report_template_assignments
+            (org_id, template_id, entity_type, is_active, is_default, default_options)
+        SELECT template.org_id, template.id, template.entity_type,
+               template.is_active, FALSE, COALESCE(template.default_params, '{}'::json)
+        FROM containermgmt.report_templates AS template
+        WHERE template.is_system IS FALSE
+          AND template.org_id IS NOT NULL
+          AND template.is_deleted IS FALSE
         ON CONFLICT (org_id, template_id) DO NOTHING
     """))
     db.commit()
