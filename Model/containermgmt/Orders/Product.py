@@ -14,6 +14,7 @@ class ProductCategory(OrgMixin, AuditMixin, Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
+    is_shared = Column(Boolean, default=False, nullable=False, index=True)
 
     # Hierarchy
     parent_id = Column(Integer, ForeignKey("containermgmt.product_categories.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -40,6 +41,7 @@ class Product(OrgMixin, AuditMixin, Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     description_quick = Column(String(500), nullable=True)  # Short one-liner for lists
+    is_shared = Column(Boolean, default=False, nullable=False, index=True)
 
     # status: 'active' | 'inactive'  (active by default)
     status = Column(String(20), default="active", nullable=False)

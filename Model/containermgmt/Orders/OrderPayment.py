@@ -18,6 +18,8 @@ class OrderPayment(OrgMixin, AuditMixin, Base):
     currency = Column(String(10), default="USD")
     exchange_rate = Column(Numeric(10, 4), default=1.0)
     amount_local = Column(Numeric(14, 2), nullable=True)  # SCR amount
+    base_currency = Column(String(10), nullable=True)
+    base_amount = Column(Numeric(14, 2), nullable=True)
     
     due_date = Column(Date, nullable=True)
     paid_date = Column(Date, nullable=True)

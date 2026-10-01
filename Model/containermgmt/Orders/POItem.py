@@ -21,6 +21,10 @@ class POItem(OrgMixin, AuditMixin, Base):
     unit_price = Column(Numeric(14, 2), nullable=True)
     total_price = Column(Numeric(14, 2), nullable=True)
     currency = Column(String(10), default="USD")
+    base_currency = Column(String(10), nullable=True)
+    exchange_rate_to_base = Column(Numeric(18, 8), nullable=True)
+    unit_price_base = Column(Numeric(14, 2), nullable=True)
+    total_price_base = Column(Numeric(14, 2), nullable=True)
     
     # ── Multi-Stage Prices ───────────────────────────────────────────────
     draft_unit_price = Column(Numeric(14, 2), nullable=True)       # Estimated price during Draft

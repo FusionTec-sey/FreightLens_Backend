@@ -9,7 +9,7 @@ class Supplier(AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     supplier_id = Column(Integer, primary_key=True)
-    org_id = Column(Integer, ForeignKey("usercredentials.organisations.id"), nullable=True, index=True)
+    org_id = Column(Integer, ForeignKey("usercredentials.organisations.id"), nullable=False, index=True)
     is_shared = Column(Boolean, default=False, nullable=False, index=True)
     name = Column(String(255))
     code = Column(String(50), nullable=True)

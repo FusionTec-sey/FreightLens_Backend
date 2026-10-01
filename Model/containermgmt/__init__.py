@@ -38,9 +38,13 @@ from .Orders.POItemHistory import POItemHistory
 from .Orders.POStageTransition import POStageTransition
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
+from .MasterData.DocumentType import MasterDocumentType
 from .Report.ReportTemplate import ReportTemplate
 from .Report.ReportTemplateVersion import ReportTemplateVersion
 from .Report.ReportRenderJob import ReportRenderJob
+from .Report.OrgPrintProfile import OrgPrintProfile
+from .Report.ReportFieldClass import ReportFieldClass
+from .Report.ReportTemplateAssignment import ReportTemplateAssignment
 
 __all__ = [
     "ContainerDetails", "ContainerDocs", "DocType", "BillOfLanding",
@@ -54,6 +58,8 @@ __all__ = [
     "OrderStatusHistory", "Notification", "Product", "ProductCategory", "ProductLink",
     "OrderTemplate", "OrderTemplateItem",
     "VendorQuote", "VendorQuoteItem", "POItemHistory", "POStageTransition",
-    "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob"
+    "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
+    "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
+    "MasterDocumentType"
 ]
 

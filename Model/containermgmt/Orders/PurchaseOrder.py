@@ -49,6 +49,11 @@ class PurchaseOrder(OrgMixin, AuditMixin, Base):
     advance_amount = Column(Numeric(14, 2), nullable=True)
     balance_amount = Column(Numeric(14, 2), nullable=True)
     currency = Column(String(10), default="USD")
+    base_currency = Column(String(10), nullable=True)
+    exchange_rate_to_base = Column(Numeric(18, 8), nullable=True)
+    total_amount_base = Column(Numeric(14, 2), nullable=True)
+    advance_amount_base = Column(Numeric(14, 2), nullable=True)
+    balance_amount_base = Column(Numeric(14, 2), nullable=True)
 
     # Company / Consignee legacy fields
     sheet_type = Column(String(50), default="NOBLE")  # NOBLE, SAHAJANAND, SAHAJ

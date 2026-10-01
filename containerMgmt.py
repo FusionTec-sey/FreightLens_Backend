@@ -147,6 +147,8 @@ async def startup_event():
     ensure_template_activation_and_tabular_schema()
     from Utils.migrate_sourcing_and_quote_templates import ensure_sourcing_and_quote_templates_schema
     ensure_sourcing_and_quote_templates_schema()
+    from Utils.migrate_reporting_foundation import ensure_reporting_foundation_schema
+    ensure_reporting_foundation_schema()
     from Utils.migrate_20260930_org_id_integrity import ensure_org_id_integrity
     ensure_org_id_integrity()
     logger.info("Database tables are ready.")
@@ -157,6 +159,8 @@ async def startup_event():
         seed_db(db_session)
         from Utils.migrate_reporting_permissions import run_reporting_permissions_migration
         run_reporting_permissions_migration(db_session)
+        from Utils.migrate_reporting_foundation import seed_reporting_foundation
+        seed_reporting_foundation(db_session)
     except Exception as e:
         logger.error("Database seeding failed: %s", e)
     finally:

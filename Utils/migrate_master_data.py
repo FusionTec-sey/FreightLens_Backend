@@ -276,6 +276,10 @@ def ensure_master_data_schema():
                     ALTER COLUMN is_deleted SET DEFAULT FALSE;
 
                     ALTER TABLE containermgmt.payment_terms
+                    ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES usercredentials.organisations(id),
+                    ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
+
+                    ALTER TABLE containermgmt.payment_terms
                     ALTER COLUMN is_deleted SET DEFAULT FALSE;
 
                     ALTER TABLE containermgmt.supplier
@@ -319,20 +323,25 @@ def ensure_master_data_schema():
                         );
                     """), rate)
 
-                # Step 6: Seed Standard Payment Terms
-                for term in STANDARD_PAYMENT_TERMS:
-                    conn.execute(text("""
-                        INSERT INTO containermgmt.payment_terms (code, name, description, advance_pct, progress_pct, balance_pct, balance_trigger, credit_days, is_active, is_deleted)
-                        VALUES (:code, :name, :description, :advance_pct, :progress_pct, :balance_pct, :balance_trigger, :credit_days, TRUE, FALSE)
-                        ON CONFLICT (code) DO UPDATE
-                        SET name = EXCLUDED.name,
-                            description = EXCLUDED.description,
-                            advance_pct = EXCLUDED.advance_pct,
-                            progress_pct = EXCLUDED.progress_pct,
-                            balance_pct = EXCLUDED.balance_pct,
-                            balance_trigger = EXCLUDED.balance_trigger,
-                            credit_days = EXCLUDED.credit_days;
-                    """), term)
+                # Step 6: Seed shared defaults once an owner organisation exists.
+                owner_org_id = conn.execute(text(
+                    "SELECT min(id) FROM usercredentials.organisations"
+                )).scalar()
+                if owner_org_id is not None:
+                    for term in STANDARD_PAYMENT_TERMS:
+                        conn.execute(text("""
+                            INSERT INTO containermgmt.payment_terms
+                                (org_id, is_shared, code, name, description, advance_pct,
+                                 progress_pct, balance_pct, balance_trigger, credit_days,
+                                 is_active, is_deleted)
+                            SELECT :owner_org_id, TRUE, :code, :name, :description,
+                                   :advance_pct, :progress_pct, :balance_pct,
+                                   :balance_trigger, :credit_days, TRUE, FALSE
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM containermgmt.payment_terms
+                                WHERE code = :code
+                            );
+                        """), {**term, "owner_org_id": owner_org_id})
 
                 conn.commit()
                 logger.info("Master Data currencies, exchange rates, and payment terms successfully verified and seeded.")

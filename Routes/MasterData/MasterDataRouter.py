@@ -323,7 +323,7 @@ def get_payment_terms(
     org_context: OrgContext = Depends(get_org_context),
     current_user = Depends(get_current_user)
 ):
-    query = db.query(PaymentTerm)
+    query = apply_shared_or_org_filter(db.query(PaymentTerm), PaymentTerm, org_context)
     if active_only:
         query = query.filter(PaymentTerm.is_active == True)
     terms = query.order_by(PaymentTerm.id.asc()).all()
@@ -348,6 +348,8 @@ def get_payment_terms(
             "balance_trigger": t.balance_trigger,
             "credit_days": t.credit_days,
             "is_active": t.is_active,
+            "is_shared": t.is_shared,
+            "org_id": t.org_id,
             "vendor_count": vendor_count,
         })
 
@@ -371,11 +373,16 @@ def create_payment_term(
         )
 
     code_clean = payload.code.strip().upper().replace(" ", "_")
-    existing = db.query(PaymentTerm).filter(PaymentTerm.code == code_clean).first()
+    existing = db.query(PaymentTerm).filter(
+        PaymentTerm.org_id == org_context.org_id,
+        PaymentTerm.code == code_clean,
+    ).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Payment term code '{code_clean}' already exists.")
 
     term = PaymentTerm(
+        org_id=org_context.org_id,
+        is_shared=False,
         code=code_clean,
         name=payload.name.strip(),
         description=payload.description.strip() if payload.description else None,
@@ -403,7 +410,10 @@ def update_payment_term(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance users can edit payment terms.")
 
-    term = db.query(PaymentTerm).filter(PaymentTerm.id == id).first()
+    term = db.query(PaymentTerm).filter(
+        PaymentTerm.id == id,
+        PaymentTerm.org_id == org_context.org_id,
+    ).first()
     if not term:
         raise HTTPException(status_code=404, detail="Payment term not found.")
 
@@ -445,7 +455,10 @@ def delete_payment_term(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance users can delete payment terms.")
 
-    term = db.query(PaymentTerm).filter(PaymentTerm.id == id).first()
+    term = db.query(PaymentTerm).filter(
+        PaymentTerm.id == id,
+        PaymentTerm.org_id == org_context.org_id,
+    ).first()
     if not term:
         raise HTTPException(status_code=404, detail="Payment term not found.")
 
@@ -771,10 +784,15 @@ def list_document_types(
     space: Optional[str] = Query(None, description="Filter by space: SOURCING, ORDER, PAYMENT, SHIPPING, DEFECTS"),
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
     current_user = Depends(get_current_user)
 ):
     """Retrieve document types configured in reference data, optionally filtered by stage/space."""
-    query = db.query(MasterDocumentType).filter(MasterDocumentType.is_deleted == False)
+    query = apply_shared_or_org_filter(
+        db.query(MasterDocumentType).filter(MasterDocumentType.is_deleted == False),
+        MasterDocumentType,
+        org_context,
+    )
     if active_only:
         query = query.filter(MasterDocumentType.is_active == True)
     
@@ -799,6 +817,8 @@ def list_document_types(
             "applicable_spaces": r.applicable_spaces or [],
             "is_active": r.is_active,
             "display_order": r.display_order,
+            "is_shared": r.is_shared,
+            "org_id": r.org_id,
         }
         for r in rows
     ]
@@ -815,18 +835,23 @@ def create_document_type(
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can manage document types.")
 
     cleaned_code = payload.code.strip().lower().replace(" ", "_")
-    existing = db.query(MasterDocumentType).filter(MasterDocumentType.code == cleaned_code).first()
+    existing = db.query(MasterDocumentType).filter(
+        MasterDocumentType.org_id == org_context.org_id,
+        MasterDocumentType.code == cleaned_code,
+    ).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Document type with code '{cleaned_code}' already exists.")
 
     new_doc_type = MasterDocumentType(
+        org_id=org_context.org_id,
+        is_shared=False,
         code=cleaned_code,
         name=payload.name.strip(),
         description=payload.description.strip() if payload.description else None,
         applicable_spaces=[s.strip().upper() for s in payload.applicable_spaces if s],
         is_active=payload.is_active,
         display_order=payload.display_order,
-        created_by=getattr(current_user, "username", "Admin"),
+        created_by=getattr(current_user, "id", None),
     )
     db.add(new_doc_type)
     db.commit()
@@ -853,13 +878,17 @@ def update_document_type(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can manage document types.")
 
-    doc_type = db.query(MasterDocumentType).filter(MasterDocumentType.id == type_id).first()
+    doc_type = db.query(MasterDocumentType).filter(
+        MasterDocumentType.id == type_id,
+        MasterDocumentType.org_id == org_context.org_id,
+    ).first()
     if not doc_type:
         raise HTTPException(status_code=404, detail="Document type not found.")
 
     cleaned_code = payload.code.strip().lower().replace(" ", "_")
     if cleaned_code != doc_type.code:
         duplicate = db.query(MasterDocumentType).filter(
+            MasterDocumentType.org_id == org_context.org_id,
             MasterDocumentType.code == cleaned_code,
             MasterDocumentType.id != type_id
         ).first()
@@ -872,7 +901,7 @@ def update_document_type(
     doc_type.applicable_spaces = [s.strip().upper() for s in payload.applicable_spaces if s]
     doc_type.is_active = payload.is_active
     doc_type.display_order = payload.display_order
-    doc_type.updated_by = getattr(current_user, "username", "Admin")
+    doc_type.updated_by = getattr(current_user, "id", None)
 
     db.commit()
     db.refresh(doc_type)
@@ -897,7 +926,10 @@ def delete_document_type(
     if not is_accounts_user(current_user, org_context):
         raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can manage document types.")
 
-    doc_type = db.query(MasterDocumentType).filter(MasterDocumentType.id == type_id).first()
+    doc_type = db.query(MasterDocumentType).filter(
+        MasterDocumentType.id == type_id,
+        MasterDocumentType.org_id == org_context.org_id,
+    ).first()
     if not doc_type:
         raise HTTPException(status_code=404, detail="Document type not found.")
 

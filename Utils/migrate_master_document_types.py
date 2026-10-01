@@ -190,6 +190,8 @@ def ensure_master_document_types_schema():
                 applicable_spaces JSONB NOT NULL DEFAULT '[]'::jsonb,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 display_order INTEGER NOT NULL DEFAULT 0,
+                org_id INTEGER REFERENCES usercredentials.organisations(id),
+                is_shared BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc'),
                 updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc'),
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
@@ -201,6 +203,10 @@ def ensure_master_document_types_schema():
 
             ALTER TABLE containermgmt.master_document_types 
                 ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE containermgmt.master_document_types
+                ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES usercredentials.organisations(id);
+            ALTER TABLE containermgmt.master_document_types
+                ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
             ALTER TABLE containermgmt.master_document_types 
                 ALTER COLUMN is_deleted SET DEFAULT FALSE;
             ALTER TABLE containermgmt.master_document_types 
@@ -216,29 +222,36 @@ def ensure_master_document_types_schema():
                 ON containermgmt.master_document_types(is_deleted);
         """))
 
-        # Seed defaults if missing
-        for item in DEFAULT_DOCUMENT_TYPES:
-            existing = conn.execute(
-                text("SELECT id FROM containermgmt.master_document_types WHERE code = :code"),
-                {"code": item["code"]}
-            ).fetchone()
+        owner_org_id = conn.execute(text(
+            "SELECT min(id) FROM usercredentials.organisations"
+        )).scalar()
+        if owner_org_id is not None:
+            for item in DEFAULT_DOCUMENT_TYPES:
+                existing = conn.execute(
+                    text("SELECT id FROM containermgmt.master_document_types WHERE code = :code"),
+                    {"code": item["code"]}
+                ).fetchone()
 
-            if not existing:
-                conn.execute(
-                    text("""
-                        INSERT INTO containermgmt.master_document_types 
-                        (code, name, description, applicable_spaces, is_active, display_order, is_deleted, created_by)
-                        VALUES (:code, :name, :description, CAST(:applicable_spaces AS jsonb), TRUE, :display_order, FALSE, NULL)
-                    """),
-                    {
-                        "code": item["code"],
-                        "name": item["name"],
-                        "description": item["description"],
-                        "applicable_spaces": json.dumps(item["applicable_spaces"]),
-                        "display_order": item["display_order"],
-                    }
-                )
-                logger.info(f"Seeded document type: {item['code']} -> {item['name']}")
+                if not existing:
+                    conn.execute(
+                        text("""
+                            INSERT INTO containermgmt.master_document_types
+                            (org_id, is_shared, code, name, description, applicable_spaces,
+                             is_active, display_order, is_deleted, created_by)
+                            VALUES (:owner_org_id, TRUE, :code, :name, :description,
+                                    CAST(:applicable_spaces AS jsonb), TRUE,
+                                    :display_order, FALSE, NULL)
+                        """),
+                        {
+                            "owner_org_id": owner_org_id,
+                            "code": item["code"],
+                            "name": item["name"],
+                            "description": item["description"],
+                            "applicable_spaces": json.dumps(item["applicable_spaces"]),
+                            "display_order": item["display_order"],
+                        }
+                    )
+                    logger.info(f"Seeded document type: {item['code']} -> {item['name']}")
 
     logger.info("containermgmt.master_document_types schema verified and seeded.")
 

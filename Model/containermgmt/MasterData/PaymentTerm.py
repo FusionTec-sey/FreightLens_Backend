@@ -1,13 +1,17 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Numeric, Text, func
+from sqlalchemy import Boolean, Column, Integer, Numeric, String, Text, UniqueConstraint
 from ...db import Base
-from ...mixins import AuditMixin
+from ...mixins import AuditMixin, OrgMixin
 
-class PaymentTerm(AuditMixin, Base):
+class PaymentTerm(OrgMixin, AuditMixin, Base):
     __tablename__ = 'payment_terms'
-    __table_args__ = {'schema': 'containermgmt'}
+    __table_args__ = (
+        UniqueConstraint("org_id", "code", name="uq_payment_terms_org_code"),
+        {'schema': 'containermgmt'},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    code = Column(String(50), unique=True, nullable=False) # e.g. ADV_30_BL_70, NET_30, ADV_100
+    code = Column(String(50), nullable=False, index=True) # e.g. ADV_30_BL_70, NET_30, ADV_100
+    is_shared = Column(Boolean, default=False, nullable=False, index=True)
     name = Column(String(100), nullable=False)             # e.g. 30% Advance, 70% against B/L
     description = Column(Text, nullable=True)
     advance_pct = Column(Numeric(5, 2), default=0.00, nullable=False)

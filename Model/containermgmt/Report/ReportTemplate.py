@@ -37,6 +37,11 @@ class ReportTemplate(OrgMixin, AuditMixin, Base):
         order_by="desc(ReportTemplateVersion.version_number)"
     )
     render_jobs = relationship("ReportRenderJob", back_populates="template")
+    assignments = relationship(
+        "ReportTemplateAssignment",
+        back_populates="template",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def active_version_number(self):

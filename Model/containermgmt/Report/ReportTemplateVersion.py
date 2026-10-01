@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from Model.db import Base
 from Model.mixins import AuditMixin
@@ -23,6 +23,8 @@ class ReportTemplateVersion(AuditMixin, Base):
     css_content = Column(Text, nullable=True)
     header_html = Column(Text, nullable=True)
     footer_html = Column(Text, nullable=True)
+    paper_settings = Column(JSON, nullable=True)
+    options_schema = Column(JSON, nullable=True)
     change_notes = Column(Text, nullable=True)
 
     # Relationships
