@@ -9,9 +9,6 @@ from Model.Credentials.users import User
 from Utils.org_filter import OrgContext
 from auth.dependencies import get_current_user, get_org_context
 
-# Roles that inherently possess full financial & administrative visibility
-FINANCIAL_ROLES = ["admin", "administrator", "super_admin", "account", "accounts", "finance", "manager", "noblecon", "buyer", "procurement"]
-
 # Explicit permissions that grant financial visibility / mutation
 FINANCIAL_PERMISSIONS = {
     "Manage_Financials",
@@ -24,9 +21,6 @@ FINANCIAL_PERMISSIONS = {
     "Compare_Quote",
 }
 
-# Roles that inherently possess procurement & commercial sourcing authority
-SOURCING_ROLES = ["admin", "administrator", "super_admin", "procurement", "buyer", "noblecon"]
-
 # Sourcing permissions that must be kept confidential from floor requestors
 SOURCING_PERMISSIONS = {
     "Send_RFQ",
@@ -38,6 +32,7 @@ SOURCING_PERMISSIONS = {
 }
 
 ADMIN_ROLE_NAMES = {"admin", "administrator", "root", "super_admin", "superadmin"}
+PLATFORM_ADMIN_ROLE_NAMES = {"root", "super_admin", "superadmin"}
 
 
 def is_admin_user(user: User) -> bool:
@@ -45,6 +40,16 @@ def is_admin_user(user: User) -> bool:
         return False
     return any(
         getattr(role, "name", "").strip().lower() in ADMIN_ROLE_NAMES
+        for role in getattr(user, "roles", [])
+    )
+
+
+def is_platform_admin_user(user: User) -> bool:
+    """Return true only for an explicitly named platform-wide administrator."""
+    if not user:
+        return False
+    return any(
+        getattr(role, "name", "").strip().lower() in PLATFORM_ADMIN_ROLE_NAMES
         for role in getattr(user, "roles", [])
     )
 
@@ -64,7 +69,7 @@ def require_root_admin(
     org_context: OrgContext = Depends(get_org_context),
 ) -> User:
     """Restrict platform administration to administrators in the root tenant."""
-    if not org_context.is_root or not is_admin_user(current_user):
+    if not org_context.is_root or not is_platform_admin_user(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Root administrator access is required",
@@ -73,17 +78,17 @@ def require_root_admin(
 
 def has_permission(user: User, permission_name: str) -> bool:
     """
-    Checks whether a user holds a specific permission through any assigned role,
-    or inherently holds it if they have an administrative role.
+    Checks whether a user holds a specific permission through an assigned role.
+    Only an explicit platform administrator bypasses permission checks.
     """
     if not user:
         return False
 
+    if is_platform_admin_user(user):
+        return True
+
     user_roles = getattr(user, "roles", [])
     for r in user_roles:
-        r_name = getattr(r, "name", "").lower()
-        if r_name in ["admin", "administrator", "root", "super_admin"]:
-            return True
         for p in getattr(r, "permissions", []):
             p_name = getattr(p, "name", "")
             if p_name == permission_name:
@@ -98,35 +103,28 @@ def has_permission(user: User, permission_name: str) -> bool:
 def can_access_sourcing(user: User, specific_permission: Optional[str] = None) -> bool:
     """
     Checks whether a user has authority to perform or view commercial sourcing.
-    Administrative and buyer roles hold general clearance.
-    If specific_permission is provided, checks for that exact permission or general administrative authority.
+    Access requires an explicit sourcing permission, except for platform administrators.
     """
     if not user:
         return False
 
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(any(kw in r for kw in ["admin", "administrator", "root", "super_admin"]) for r in user_roles):
+    if is_platform_admin_user(user):
         return True
 
-    if specific_permission and has_permission(user, specific_permission):
-        return True
-
-    if not specific_permission and any(any(kw in r for kw in SOURCING_ROLES) for r in user_roles):
-        return True
-
-    return False
+    if specific_permission:
+        return has_permission(user, specific_permission)
+    return any(has_permission(user, permission) for permission in SOURCING_PERMISSIONS)
 
 def is_financial_user(user: User, org_context: Optional[OrgContext] = None) -> bool:
     """
     Authoritative server-side check for whether a user is authorized to view
     confidential financial data (unit prices, total amounts, vendor quotes, payment ledger).
-    Strictly role-based; tenant hierarchy (org_context.is_root) does NOT grant financial clearance.
+    Tenant hierarchy and ordinary administrative roles do not grant financial clearance.
     """
     if not user:
         return False
 
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(any(kw in r for kw in FINANCIAL_ROLES) for r in user_roles):
+    if is_platform_admin_user(user):
         return True
 
     for r in getattr(user, "roles", []):
@@ -141,21 +139,13 @@ def can_view_supplier_user(user: User, org_context: Optional[OrgContext] = None)
     """
     Authoritative server-side check for whether a user is authorized to view
     confidential vendor/supplier identities, contacts, and quotes.
-    Allowed for:
-    - Root tenant super admins ('super_admin', 'root')
-    - Explicit procurement & finance roles ('procurement_specialist', 'buyer', 'finance_controller')
-    - Explicit permissions: View_Supplier, Supplier, Edit_Supplier, Add_Supplier
+    Allowed for platform administrators or explicit supplier permissions.
     Forbidden for: Tenant admins without explicit supplier permissions, floor staff, warehouse, requestors.
     """
     if not user:
         return False
 
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    # Only true global Super Admins bypass explicit permission checks
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
-        return True
-
-    if any(r in ["procurement_specialist", "buyer", "finance_controller", "accounts_finance"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
 
     for r in getattr(user, "roles", []):

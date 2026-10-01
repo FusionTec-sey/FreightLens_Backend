@@ -24,8 +24,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             raise HTTPException(status_code=401, detail="User not found")
 
         db.refresh(user)
-        user.is_root = (user.organisation.parent_org_id is None) if user.organisation else True
-        user.modules = list(user.organisation.modules) if (user.organisation and user.organisation.modules) else ["LOGISTICS", "ORDERS"]
+        user.is_root = bool(user.organisation and user.organisation.parent_org_id is None)
+        user.modules = list(user.organisation.modules) if (user.organisation and user.organisation.modules) else []
         user.plan = user.organisation.plan if (user.organisation and user.organisation.plan) else "complete"
         return user
 
@@ -39,43 +39,61 @@ def get_org_context(
     x_active_org: Optional[str] = Header(None, alias="X-Active-Org"),
     db: Session = Depends(get_db)
 ) -> OrgContext:
-    user_org_id = user.org_id or 1
+    if user.org_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not assigned to an organisation",
+        )
+
+    user_org_id = user.org_id
     org = db.query(Organisation).filter_by(id=user_org_id).first()
-    
-    is_root = (org.parent_org_id is None) if org else True
-
-    if is_root:
-        all_orgs = db.query(Organisation.id).filter_by(is_active=True).all()
-        allowed_ids = [o[0] for o in all_orgs]
-        
-        selected_id = None
-        if x_active_org and x_active_org.isdigit():
-            val = int(x_active_org)
-            if val in allowed_ids:
-                selected_id = val
-
-        return OrgContext(
-            current_org_id=user_org_id,
-            allowed_org_ids=allowed_ids,
-            is_root=True,
-            selected_org_id=selected_id
+    if not org or not org.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User organisation is inactive or unavailable",
         )
-    else:
-        user_allowed = user.allowed_org_ids if user.allowed_org_ids else [user_org_id]
-        selected_id = None
-        if x_active_org and x_active_org.isdigit():
-            val = int(x_active_org)
-            if val in user_allowed:
-                selected_id = val
-        elif len(user_allowed) == 1:
-            selected_id = user_allowed[0]
 
-        return OrgContext(
-            current_org_id=user_org_id,
-            allowed_org_ids=user_allowed,
-            is_root=False,
-            selected_org_id=selected_id
+    configured_ids = user.allowed_org_ids
+    candidate_ids = [user_org_id] if configured_ids is None else configured_ids
+    candidate_ids = list(dict.fromkeys(
+        org_id for org_id in candidate_ids if isinstance(org_id, int) and org_id > 0
+    ))
+    active_orgs = (
+        db.query(Organisation.id)
+        .filter(Organisation.id.in_(candidate_ids), Organisation.is_active.is_(True))
+        .all()
+        if candidate_ids
+        else []
+    )
+    allowed_ids = [row[0] for row in active_orgs]
+    if not allowed_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User has no active organisation assignments",
         )
+
+    selected_id = None
+    if x_active_org is not None:
+        if not x_active_org.isdigit():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="X-Active-Org must be a numeric organisation id",
+            )
+        selected_id = int(x_active_org)
+        if selected_id not in allowed_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Selected organisation is not assigned to this user",
+            )
+    elif len(allowed_ids) == 1:
+        selected_id = allowed_ids[0]
+
+    return OrgContext(
+        current_org_id=user_org_id,
+        allowed_org_ids=allowed_ids,
+        is_root=org.parent_org_id is None,
+        selected_org_id=selected_id,
+    )
 
 def require_roles(required_roles: list):
     def checker(user: User = Depends(get_current_user)):

@@ -70,11 +70,13 @@ async def login(
     # ── Build token with actual DB roles and org info ──────────────────────────────
     user_roles = [role.name for role in user.roles]
     org = user.organisation
-    org_id = user.org_id or 1
-    allowed_org_ids = user.allowed_org_ids if user.allowed_org_ids else [org_id]
-    is_root = (org.parent_org_id is None) if org else True
-    org_name = org.display_name or org.name if org else "Sahaj Construction"
-    modules = list(org.modules) if (org and org.modules) else ["LOGISTICS", "ORDERS"]
+    if not org or user.org_id is None or not org.is_active:
+        raise HTTPException(status_code=403, detail="User organisation is inactive or unavailable")
+    org_id = user.org_id
+    allowed_org_ids = [org_id] if user.allowed_org_ids is None else list(user.allowed_org_ids)
+    is_root = org.parent_org_id is None
+    org_name = org.display_name or org.name
+    modules = list(org.modules or [])
     plan = org.plan if (org and org.plan) else "complete"
 
     access_token = create_access_token(
@@ -174,9 +176,11 @@ async def refresh_token_endpoint(
 
     user_roles = [role.name for role in user.roles]
     org = user.organisation
-    org_id = user.org_id or 1
-    is_root = (org.parent_org_id is None) if org else True
-    modules = list(org.modules) if (org and org.modules) else ["LOGISTICS", "ORDERS"]
+    if not org or user.org_id is None or not org.is_active:
+        raise HTTPException(status_code=403, detail="User organisation is inactive or unavailable")
+    org_id = user.org_id
+    is_root = org.parent_org_id is None
+    modules = list(org.modules or [])
     plan = org.plan if (org and org.plan) else "complete"
 
     access_token = create_access_token(

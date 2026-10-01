@@ -49,11 +49,14 @@ async def list_organisations(
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
 ):
-    query = db.query(Organisation)
-    if not org_context.is_root:
-        query = query.filter(Organisation.id.in_(org_context.allowed_org_ids))
-    
-    orgs = query.all()
+    orgs = (
+        db.query(Organisation)
+        .filter(
+            Organisation.id.in_(org_context.allowed_org_ids),
+            Organisation.is_active.is_(True),
+        )
+        .all()
+    )
     results = []
     for org in orgs:
         u_count = db.query(User).filter_by(org_id=org.id).count()
@@ -69,10 +72,26 @@ async def get_organisation_tree(
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
 ):
-    root_orgs = db.query(Organisation).filter_by(parent_org_id=None).all()
+    root_orgs = (
+        db.query(Organisation)
+        .filter(
+            Organisation.parent_org_id.is_(None),
+            Organisation.id.in_(org_context.allowed_org_ids),
+            Organisation.is_active.is_(True),
+        )
+        .all()
+    )
     res = []
     for root in root_orgs:
-        children = db.query(Organisation).filter_by(parent_org_id=root.id).all()
+        children = (
+            db.query(Organisation)
+            .filter(
+                Organisation.parent_org_id == root.id,
+                Organisation.id.in_(org_context.allowed_org_ids),
+                Organisation.is_active.is_(True),
+            )
+            .all()
+        )
         res.append({
             "id": root.id,
             "name": root.name,
@@ -131,7 +150,7 @@ async def update_organisation(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(require_admin),
 ):
-    if not org_context.is_root and org_id != org_context.current_org_id:
+    if org_id not in org_context.allowed_org_ids:
         raise HTTPException(status_code=403, detail="Access denied.")
 
     org = db.query(Organisation).filter_by(id=org_id).first()

@@ -15,8 +15,8 @@ def _context(is_root):
     return OrgContext(current_org_id=1, allowed_org_ids=[1], is_root=is_root)
 
 
-def test_root_administrator_is_allowed():
-    user = _user("Administrator")
+def test_root_platform_administrator_is_allowed():
+    user = _user("Super_Admin")
     assert require_root_admin(user, _context(True)) is user
 
 
@@ -31,6 +31,7 @@ def test_tenant_administrator_passes_admin_guard_without_root_privilege():
     ("user", "context"),
     [
         (_user("Manager"), _context(True)),
+        (_user("Administrator"), _context(True)),
         (_user("Administrator"), _context(False)),
         (_user(), _context(True)),
     ],
