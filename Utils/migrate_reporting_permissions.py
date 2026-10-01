@@ -19,6 +19,7 @@ NEW_REPORTING_PERMISSIONS = [
     ("View_Operational_Register", "View parametric operational registers catalog"),
     ("Run_Operational_Register", "Execute operational registers, view interactive grids, and export to Excel/PDF"),
     ("Manage_Operational_Template", "Visually design, customize columns/groupings/geometry, and save tabular templates"),
+    ("Cross_Org_Report", "Run reports across more than one assigned organisation"),
     ("Print_PurchaseOrder", "Access contextual print modal and print Purchase Orders"),
     ("Print_Container", "Access contextual print modal and print Container gate passes / delivery notes"),
     ("Print_BillOfLanding", "Access contextual print modal and print Bill of Lading manifests"),
@@ -26,7 +27,7 @@ NEW_REPORTING_PERMISSIONS = [
 
 
 def run_reporting_permissions_migration(db: Session):
-    """Ensures all 9 granular reporting permissions exist and are linked to Admin roles."""
+    """Ensure granular reporting permissions exist and are linked to admin roles."""
     created_count = 0
     perm_objs = []
 

@@ -18,7 +18,8 @@ from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
-from auth.security_guards import require_permission, has_permission, is_financial_user, can_view_supplier_user
+from auth.security_guards import require_permission, has_permission
+from reporting.policy import AccessPolicy, get_access_policy
 from Utils.org_filter import OrgContext
 
 from Schema.ReportDatasetSchema import (
@@ -613,17 +614,11 @@ def get_dataset_reports_catalog(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Lists all operational dataset reports and registers available to the user."""
-    if not (
-        has_permission(current_user, "View_Operational_Register")
-        or has_permission(current_user, "View_Report")
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission 'View_Operational_Register'."
-        )
-    return list_dataset_catalog(current_user, org_context)
+    access_policy.require_any("View_Operational_Register", "View_Report")
+    return list_dataset_catalog(access_policy.scoped_user, org_context)
 
 
 @ReportRouter.get("/datasets/{report_key}/schema", response_model=DatasetCatalogItem)
@@ -632,19 +627,13 @@ def get_dataset_report_schema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Returns the filter definitions, columns, and sort/group options for a dataset report."""
-    if not (
-        has_permission(current_user, "View_Operational_Register")
-        or has_permission(current_user, "View_Report")
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission 'View_Operational_Register'."
-        )
+    access_policy.require_any("View_Operational_Register", "View_Report")
     resolver = get_dataset_resolver(report_key)
-    can_financial = is_financial_user(current_user, org_context)
-    can_vendor = can_view_supplier_user(current_user, org_context)
+    can_financial = access_policy.allows_field_class("FINANCIAL")
+    can_vendor = access_policy.allows_field_class("SUPPLIER_IDENTITY")
 
     filtered_cols = [
         c for c in resolver.columns
@@ -672,18 +661,12 @@ def run_dataset_report_query(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Executes a parametric query for an operational report and returns paginated records with subtotals."""
-    if not (
-        has_permission(current_user, "Run_Operational_Register")
-        or has_permission(current_user, "View_Report")
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission 'Run_Operational_Register'."
-        )
+    access_policy.require_any("Run_Operational_Register", "View_Report")
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
-    return run_dataset_query(report_key, spec, db, org_context, current_user)
+    return run_dataset_query(report_key, spec, db, org_context, access_policy.scoped_user)
 
 
 @ReportRouter.post("/datasets/{report_key}/render")
@@ -693,19 +676,13 @@ def render_dataset_report_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Compiles the operational register into an enterprise landscape PDF with repeating headers."""
-    if not (
-        has_permission(current_user, "Run_Operational_Register")
-        or has_permission(current_user, "View_Report")
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission 'Run_Operational_Register'."
-        )
+    access_policy.require_any("Run_Operational_Register", "View_Report")
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "pdf"})
-    pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, current_user)
+    pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, access_policy.scoped_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -721,19 +698,13 @@ def export_dataset_report_excel(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Generates and streams a styled Excel (.xlsx) spreadsheet with subtotals and auto-fitted columns."""
-    if not (
-        has_permission(current_user, "Run_Operational_Register")
-        or has_permission(current_user, "View_Report")
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission 'Run_Operational_Register'."
-        )
+    access_policy.require_any("Run_Operational_Register", "View_Report")
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "xlsx"})
-    excel_bytes = export_dataset_excel(report_key, spec, db, org_context, current_user)
+    excel_bytes = export_dataset_excel(report_key, spec, db, org_context, access_policy.scoped_user)
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(
         io.BytesIO(excel_bytes),
