@@ -1493,9 +1493,9 @@ class ContainerAPI:
         from Model.containermgmt.Orders.OrderPackingList import OrderPackingList
         from Model.containermgmt.Orders.OrderDocument import OrderDocument
 
-        user_modules = getattr(current_user, "modules", ["LOGISTICS", "ORDERS"])
-        is_root = getattr(current_user, "is_root", False)
-        orders_module_active = ("ORDERS" in user_modules or is_root)
+        policy = getattr(current_user, "access_policy", None)
+        user_modules = policy.module_names if policy else getattr(current_user, "modules", [])
+        orders_module_active = "ORDERS" in user_modules
 
         can_bl = can_view_bl_user(current_user, org_context)
         can_supp = can_view_supplier_user(current_user, org_context)

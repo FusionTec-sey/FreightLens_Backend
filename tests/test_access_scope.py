@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from Utils.org_filter import OrgContext
 from auth.dependencies import get_org_context
 from auth.module_guard import require_module
+from auth.policy import AccessPolicy
 from auth.security_guards import (
     can_access_sourcing,
     can_view_supplier_user,
@@ -119,8 +120,15 @@ def test_module_guard_uses_selected_organisation_modules():
     db = _SequenceDb(
         _Query(rows=[SimpleNamespace(id=2, is_active=True, modules=["INVENTORY"])]),
     )
+    policy = AccessPolicy(
+        user=user,
+        org_ids=(2,),
+        permission_names=frozenset(),
+        module_names=frozenset({"INVENTORY"}),
+        field_permissions={},
+    )
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(require_module("ORDERS")(user, context, db))
+        asyncio.run(require_module("ORDERS")(user, context, db, policy))
 
     assert exc_info.value.status_code == 403

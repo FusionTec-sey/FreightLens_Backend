@@ -18,6 +18,7 @@ NEW_REPORTING_PERMISSIONS = [
     ("Toggle_Report_Template", "Activate or deactivate report templates for organization print menus"),
     ("View_Operational_Register", "View parametric operational registers catalog"),
     ("Run_Operational_Register", "Execute operational registers, view interactive grids, and export to Excel/PDF"),
+    ("Export_Report", "Export operational registers and rendered reports"),
     ("Manage_Operational_Template", "Visually design, customize columns/groupings/geometry, and save tabular templates"),
     ("Cross_Org_Report", "Run reports across more than one assigned organisation"),
     ("Manage_Print_Profile", "Manage organisation branding and print defaults"),
@@ -59,6 +60,17 @@ def run_reporting_permissions_migration(db: Session):
         if to_add:
             r.permissions.extend(to_add)
             logger.info("Linked %d reporting permission(s) to role '%s'", len(to_add), r.name)
+
+    export_permission = next(p for p in perm_objs if p.name == "Export_Report")
+    export_roles = db.query(Role).filter(
+        sqlfunc.lower(Role.name).in_([
+            "finance_controller", "tenant_admin", "super_admin"
+        ]),
+        Role.is_deleted == False,
+    ).all()
+    for role in export_roles:
+        if export_permission not in role.permissions:
+            role.permissions.append(export_permission)
 
     db.commit()
     logger.info("Reporting permissions migration completed (Created: %d).", created_count)

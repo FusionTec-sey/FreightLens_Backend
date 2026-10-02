@@ -12,6 +12,7 @@ from Model.containermgmt.Orders.OrderStatusHistory import OrderStatusHistory
 from Model.containermgmt.Orders.Notification import Notification
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import is_financial_user
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 
@@ -127,7 +128,7 @@ async def list_store_requests(
         query = query.order_by(desc(sort_column))
 
     requests = query.offset(offset).limit(limit).all()
-    is_accounts = org_context.is_root or any(r.name in ["Administrator", "Accounts_Finance", "Admin"] for r in current_user.roles)
+    is_accounts = is_financial_user(current_user, org_context)
     return {
         "items": [format_request(r, is_accounts) for r in requests],
         "total": total_count,
@@ -153,7 +154,7 @@ async def get_store_request(
     if not req:
         raise HTTPException(status_code=404, detail="Store request not found")
 
-    is_accounts = org_context.is_root or any(r.name in ["Administrator", "Accounts_Finance", "Admin"] for r in current_user.roles)
+    is_accounts = is_financial_user(current_user, org_context)
     return format_request(req, is_accounts)
 
 @StoreRequestRouter.post("")

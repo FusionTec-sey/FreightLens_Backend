@@ -21,7 +21,10 @@ def apply_org_filter(query: Query, model, org_context: OrgContext) -> Query:
     - If user is Sub-Org: filters strictly by their allowed_org_ids.
     """
     if not hasattr(model, "org_id"):
-        return query
+        raise ValueError(
+            f"{getattr(model, '__name__', model)!s} is not tenant-scoped; "
+            "declare it shared/global or use a scoped model"
+        )
 
     if org_context.selected_org_id:
         return query.filter(model.org_id == org_context.selected_org_id)

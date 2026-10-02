@@ -264,7 +264,8 @@ app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENT
 app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
-app.include_router(DashboardRouter)
+from auth.policy import get_request_policy
+app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
 
 
 

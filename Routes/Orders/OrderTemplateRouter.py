@@ -10,7 +10,7 @@ from Model.containermgmt.Orders.Product import Product
 from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
-from auth.security_guards import is_financial_user, has_permission
+from auth.security_guards import is_financial_user, has_permission, can_view_supplier_user
 from Utils.org_filter import OrgContext, apply_org_filter
 
 logger = logging.getLogger("containerMgmt.orders.templates")
@@ -36,21 +36,7 @@ def check_can_view_supplier(user: User, org_context: OrgContext) -> bool:
     - User explicitly holds View_Supplier or Supplier permission
     Does NOT infer view access from financial clearance or unrelated roles.
     """
-    if not user:
-        return False
-    if org_context and org_context.is_root:
-        return True
-
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "administrator", "root"] for r in user_roles):
-        return True
-
-    for r in getattr(user, "roles", []):
-        for p in getattr(r, "permissions", []):
-            p_name = getattr(p, "name", "")
-            if p_name in ["View_Supplier", "Supplier"]:
-                return True
-    return False
+    return can_view_supplier_user(user, org_context)
 
 def template_to_dict(template: OrderTemplate, is_accounts: bool = True, can_view_supplier: bool = True) -> dict:
     supplier_name = template.company

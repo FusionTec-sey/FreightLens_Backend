@@ -820,7 +820,11 @@ def get_dataset_reports_catalog(
 ):
     """Lists all operational dataset reports and registers available to the user."""
     access_policy.require_any("View_Operational_Register", "View_Report")
-    return list_dataset_catalog(access_policy.scoped_user, org_context)
+    return [
+        item
+        for item in list_dataset_catalog(access_policy.scoped_user, org_context)
+        if item.category in access_policy.module_names
+    ]
 
 
 @ReportRouter.get("/datasets/{report_key}/schema", response_model=DatasetCatalogItem)
@@ -834,6 +838,8 @@ def get_dataset_report_schema(
     """Returns the filter definitions, columns, and sort/group options for a dataset report."""
     access_policy.require_any("View_Operational_Register", "View_Report")
     resolver = get_dataset_resolver(report_key)
+    if resolver.category not in access_policy.module_names:
+        raise HTTPException(status_code=403, detail="Dataset module is not enabled")
     can_financial = access_policy.allows_field_class("FINANCIAL")
     can_vendor = access_policy.allows_field_class("SUPPLIER_IDENTITY")
 
@@ -867,6 +873,9 @@ def run_dataset_report_query(
 ):
     """Executes a parametric query for an operational report and returns paginated records with subtotals."""
     access_policy.require_any("Run_Operational_Register", "View_Report")
+    resolver = get_dataset_resolver(report_key)
+    if resolver.category not in access_policy.module_names:
+        raise HTTPException(status_code=403, detail="Dataset module is not enabled")
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     return run_dataset_query(report_key, spec, db, org_context, access_policy.scoped_user)
 
@@ -881,7 +890,10 @@ def render_dataset_report_pdf(
     access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Compiles the operational register into an enterprise landscape PDF with repeating headers."""
-    access_policy.require_any("Run_Operational_Register", "View_Report")
+    access_policy.require_any("Export_Report")
+    resolver = get_dataset_resolver(report_key)
+    if resolver.category not in access_policy.module_names:
+        raise HTTPException(status_code=403, detail="Dataset module is not enabled")
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "pdf"})
     pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, access_policy.scoped_user)
@@ -903,7 +915,10 @@ def export_dataset_report_excel(
     access_policy: AccessPolicy = Depends(get_access_policy),
 ):
     """Generates and streams a styled Excel (.xlsx) spreadsheet with subtotals and auto-fitted columns."""
-    access_policy.require_any("Run_Operational_Register", "View_Report")
+    access_policy.require_any("Export_Report")
+    resolver = get_dataset_resolver(report_key)
+    if resolver.category not in access_policy.module_names:
+        raise HTTPException(status_code=403, detail="Dataset module is not enabled")
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "xlsx"})
     excel_bytes = export_dataset_excel(report_key, spec, db, org_context, access_policy.scoped_user)

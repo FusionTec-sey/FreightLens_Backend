@@ -17,7 +17,7 @@ from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
-from auth.security_guards import is_financial_user, has_permission
+from auth.security_guards import is_financial_user, has_permission, can_view_supplier_user
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 from Services.search_service import sync_product_document, remove_product_document, search_products, search_products_with_total
@@ -270,21 +270,7 @@ def check_can_view_supplier(user: User, org_context: OrgContext) -> bool:
     - User explicitly holds View_Supplier, Supplier, Edit_Supplier, or Add_Supplier permission
     Does NOT infer view access from financial clearance or unrelated roles.
     """
-    if not user:
-        return False
-    if org_context and org_context.is_root:
-        return True
-
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "administrator", "root"] for r in user_roles):
-        return True
-
-    for r in getattr(user, "roles", []):
-        for p in getattr(r, "permissions", []):
-            p_name = getattr(p, "name", "")
-            if p_name in ["View_Supplier", "Supplier", "Edit_Supplier", "Add_Supplier"]:
-                return True
-    return False
+    return can_view_supplier_user(user, org_context)
 
 
 
@@ -748,8 +734,8 @@ def get_inventory_stats(
         .filter(POItem.product_id.isnot(None), POItem.is_deleted == False,
                 PurchaseOrder.is_deleted == False, PurchaseOrder.status.notin_(["COMPLETED", "CANCELLED"]))
     )
-    if not org_context.is_root:
-        q_items = q_items.filter(PurchaseOrder.org_id == org_context.org_id)
+    scope_ids = [org_context.selected_org_id] if org_context.selected_org_id else org_context.allowed_org_ids
+    q_items = q_items.filter(PurchaseOrder.org_id.in_(scope_ids))
     return {
         "total_products": total_products, "total_categories": total_categories,
         "low_stock_count": low_stock_count,

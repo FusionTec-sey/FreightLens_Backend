@@ -19,6 +19,7 @@ from auth.security import verify_password
 from auth.tokens import create_access_token, create_refresh_token, SECRET_KEY, ALGORITHM
 from auth.dependencies import get_current_user
 from auth.security_guards import is_platform_admin_user
+from auth.policy import AccessPolicy, get_request_policy
 
 logger = logging.getLogger("auth")
 
@@ -26,6 +27,23 @@ router = APIRouter()
 
 ACCESS_TOKEN_EXPIRE_HOUR = 1
 REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+
+
+@router.get("/auth/me/access")
+def get_my_access(policy: AccessPolicy = Depends(get_request_policy)):
+    """Return the active organisation authorization policy for the UI."""
+    return {
+        "org_ids": list(policy.org_ids),
+        "modules": sorted(policy.module_names),
+        "permissions": sorted(policy.permission_names),
+        "field_classes": sorted(
+            code
+            for code in policy.field_permissions
+            if policy.allows_field_class(code)
+        ),
+        "is_platform_admin": policy.is_platform_admin,
+        "location_ids": list(policy.location_ids),
+    }
 
 
 def _hash_token(raw_token: str) -> str:

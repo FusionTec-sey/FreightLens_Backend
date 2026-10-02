@@ -17,7 +17,7 @@ from Model.containermgmt.Cinfo.Venue import UnloadVenue
 from Model.containermgmt.Orders.Product import Product, ProductCategory
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.containermgmt.Orders.VendorQuote import VendorQuote
-from auth.security_guards import has_permission
+from auth.security_guards import has_permission, is_financial_user
 from Utils.org_filter import apply_org_filter, OrgContext
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ WIDGET_CATALOG = [
         "title": "Total Stock Valuation",
         "description": "Estimated on-hand stock financial value based on primary unit cost.",
         "type": "kpi_stat",
-        "required_permission": "Vendor_Pricing_View",  # Zero-trust financial guard
+        "field_class": "FINANCIAL",
         "default_col_span": 1,
         "icon": "DollarSign",
         "color": "emerald",
@@ -228,7 +228,7 @@ WIDGET_CATALOG = [
         "title": "Procurement Spend (YTD)",
         "description": "Cumulative purchase order commitment for the current fiscal year.",
         "type": "kpi_stat",
-        "required_permission": "Vendor_Pricing_View",  # Zero-trust financial guard
+        "field_class": "FINANCIAL",
         "default_col_span": 1,
         "icon": "DollarSign",
         "color": "emerald",
@@ -315,9 +315,12 @@ ROLE_DEFAULT_TEMPLATES = {
 def get_authorized_widgets(current_user) -> List[Dict[str, Any]]:
     """Return all widgets from catalog that the current user has permission to view."""
     authorized = []
+    policy = getattr(current_user, "access_policy", None)
     for w in WIDGET_CATALOG:
         perm = w.get("required_permission")
-        if not perm or has_permission(current_user, perm):
+        module_allowed = policy is None or w.get("module") in policy.module_names
+        field_allowed = policy is None or policy.allows_field_class(w.get("field_class"))
+        if module_allowed and field_allowed and (not perm or has_permission(current_user, perm)):
             authorized.append(w)
     return authorized
 
@@ -522,8 +525,7 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
             data["inv_total_products"] = {"value": total_skus, "unit": "SKUs"}
             data["inv_low_stock"] = {"value": low_stock_count, "unit": "SKUs", "alert": low_stock_count > 0}
 
-            # Inventory Valuation (zero-trust check on Vendor_Pricing_View)
-            if has_permission(current_user, "Vendor_Pricing_View"):
+            if is_financial_user(current_user, org_context):
                 try:
                     val_result = db.query(
                         func.sum(Product.current_stock * func.coalesce(Product.unit_cost, 0))
@@ -690,8 +692,7 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
             data["po_active_orders"] = {"value": active_pos, "unit": "Orders"}
             data["po_pending_approval"] = {"value": pending_pos, "unit": "Orders", "alert": pending_pos > 0}
 
-            # Spend YTD (zero-trust check on Vendor_Pricing_View)
-            if has_permission(current_user, "Vendor_Pricing_View"):
+            if is_financial_user(current_user, org_context):
                 try:
                     spend_result = db.query(
                         func.sum(PurchaseOrder.total_amount)

@@ -107,17 +107,11 @@ class VarianceApprovalRequest(BaseModel):
     justification: str
 
 def check_variance_permission(user: User, org_context: OrgContext):
-    if org_context.is_root or getattr(user, "is_root", False):
-        return True
-    perms = [p.name for p in getattr(user, "permissions", [])]
-    roles = [r.name for r in getattr(user, "roles", [])]
-    if "Approve_Variance" in perms:
-        return True
-    if any(r in ["Administrator", "Admin", "Accounts_Finance", "Finance", "Account"] for r in roles):
+    if has_permission(user, "Approve_Variance"):
         return True
     raise HTTPException(
         status_code=403,
-        detail="Permission Denied: Only users with 'Approve_Variance' permission or Administrators can approve price variances."
+        detail="Permission Denied: 'Approve_Variance' is required."
     )
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

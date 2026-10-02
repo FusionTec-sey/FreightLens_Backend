@@ -23,6 +23,7 @@ class AccessPolicy:
     module_names: frozenset[str]
     field_permissions: Mapping[str, str]
     is_platform_admin: bool = False
+    location_ids: tuple[int, ...] = ()
 
     def has(self, permission_name: str) -> bool:
         return self.is_platform_admin or permission_name in self.permission_names
@@ -45,10 +46,12 @@ class AccessPolicy:
 
     @property
     def scoped_user(self):
-        """Compatibility principal for resolvers not yet converted to AccessPolicy."""
         permissions = [SimpleNamespace(name=name) for name in sorted(self.permission_names)]
-        role_name = "super_admin" if self.is_platform_admin else "access_policy"
-        role = SimpleNamespace(name=role_name, permissions=permissions)
+        role = SimpleNamespace(
+            name="access_policy",
+            permissions=permissions,
+            is_platform_admin=self.is_platform_admin,
+        )
         return SimpleNamespace(
             id=getattr(self.user, "id", None),
             username=getattr(self.user, "username", None),
@@ -72,14 +75,12 @@ class AccessPolicy:
         permission_sets = []
         module_sets = []
         for org_id in org_ids:
-            roles = roles_by_org.get(org_id, ())
             permission_sets.append({
                 permission.name
-                for role in roles
+                for role in roles_by_org.get(org_id, ())
                 for permission in getattr(role, "permissions", ())
             })
             module_sets.append(set(modules_by_org.get(org_id, ())))
-
         permissions = set.intersection(*permission_sets) if permission_sets else set()
         modules = set.intersection(*module_sets) if module_sets else set()
         return cls(
@@ -92,17 +93,7 @@ class AccessPolicy:
         )
 
 
-def get_access_policy(
-    user: User = Depends(get_current_user),
-    org_context: OrgContext = Depends(get_org_context),
-    db: Session = Depends(get_db),
-) -> AccessPolicy:
-    org_ids = (
-        [org_context.selected_org_id]
-        if org_context.selected_org_id is not None
-        else list(org_context.allowed_org_ids)
-    )
-
+def _build_policy(db: Session, user: User, org_ids: Sequence[int]) -> AccessPolicy:
     role_rows = (
         db.query(user_org_roles.c.org_id, Role)
         .join(Role, Role.id == user_org_roles.c.role_id)
@@ -116,29 +107,50 @@ def get_access_policy(
     roles_by_org = {org_id: [] for org_id in org_ids}
     for org_id, role in role_rows:
         roles_by_org[org_id].append(role)
-
     organisations = db.query(Organisation).filter(Organisation.id.in_(org_ids)).all()
     modules_by_org = {org.id: (org.modules or []) for org in organisations}
     field_permissions = {
-        row.code: row.permission_name
-        for row in db.query(ReportFieldClass).all()
+        row.code: row.permission_name for row in db.query(ReportFieldClass).all()
     }
-    is_platform_admin = any(
-        bool(getattr(role, "is_platform_admin", False))
-        for role in getattr(user, "roles", ())
-    )
-
     policy = AccessPolicy.from_role_sets(
         user=user,
         org_ids=org_ids,
         roles_by_org=roles_by_org,
         modules_by_org=modules_by_org,
         field_permissions=field_permissions,
-        is_platform_admin=is_platform_admin,
+        is_platform_admin=any(
+            bool(getattr(role, "is_platform_admin", False))
+            for role in getattr(user, "roles", ())
+        ),
     )
+    user.access_policy = policy
+    return policy
+
+
+def get_access_policy(
+    user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    db: Session = Depends(get_db),
+) -> AccessPolicy:
+    org_ids = (
+        [org_context.selected_org_id]
+        if org_context.selected_org_id is not None
+        else list(org_context.allowed_org_ids)
+    )
+    policy = _build_policy(db, user, org_ids)
     if len(org_ids) > 1 and not policy.has("Cross_Org_Report"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cross-organisation reporting requires Cross_Org_Report",
         )
     return policy
+
+
+def get_request_policy(
+    user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    db: Session = Depends(get_db),
+) -> AccessPolicy:
+    """Build the active-org policy once for non-reporting request guards."""
+    org_id = org_context.selected_org_id or org_context.current_org_id
+    return _build_policy(db, user, [org_id])

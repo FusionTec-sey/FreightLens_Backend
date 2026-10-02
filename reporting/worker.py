@@ -20,7 +20,7 @@ from Model.db import SessionLocal
 from Services.report_data_resolvers import resolve_report_data
 from Utils.blob_storage import blob_storage
 from Utils.org_filter import OrgContext
-from reporting.policy.access_policy import get_access_policy
+from auth.policy import get_access_policy
 
 
 logger = logging.getLogger("containerMgmt.reporting.worker")

@@ -81,6 +81,10 @@ def has_permission(user: User, permission_name: str) -> bool:
     if not user:
         return False
 
+    policy = getattr(user, "access_policy", None)
+    if policy is not None:
+        return policy.has(permission_name)
+
     if is_platform_admin_user(user):
         return True
 
@@ -121,6 +125,10 @@ def is_financial_user(user: User, org_context: Optional[OrgContext] = None) -> b
     if not user:
         return False
 
+    policy = getattr(user, "access_policy", None)
+    if policy is not None:
+        return policy.allows_field_class("FINANCIAL")
+
     if is_platform_admin_user(user):
         return True
 
@@ -141,6 +149,10 @@ def can_view_supplier_user(user: User, org_context: Optional[OrgContext] = None)
     """
     if not user:
         return False
+
+    policy = getattr(user, "access_policy", None)
+    if policy is not None:
+        return policy.allows_field_class("SUPPLIER_IDENTITY")
 
     if is_platform_admin_user(user):
         return True

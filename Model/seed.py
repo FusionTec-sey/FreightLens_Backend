@@ -26,6 +26,7 @@ DEFAULT_PERMISSIONS = [
     ("Toggle_Report_Template", "Activate or deactivate report templates for organization print menus"),
     ("View_Operational_Register", "View parametric operational registers catalog"),
     ("Run_Operational_Register", "Execute operational registers, view interactive grids, and export to Excel/PDF"),
+    ("Export_Report", "Export operational registers and rendered reports"),
     ("Manage_Operational_Template", "Visually design, customize columns/groupings/geometry, and save tabular templates"),
     ("Print_PurchaseOrder",  "Access contextual print modal and print Purchase Orders"),
     ("Print_Container",      "Access contextual print modal and print Container gate passes / delivery notes"),
@@ -318,6 +319,7 @@ def seed_db(db: Session):
 
         # Accounts / Finance role
         accounts_role = db.query(Role).filter(Role.name == "Accounts_Finance").first()
+        accounts_role_created = accounts_role is None
         if not accounts_role:
             accounts_role = Role(name="Accounts_Finance")
             db.add(accounts_role)
@@ -332,10 +334,12 @@ def seed_db(db: Session):
             "View_Container", "View_BL", "View_Report"
         ]
         accounts_perms = [p for p in all_perms if p.name in accounts_perm_names]
-        accounts_role.permissions = accounts_perms
+        if accounts_role_created:
+            accounts_role.permissions = accounts_perms
 
         # Store User role (Store requests only, NO supplier info, NO prices/payments)
         store_role = db.query(Role).filter(Role.name == "Store_User").first()
+        store_role_created = store_role is None
         if not store_role:
             store_role = Role(name="Store_User")
             db.add(store_role)
@@ -347,10 +351,12 @@ def seed_db(db: Session):
             "Submit_StoreRequest", "Withdraw_StoreRequest", "View_Order", "View_Defect", "Add_Defect"
         ]
         store_perms = [p for p in all_perms if p.name in store_perm_names]
-        store_role.permissions = store_perms
+        if store_role_created:
+            store_role.permissions = store_perms
 
         # Warehouse Operator role (Receipt verification, packing lists, defect reporting)
         warehouse_role = db.query(Role).filter(Role.name == "Warehouse_Operator").first()
+        warehouse_role_created = warehouse_role is None
         if not warehouse_role:
             warehouse_role = Role(name="Warehouse_Operator")
             db.add(warehouse_role)
@@ -362,10 +368,12 @@ def seed_db(db: Session):
             "Edit_Receipt", "Submit_Receipt", "View_PackingList", "View_Defect", "Add_Defect", "Edit_Defect"
         ]
         warehouse_perms = [p for p in all_perms if p.name in warehouse_perm_names]
-        warehouse_role.permissions = warehouse_perms
+        if warehouse_role_created:
+            warehouse_role.permissions = warehouse_perms
 
         # Viewer role: view-only permissions
         viewer_role = db.query(Role).filter(Role.name == "viewer").first()
+        viewer_role_created = viewer_role is None
         if not viewer_role:
             viewer_role = Role(name="viewer")
             db.add(viewer_role)
@@ -373,7 +381,8 @@ def seed_db(db: Session):
             logger.info("Seeded role: viewer")
 
         view_perms = [p for p in all_perms if p.name.startswith("View_")]
-        viewer_role.permissions = view_perms
+        if viewer_role_created:
+            viewer_role.permissions = view_perms
 
         db.flush()
 
