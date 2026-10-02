@@ -18,6 +18,7 @@ from Model.db import get_db
 from auth.security import verify_password
 from auth.tokens import create_access_token, create_refresh_token, SECRET_KEY, ALGORITHM
 from auth.dependencies import get_current_user
+from auth.security_guards import is_platform_admin_user
 
 logger = logging.getLogger("auth")
 
@@ -78,6 +79,7 @@ async def login(
     org_name = org.display_name or org.name
     modules = list(org.modules or [])
     plan = org.plan if (org and org.plan) else "complete"
+    is_platform_admin = is_platform_admin_user(user)
 
     access_token = create_access_token(
         {
@@ -88,6 +90,7 @@ async def login(
             "is_root": is_root,
             "modules": modules,
             "plan": plan,
+            "is_platform_admin": is_platform_admin,
         },
         timedelta(hours=ACCESS_TOKEN_EXPIRE_HOUR),
     )
@@ -138,6 +141,7 @@ async def login(
         "is_root": is_root,
         "modules": modules,
         "plan": plan,
+        "is_platform_admin": is_platform_admin,
         "permissions": [p[0] for p in permissions],
     }
 
@@ -182,6 +186,7 @@ async def refresh_token_endpoint(
     is_root = org.parent_org_id is None
     modules = list(org.modules or [])
     plan = org.plan if (org and org.plan) else "complete"
+    is_platform_admin = is_platform_admin_user(user)
 
     access_token = create_access_token(
         {
@@ -191,6 +196,7 @@ async def refresh_token_endpoint(
             "is_root": is_root,
             "modules": modules,
             "plan": plan,
+            "is_platform_admin": is_platform_admin,
         },
         timedelta(hours=ACCESS_TOKEN_EXPIRE_HOUR),
     )
@@ -207,6 +213,7 @@ async def refresh_token_endpoint(
         "token_type": "bearer",
         "modules": modules,
         "plan": plan,
+        "is_platform_admin": is_platform_admin,
         "permissions": [p[0] for p in permissions],
     }
 

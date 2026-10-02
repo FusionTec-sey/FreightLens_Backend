@@ -19,10 +19,11 @@ def _permission(name):
     return SimpleNamespace(name=name)
 
 
-def _role(name, *permissions):
+def _role(name, *permissions, is_platform_admin=False):
     return SimpleNamespace(
         name=name,
         permissions=[_permission(permission) for permission in permissions],
+        is_platform_admin=is_platform_admin,
     )
 
 
@@ -89,7 +90,10 @@ def test_unassigned_active_organisation_selection_is_rejected():
 
 def test_ordinary_administrator_has_no_implicit_permissions():
     assert not has_permission(_user(_role("Administrator")), "View_Financials")
-    assert has_permission(_user(_role("Super_Admin")), "View_Financials")
+    assert has_permission(
+        _user(_role("Platform Operations", is_platform_admin=True)),
+        "View_Financials",
+    )
 
 
 def test_sensitive_fields_require_explicit_permissions():

@@ -20,7 +20,9 @@ class ReportTemplate(OrgMixin, AuditMixin, Base):
     is_system = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     active_org_ids = Column(ARRAY(Integer), default=list, nullable=True)
-    template_type = Column(String(30), default="DOCUMENT", nullable=False)  # "DOCUMENT" or "OPERATIONAL_TABULAR"
+    template_type = Column(
+        String(30), default="DOCUMENT", server_default="DOCUMENT", nullable=False
+    )  # "DOCUMENT" or "OPERATIONAL_TABULAR"
     table_config = Column(JSON, nullable=True)
     paper_settings = Column(JSON, nullable=True)
     page_size = Column(String(20), default="A4")

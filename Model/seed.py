@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import date
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
@@ -280,6 +281,28 @@ def seed_db(db: Session):
             admin_role.permissions.extend(new_admin_perms)
             logger.info("Linked %d new permission(s) to admin role", len(new_admin_perms))
 
+        platform_admin_role = (
+            db.query(Role)
+            .filter(
+                sqlfunc.lower(Role.name) == "super_admin",
+                Role.org_id.is_(None),
+                Role.is_deleted == False,
+            )
+            .first()
+        )
+        if not platform_admin_role:
+            platform_admin_role = Role(
+                name="Super_Admin", org_id=None, is_platform_admin=True
+            )
+            db.add(platform_admin_role)
+            db.flush()
+            logger.info("Seeded platform role: Super_Admin")
+        platform_admin_role.is_platform_admin = True
+        platform_permission_ids = {p.id for p in platform_admin_role.permissions}
+        platform_admin_role.permissions.extend(
+            p for p in all_perms if p.id not in platform_permission_ids
+        )
+
         # Sync existing "Administrator" role
         administrator_role = (
             db.query(Role)
@@ -369,26 +392,35 @@ def seed_db(db: Session):
             db.flush()
             logger.info("Seeded default organisation: id=1 (Sahaj Construction)")
 
-        # Guarantee admin user exists with known credentials: admin / admin123
+        # Bootstrap credentials are written once. Restarts must never undo a
+        # password change made by an operator.
         admin_user = db.query(User).filter_by(username="admin").first()
         if not admin_user:
+            bootstrap_password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD")
+            if not bootstrap_password:
+                if os.getenv("ENVIRONMENT", "development").lower() in {
+                    "staging", "production"
+                }:
+                    raise RuntimeError(
+                        "BOOTSTRAP_ADMIN_PASSWORD is required to create the initial administrator"
+                    )
+                bootstrap_password = "admin123"
             admin_user = User(
                 username="admin",
-                password_hash=hash_password("admin123"),
+                password_hash=hash_password(bootstrap_password),
                 org_id=1,
                 allowed_org_ids=[1],
                 is_deleted=False
             )
-            admin_user.roles = [admin_role]
+            admin_user.roles = [platform_admin_role]
             db.add(admin_user)
-            logger.info("Seeded default admin user: admin / admin123")
+            logger.info("Seeded bootstrap administrator: admin")
         else:
-            admin_user.password_hash = hash_password("admin123")
             admin_user.is_deleted = False
             admin_user.org_id = 1
-            if admin_role not in admin_user.roles:
-                admin_user.roles.append(admin_role)
-            logger.info("Ensured admin user credentials: admin / admin123")
+            if platform_admin_role not in admin_user.roles:
+                admin_user.roles.append(platform_admin_role)
+            logger.info("Verified bootstrap administrator role assignment")
 
         # Guarantee admin_sahaj user exists: admin_sahaj / Password@123
         admin_sahaj = db.query(User).filter_by(username="admin_sahaj").first()
@@ -404,7 +436,6 @@ def seed_db(db: Session):
             db.add(admin_sahaj)
             logger.info("Seeded admin_sahaj user: admin_sahaj / Password@123")
         else:
-            admin_sahaj.password_hash = hash_password("Password@123")
             admin_sahaj.is_deleted = False
             if admin_role not in admin_sahaj.roles:
                 admin_sahaj.roles.append(admin_role)

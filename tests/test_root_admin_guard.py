@@ -7,8 +7,13 @@ from Utils.org_filter import OrgContext
 from auth.security_guards import require_admin, require_root_admin
 
 
-def _user(*roles):
-    return SimpleNamespace(roles=[SimpleNamespace(name=role) for role in roles])
+def _user(*roles, is_platform_admin=False):
+    return SimpleNamespace(
+        roles=[
+            SimpleNamespace(name=role, is_platform_admin=is_platform_admin)
+            for role in roles
+        ]
+    )
 
 
 def _context(is_root):
@@ -16,7 +21,7 @@ def _context(is_root):
 
 
 def test_root_platform_administrator_is_allowed():
-    user = _user("Super_Admin")
+    user = _user("Platform Operations", is_platform_admin=True)
     assert require_root_admin(user, _context(True)) is user
 
 

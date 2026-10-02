@@ -110,6 +110,9 @@ async def startup_event():
 
         # Continue so health diagnostics can report an existing database permission issue.
 
+    from Utils.bootstrap_root_org import ensure_root_organisation
+    ensure_root_organisation()
+
     logger.info("Initializing database tables...")
     from Utils.migrate_product_master import ensure_product_master_schema
     ensure_product_master_schema()

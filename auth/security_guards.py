@@ -32,9 +32,6 @@ SOURCING_PERMISSIONS = {
 }
 
 ADMIN_ROLE_NAMES = {"admin", "administrator", "root", "super_admin", "superadmin"}
-PLATFORM_ADMIN_ROLE_NAMES = {"root", "super_admin", "superadmin"}
-
-
 def is_admin_user(user: User) -> bool:
     if not user:
         return False
@@ -45,11 +42,11 @@ def is_admin_user(user: User) -> bool:
 
 
 def is_platform_admin_user(user: User) -> bool:
-    """Return true only for an explicitly named platform-wide administrator."""
+    """Return true only when a role explicitly carries platform authority."""
     if not user:
         return False
     return any(
-        getattr(role, "name", "").strip().lower() in PLATFORM_ADMIN_ROLE_NAMES
+        bool(getattr(role, "is_platform_admin", False))
         for role in getattr(user, "roles", [])
     )
 
@@ -168,8 +165,7 @@ def can_view_bl_user(user: User, org_context: Optional[OrgContext] = None) -> bo
     if not user:
         return False
 
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
 
     for r in getattr(user, "roles", []):
@@ -232,8 +228,7 @@ def can_view_documents_user(user: User, org_context: Optional[OrgContext] = None
     """Check if user has clearance to view container and operational documents/proofs."""
     if not user:
         return False
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
     for r in getattr(user, "roles", []):
         for p in getattr(r, "permissions", []):
@@ -246,8 +241,7 @@ def can_upload_documents_user(user: User, org_context: Optional[OrgContext] = No
     """Check if user has clearance to upload container attachments, shipping documents, or photos."""
     if not user:
         return False
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
     for r in getattr(user, "roles", []):
         for p in getattr(r, "permissions", []):
@@ -260,8 +254,7 @@ def can_delete_documents_user(user: User, org_context: Optional[OrgContext] = No
     """Check if user has clearance to delete documents/proofs."""
     if not user:
         return False
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
     for r in getattr(user, "roles", []):
         for p in getattr(r, "permissions", []):
@@ -274,8 +267,7 @@ def can_view_orders_user(user: User, org_context: Optional[OrgContext] = None) -
     """Check if user has clearance to view linked purchase orders."""
     if not user:
         return False
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
     for r in getattr(user, "roles", []):
         for p in getattr(r, "permissions", []):
@@ -288,8 +280,7 @@ def can_view_receipts_user(user: User, org_context: Optional[OrgContext] = None)
     """Check if user has clearance to view goods receiving operations."""
     if not user:
         return False
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
     for r in getattr(user, "roles", []):
         for p in getattr(r, "permissions", []):
@@ -302,8 +293,7 @@ def can_view_defects_user(user: User, org_context: Optional[OrgContext] = None) 
     """Check if user has clearance to view container and receiving defect reports."""
     if not user:
         return False
-    user_roles = [getattr(r, "name", "").lower() for r in getattr(user, "roles", []) if hasattr(r, "name")]
-    if any(r in ["super_admin", "root", "superadmin"] for r in user_roles):
+    if is_platform_admin_user(user):
         return True
     for r in getattr(user, "roles", []):
         for p in getattr(r, "permissions", []):

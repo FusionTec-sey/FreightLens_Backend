@@ -10,6 +10,8 @@ from Utils import *
 from auth.dependencies import get_current_user
 from fastapi import Depends, HTTPException
 from auth.security import hash_password
+from Services.user_org_role_sync import sync_user_org_roles
+from Model.Credentials.user_org_roles import user_org_roles
 from datetime import datetime
 
 CreadentialsInfo = InferringRouter()
@@ -129,6 +131,8 @@ class CreadentialsInfoAPI:
             new_user.roles = []
 
         db.add(new_user)
+        db.flush()
+        sync_user_org_roles(db, new_user)
         db.commit()
         db.refresh(new_user)
 
@@ -157,6 +161,7 @@ class CreadentialsInfoAPI:
             raise HTTPException(status_code=404, detail="User not found")
 
         user.roles.clear()
+        db.execute(user_org_roles.delete().where(user_org_roles.c.user_id == user.id))
         user.is_deleted = True
         user.deleted_by = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
         user.deleted_at = datetime.utcnow()
@@ -196,6 +201,8 @@ class CreadentialsInfoAPI:
             else:
                 user.roles = []
             
+        db.flush()
+        sync_user_org_roles(db, user)
         db.commit()
         db.refresh(user)
 
