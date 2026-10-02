@@ -13,6 +13,7 @@ from Model.containermgmt.Report.ReportFieldClass import ReportFieldClass
 from Model.db import get_db
 from Utils.org_filter import OrgContext
 from auth.dependencies import get_current_user, get_org_context
+from .catalog import PERMISSION_BY_NAME
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,14 @@ class AccessPolicy:
             module_sets.append(set(modules_by_org.get(org_id, ())))
         permissions = set.intersection(*permission_sets) if permission_sets else set()
         modules = set.intersection(*module_sets) if module_sets else set()
+        permissions = {
+            name for name in permissions
+            if name in PERMISSION_BY_NAME
+            and (
+                PERMISSION_BY_NAME[name].module is None
+                or PERMISSION_BY_NAME[name].module in modules
+            )
+        }
         return cls(
             user=user,
             org_ids=tuple(org_ids),

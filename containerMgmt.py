@@ -232,6 +232,7 @@ async def health_check(db: Session = Depends(get_db)):
 
 # ── Route registration ────────────────────────────────────────────────────────
 from auth.module_guard import require_module
+from auth.policy import get_request_policy
 from auth.security_guards import require_root_admin
 
 from LogisticsAPI import logistics_router, logistics_webhook_router
@@ -244,7 +245,7 @@ app.include_router(auth_router)
 app.include_router(ReportRouter)
 app.include_router(Cinfo)
 app.include_router(ContainerRouter, dependencies=[Depends(require_module("LOGISTICS"))])
-app.include_router(CreadentialsInfo, dependencies=[Depends(require_root_admin)])
+app.include_router(CreadentialsInfo, dependencies=[Depends(get_request_policy)])
 app.include_router(TrackingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(logistics_router, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(logistics_webhook_router)  # Carrier-authenticated push events
@@ -264,7 +265,6 @@ app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENT
 app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
-from auth.policy import get_request_policy
 app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
 
 

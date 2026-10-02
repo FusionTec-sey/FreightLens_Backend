@@ -4,6 +4,7 @@ from typing import List, Optional
 class RoleBase(BaseModel):
     name: str
     permissions: Optional[List[int]] = []
+    org_id: Optional[int] = None
 
 class RoleCreate(RoleBase):
     pass

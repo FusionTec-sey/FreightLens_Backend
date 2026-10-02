@@ -10,13 +10,18 @@ from Model.containermgmt.Cinfo.Status import Status
 from Model.containermgmt.Orders.OrderStatus import OrderStatus
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from auth.security import hash_password
+from auth.policy.catalog import (
+    PERMISSION_CATALOG,
+    PLATFORM_PERMISSION_NAMES,
+    sync_permission_catalog,
+)
 
 logger = logging.getLogger("containerMgmt.seed")
 
 # ── Required permissions ───────────────────────────────────────────────────────
 # Each entry: (name, description)
 # Naming convention: <Action>_<Resource>
-DEFAULT_PERMISSIONS = [
+_LEGACY_PERMISSION_NOTES = r"""
     # ── Sidebar / Page views ──────────────────────────────────────────────────
     ("View_Dashboard",       "View dashboard and summary stats"),
     ("View_Container",       "View containers list and sections"),
@@ -161,7 +166,10 @@ DEFAULT_PERMISSIONS = [
     # ── Inventory Reporting & Export ─────────────────────────────────────────
     ("View_InventoryReport",  "View inventory analytics and reorder reports"),
     ("Export_Inventory",      "Export product catalog and stock data to CSV or Excel"),
-]
+"""
+
+# Compatibility for scripts importing this name. The catalog is authoritative.
+DEFAULT_PERMISSIONS = [(spec.name, spec.description) for spec in PERMISSION_CATALOG]
 
 DEFAULT_STATUSES = [
     (1, "In Transit"),
@@ -207,22 +215,8 @@ def seed_db(db: Session):
         logger.info("Checking database seeding...")
 
         # ── 1. Seed / backfill Permissions ────────────────────────────────────
-        permissions_map = {}
-        new_perm_count = 0
-        for perm_name, perm_desc in DEFAULT_PERMISSIONS:
-            perm = db.query(Permission).filter(Permission.name == perm_name).first()
-            if not perm:
-                perm = Permission(name=perm_name, description=perm_desc)
-                db.add(perm)
-                db.flush()
-                new_perm_count += 1
-                logger.info("Seeded NEW permission: %s", perm_name)
-            permissions_map[perm_name] = perm
-
-        if new_perm_count:
-            logger.info("Added %d new permission(s) to the database.", new_perm_count)
-        else:
-            logger.info("All permissions are already present — no new permissions added.")
+        permissions_map = sync_permission_catalog(db)
+        logger.info("Synchronized %d catalog permissions.", len(permissions_map))
 
         # ── 2. Seed Container Statuses ─────────────────────────────────────────
         for status_id, status_name in DEFAULT_STATUSES:
@@ -303,6 +297,28 @@ def seed_db(db: Session):
         platform_admin_role.permissions.extend(
             p for p in all_perms if p.id not in platform_permission_ids
         )
+
+        tenant_admin_role = (
+            db.query(Role)
+            .filter(
+                sqlfunc.lower(Role.name) == "tenant_admin",
+                Role.org_id.is_(None),
+                Role.is_deleted == False,
+            )
+            .first()
+        )
+        if not tenant_admin_role:
+            tenant_admin_role = Role(
+                name="Tenant_Admin", org_id=None, is_platform_admin=False
+            )
+            db.add(tenant_admin_role)
+            db.flush()
+            logger.info("Seeded tenant role template: Tenant_Admin")
+        tenant_admin_role.is_platform_admin = False
+        tenant_admin_role.permissions = [
+            permission for permission in all_perms
+            if permission.name not in PLATFORM_PERMISSION_NAMES
+        ]
 
         # Sync existing "Administrator" role
         administrator_role = (

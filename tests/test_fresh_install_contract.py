@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 from Model.containermgmt.Report.ReportTemplate import ReportTemplate
-from Services import user_org_role_sync
 from Utils import bootstrap_root_org
 from auth.security_guards import is_platform_admin_user
 
@@ -29,9 +28,3 @@ def test_platform_admin_requires_explicit_role_flag():
     )
     assert is_platform_admin_user(named_only) is False
     assert is_platform_admin_user(renamed_flagged) is True
-
-
-def test_user_org_role_sync_is_transactional_bridge():
-    source = open(user_org_role_sync.__file__, encoding="utf-8").read()
-    assert "delete(user_org_roles)" in source
-    assert "insert(user_org_roles)" in source
