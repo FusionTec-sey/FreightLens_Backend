@@ -31,11 +31,12 @@ def ensure_supplier_scope_schema():
             ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE
         """))
 
-        # Preserve the previously global visibility of legacy rows explicitly.
+        # Preserve global visibility while assigning every row an auditable owner.
         conn.execute(text("""
-            UPDATE containermgmt.supplier
-            SET is_shared = TRUE
-            WHERE org_id IS NULL AND is_shared = FALSE
+            UPDATE containermgmt.supplier AS supplier
+            SET org_id = (SELECT min(id) FROM usercredentials.organisations),
+                is_shared = TRUE
+            WHERE supplier.org_id IS NULL
         """))
         conn.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_supplier_org_id
@@ -46,18 +47,16 @@ def ensure_supplier_scope_schema():
             ON containermgmt.supplier(is_shared)
         """))
 
-        constraint_exists = conn.execute(text("""
-            SELECT 1 FROM pg_constraint
-            WHERE conname = 'ck_supplier_scope'
-              AND conrelid = 'containermgmt.supplier'::regclass
-        """)).scalar()
-        if not constraint_exists:
-            conn.execute(text("""
-                ALTER TABLE containermgmt.supplier
+        conn.execute(text("""
+            ALTER TABLE containermgmt.supplier
+                DROP CONSTRAINT IF EXISTS ck_supplier_scope;
+            ALTER TABLE containermgmt.supplier
+                ALTER COLUMN org_id SET NOT NULL;
+            ALTER TABLE containermgmt.supplier
                 ADD CONSTRAINT ck_supplier_scope CHECK (
-                    (is_shared = TRUE AND org_id IS NULL)
+                    (is_shared = TRUE AND org_id IS NOT NULL)
                     OR (is_shared = FALSE AND org_id IS NOT NULL)
-                )
-            """))
+                );
+        """))
 
     logger.info("Supplier shared/tenant scope schema is ready")
