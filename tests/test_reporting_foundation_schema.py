@@ -13,7 +13,7 @@ from Model.containermgmt.Report.ReportTemplateAssignment import ReportTemplateAs
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
 from Utils import migrate_reporting_foundation
 from Utils.migrate_reporting_foundation import FIELD_CLASSES
-from Utils import migrate_report_templates
+from Utils import migrate_report_templates, migrate_sourcing_and_quote_templates
 
 
 def test_owned_or_shared_master_models_have_explicit_owner_and_flag():
@@ -49,10 +49,15 @@ def test_foundation_migration_enforces_one_default_per_org_entity():
 
 
 def test_system_template_seed_uses_explicit_root_owner():
-    source = open(migrate_report_templates.__file__, encoding="utf-8").read()
+    sources = (
+        open(module.__file__, encoding="utf-8").read()
+        for module in (migrate_report_templates, migrate_sourcing_and_quote_templates)
+    )
 
-    assert "(SELECT min(id) FROM usercredentials.organisations)" in source
-    assert "slug = :slug AND org_id IS NULL" not in source
+    for source in sources:
+        assert "(SELECT min(id) FROM usercredentials.organisations)" in source
+        assert "slug = :slug AND org_id IS NULL" not in source
+        assert "NULL, :slug" not in source
 
 
 def test_roles_can_be_assigned_per_organisation():

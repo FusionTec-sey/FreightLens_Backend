@@ -667,7 +667,7 @@ def ensure_sourcing_and_quote_templates_schema():
                 text("""
                     SELECT id, active_version_id 
                     FROM containermgmt.report_templates 
-                    WHERE is_system = TRUE AND slug = :slug AND org_id IS NULL AND is_deleted = FALSE
+                    WHERE is_system = TRUE AND slug = :slug AND is_deleted = FALSE
                 """),
                 {"slug": tpl["slug"]}
             ).fetchone()
@@ -681,7 +681,8 @@ def ensure_sourcing_and_quote_templates_schema():
                             entity_type, is_system, is_active, active_org_ids,
                             template_type, page_size, orientation, output_format, is_deleted
                         ) VALUES (
-                            NULL, :slug, :name, :description, :category, :resolver_key,
+                            (SELECT min(id) FROM usercredentials.organisations),
+                            :slug, :name, :description, :category, :resolver_key,
                             :entity_type, TRUE, TRUE, :active_org_ids,
                             'DOCUMENT', :page_size, :orientation, :output_format, FALSE
                         ) RETURNING id;
