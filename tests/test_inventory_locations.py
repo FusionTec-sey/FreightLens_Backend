@@ -25,6 +25,7 @@ def locations(test_engine, monkeypatch):
     # import until collection has restored their real dependency implementations.
     from Routes.Inventory.LocationRouter import LocationRouter
     from Routes.Inventory.CostPoolRouter import CostPoolRouter
+    from Routes.Inventory.CostEvidenceRouter import CostEvidenceRouter
     from Routes.Inventory.PolicyDraftRouter import PolicyDraftRouter
     from Routes.Inventory.BranchSettingsRouter import BranchSettingsRouter
     from Routes.Inventory.BranchCounterRouter import BranchCounterRouter
@@ -65,6 +66,7 @@ def locations(test_engine, monkeypatch):
     app = FastAPI()
     app.include_router(LocationRouter, dependencies=[Depends(require_module("INVENTORY"))])
     app.include_router(CostPoolRouter, dependencies=[Depends(require_module("INVENTORY"))])
+    app.include_router(CostEvidenceRouter)
     app.include_router(PolicyDraftRouter, dependencies=[Depends(require_module("INVENTORY"))])
     app.include_router(BranchSettingsRouter, dependencies=[Depends(require_module("INVENTORY"))])
     app.include_router(BranchCounterRouter, dependencies=[Depends(require_module("INVENTORY"))])

@@ -72,7 +72,7 @@ def record_opening_value(factory, context, actor_id, operation_key, *, balance_i
 
     def apply(db):
         source, opening, pool, latest = (loaded[k] for k in ("source", "opening", "pool", "latest"))
-        if db.query(InventoryValuation.id).filter_by(org_id=context.org_id, balance_id=balance_id, source_version=1).first():
+        if db.query(InventoryValuation.id).filter_by(org_id=context.org_id, balance_id=balance_id, source_version=1, kind='OPENING').first():
             raise PostingConflict("Opening movement already has a valuation")
         before = CostBalance(CostPool(context.org_id, pool.id, source.product_id),
             latest.pool_quantity if latest else Decimal(0), latest.pool_value_scr if latest else Decimal(0))

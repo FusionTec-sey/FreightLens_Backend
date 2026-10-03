@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from Schema.InventoryLocationSchema import NamedLocationInput
+from typing import Literal
 
 
 class CostPoolCreate(NamedLocationInput):
@@ -11,6 +12,8 @@ class CostPoolRead(CostPoolCreate):
     id: int
     org_id: int
     is_active: bool
+    central_authority_state: Literal['NOT_CONFIGURED', 'ACTIVE', 'SUSPENDED'] = 'NOT_CONFIGURED'
+    central_authority_epoch: int | None = None
 
 
 class BranchCostPoolAssign(BaseModel):

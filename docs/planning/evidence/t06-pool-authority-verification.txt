@@ -1,0 +1,21 @@
+T06 - Durable central cost-pool authority - 2026-10-03
+
+Implemented same-database central fencing foundation in existing authority models
+and service. New pool epoch table reuses StoreNode; no duplicate identity registry.
+Additive startup migration creates empty history and guards, no activation/seeding.
+
+Isolated synthetic PostgreSQL:
+python -m pytest -q tests/test_cost_pool_authority.py tests/test_posting_authority.py
+ tests/test_charge_posting.py
+43 passed, 23 dependency warnings, 16.04s.
+Coverage: actual guard on charge posting/replay, stale/suspended authority denial,
+foreign company/pool/node/epoch, missing central authority despite branch ownership,
+invalid sequence, immutable history, cross-company node FK, competing epoch append,
+pool lock held through commit, migration replay preserving history. Branch-authority
+and coordinator regressions included. Fresh-install rehearsal not claimed.
+
+API OpenAPI HTTP200 after local autoreload. git diff --check passed (line-ending
+warnings only). Frontend unchanged: no browser/build or broad regression rerun.
+Runtime identity authentication and claim binding into intent remain next work.
+Reviewed enrollment/failover, real storage configuration, receipt costs and central
+reconciliation remain pending. No public posting, real financial data or deployment.

@@ -19,6 +19,7 @@ from .Orders import (
 from .Inventory import InventoryRouter
 from .Inventory.LocationRouter import LocationRouter
 from .Inventory.CostPoolRouter import CostPoolRouter
+from .Inventory.CostEvidenceRouter import CostEvidenceRouter
 from .Inventory.PolicyDraftRouter import PolicyDraftRouter
 from .Inventory.BranchSettingsRouter import BranchSettingsRouter
 from .Inventory.BranchCounterRouter import BranchCounterRouter
@@ -31,6 +32,7 @@ from .BlobRouter import BlobRouter
 __all__ = [
     "LocationRouter",
     "CostPoolRouter",
+    "CostEvidenceRouter",
     "PolicyDraftRouter",
     "BranchSettingsRouter",
     "BranchCounterRouter",

@@ -1,0 +1,45 @@
+T06 charge evidence workspace - 2026-10-03
+
+Implemented slice
+- Existing suppliers and GENERAL/PO documents selected through bounded paginated
+  APIs. No new catalogue or invoice store. PostgreSQL guidance informed explicit
+  scoped queries, minimal projections and bounded document lookup.
+- INVENTORY and ORDERS modules; product, supplier, document and financial permissions;
+  financial/supplier field policy checks. Manage_Financials gates writes.
+- Existing immutable manager cases record independent evidence requests/decisions.
+  Exact source revalidation, self-review denial and stable operation retry identity.
+- Case responses explicitly project safe fields, not private blob keys or bindings.
+- Authenticated UUID downloads use existing blob_storage, exact company and parent
+  eligibility, attachment disposition, no-store, no numeric/foreign fallback.
+- React CostChargeEvidence, shared EvidenceChoice and adapted ManagerCases provide
+  exact string declarations, documented FX selection, download failure visibility,
+  read-only mode, guarded exits and failed-save field/operation retention.
+- No schema changes. Existing case snapshots store evidence. No new migrations.
+
+Verification
+Backend isolated PostgreSQL runner, never preview DB:
+  docker exec -w /work freightlens-pos-phase0-runner python -m pytest -q
+  915 passed, 2 known C12 legacy xfailed, 23 warnings, 98.63 seconds.
+  New API tests cover permission/module/field denial, company isolation even with
+  root context, safe projections, independent review, retry, self-review rejection,
+  stale evidence, invalid paging, unsupported/unbound document parents and downloads.
+Frontend full suite:
+  143 passed, 31 suites, 13.507 seconds.
+  Exact strings, failed-save retry identity, discard, foreign FX evidence requirement,
+  readonly controls, company-pinned API/download and manager evidence rendering tested.
+Production build:
+  Passed with existing ESLint/Browserslist warnings; main.199bbc7f.js.
+  Targeted ESLint on new components and changed ManagerCases passed.
+git diff --check passed in both repositories.
+Preview API OpenAPI and UI /inventory returned HTTP200. All five new evidence paths
+registered. HTTP checks are not browser/layout acceptance. Preview not restarted.
+
+Remaining gates / next action
+T06 remains In progress. No financial posting or real-data changes.
+Immutable blob version/content guarantees remain required before capitalisation;
+metadata hashing alone does not protect against in-place object replacement.
+Next integrate those guarantees and compose charge use, approval consumption and
+valuation in one transaction with own-operation retry recovery. Receipt costs and
+central reconciliation remain outstanding. Payment/quote evidence needs additional
+parent permissions before expanding this selector. Browser acceptance pending.
+No external deployment, uploads, customer messaging or GitHub push performed.

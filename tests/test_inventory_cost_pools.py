@@ -40,6 +40,28 @@ def test_initial_assignment_same_retry_and_no_reassignment(locations):
     assert f.db.query(BranchCostPool).filter_by(branch_id=f.own).count() == 1
 
 
+def test_pool_page_shows_latest_authority_without_private_node_data(locations):
+    from uuid import uuid4
+    from Model.containermgmt.Inventory.PostingAuthority import StoreNode, CostPoolAuthorityEpoch
+    f = locations; key = pool(f)
+    initial = f.client.get('/inventory/cost-pools').json()['items'][0]
+    assert initial['central_authority_state'] == 'NOT_CONFIGURED'
+    assert initial['central_authority_epoch'] is None
+    node = StoreNode(org_id=f.org_a, node_key=uuid4(), created_by=f.user.id)
+    f.db.add(node); f.db.flush()
+    for epoch, state in [(1, 'ACTIVE'), (2, 'SUSPENDED')]:
+        f.db.add(CostPoolAuthorityEpoch(org_id=f.org_a, cost_pool_id=key, node_id=node.id,
+            epoch=epoch, state=state, reason='Private synthetic reason', created_by=f.user.id))
+        f.db.commit()
+        response = f.client.get('/inventory/cost-pools?limit=1')
+        result = response.json()['items'][0]
+        assert result['central_authority_state'] == state
+        assert result['central_authority_epoch'] == epoch
+        assert 'node_key' not in result and 'node_id' not in result and 'reason' not in result
+        assert 'Private synthetic reason' not in response.text
+    assert f.client.get('/inventory/cost-pools?page=2&limit=1').json()['items'] == []
+
+
 def test_multiple_branches_can_share_pool(locations):
     f = locations
     p = pool(f)

@@ -1,0 +1,38 @@
+T06 public version-bound evidence integration - 2026-10-03
+
+Implemented
+- Public request path prepares server-read content outside posting transactions,
+  revalidates locked metadata and saves existing manager cases at source_version 2.
+- Retry uses saved versions, not latest objects. Review repeats strict content
+  preparation and opens a new posting transaction before source/decision checks.
+- Case-scoped UUID download validates owning pool/proposal/case/document, reads
+  saved version, verifies full size/SHA256 before returning bytes and rechecks
+  document eligibility after I/O. No raw keys, local/latest fallback or partial data.
+- Frontend adapts existing review panel/client: v2 uses case-pinned download;
+  historical v1 explicitly says current files and ineligible for financial posting.
+- COST_EVIDENCE_MAX_BYTES must be explicitly configured positive. Missing/invalid
+  value returns503. No real value or bucket configuration was changed.
+- No schema migration, new catalogue/approval engine or financial posting.
+
+Verification
+Targeted isolated backend:
+  python -m pytest -q tests/test_cost_evidence_api.py tests/test_cost_content_reviews.py
+    tests/test_cost_charge_reviews.py tests/test_blob_evidence.py
+    tests/test_blob_storage.py tests/test_cost_content_preparation.py
+  112 passed, 23 existing warnings, 9.92 seconds.
+Coverage includes public v2 request/review/replay, source changes during I/O, missing
+configuration, historical denial, anonymous/permission/company denial, pinned
+download routing and storage content replacement rejection.
+Targeted frontend: ChargeEvidenceDetails, CostChargeEvidence, ManagerCases and
+inventoryLocationsApi: 27 tests / 4 suites passed, 3.41 seconds.
+Targeted ESLint passed. Production build passed with existing warnings;
+main.0810d7bb.js. Build run for this frontend/API integration, not full regression.
+Both repository diff checks passed; line-ending notices only.
+API OpenAPI and UI root returned HTTP200; preview preserved. No browser interaction.
+
+Remaining
+Actual RustFS version/retention acceptance and explicit operational size setting,
+atomic charge/case/valuation posting, receipt costs and central reconciliation.
+New capture intentionally blocks when required configuration/version support is
+absent. No business data, accounts, production storage, external deployment or
+GitHub push changed. T06 remains In progress. Full regression deferred to milestone.

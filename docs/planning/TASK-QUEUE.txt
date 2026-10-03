@@ -2,8 +2,10 @@ FreightLens sequential development task queue
 Updated: 2026-10-03
 
 LATEST VERIFICATION
-See evidence/t06-charge-dedup-verification.txt for the current baseline:
-backend874 passed/2 known C12 xfails; frontend138 tests/30 suites; production
+Latest targeted slice: evidence/t06-evidence-own-replay-verification.txt. Full regression
+baseline below is historical; focused checks do not increase its verified total.
+See evidence/t06-evidence-workspace-verification.txt for the current baseline:
+backend915 passed/2 known C12 xfails; frontend143 tests/31 suites; production
 build passed with existing warnings. Safe reviewed alternate-unit extensions are usable
 against original stock snapshots. Authorised T05 demo/tablet checks passed for the
 recorded surfaces; this is not acceptance of every later workflow.
@@ -20,6 +22,11 @@ unless an external blocker is explicitly named. No phase is declared complete he
 States: Ready; In progress; Implemented—verification pending; Verified; Blocked.
 
 COMMON ACCEPTANCE FOR EVERY IMPLEMENTATION TASK
+Owner update 2026-10-03: use affected-feature tests and relevant shared-boundary
+checks during development. Full regression at task completion, major integration
+and before release, not after every slice. Frontend component checks when changed;
+production build for shared/dependency changes and milestones. Broaden checks for
+cross-cutting risk. Always record selected tests and deliberately deferred checks.
 Reuse FastAPI/React, existing catalogues, typed schemas and organisation helpers.
 Include usable frontend where applicable, additive replayable migrations, tests,
 architecture/progress updates and evidence. Check permission/tenant boundaries,
@@ -245,6 +252,76 @@ Existing supplier/document records reused; no second invoice store or public wri
 Evidence: evidence/t06-charge-dedup-verification.txt. Next: connect authoritative
 supplier invoice/FX evidence and bind it to review before composing charge use,
 approval consumption and valuation. Current allocation approval is not that proof.
+Evidence-review internal adapter implemented: declared invoice/eligible amount/FX
+with exact conversion; locked document/supplier/PO state and distinct manager-case
+action. Approved current unconsumed evidence can populate the existing charge-use
+contract. No second invoice or approval system. Old allocation approvals remain
+insufficient. Evidence: evidence/t06-charge-evidence-review-verification.txt.
+Permission-aware supplier/document picker and evidence request/review API are now
+implemented with separate supplier/document/financial field gates. Explicit case
+projections never expose private keys; GENERAL/PO downloads have exact-company
+eligibility and no legacy fallback. Shared React picker, failed-save protection
+and existing manager-case review UI are connected; no duplicate records introduced.
+Evidence: evidence/t06-evidence-workspace-verification.txt.
+Version-pinned byte fingerprint primitive added to existing blob_storage: strict
+non-null version, bounded complete stream SHA256, mandatory size limit, no disk
+fallback, stream closure on errors. Internal only; no bucket configuration changes.
+Evidence: evidence/t06-versioned-blob-verification.txt.
+Internal version-2 review bindings now retain exact typed document content maps;
+current content identity is mandatory for approved financial evidence. Historical
+metadata-only cases cannot be upgraded implicitly. No parallel approval store or
+storage I/O inside transactions. Evidence: evidence/t06-content-review-binding-verification.txt.
+Two-stage preparation helper implemented: authorized detached source snapshot,
+transaction closed before strict storage reads, exact reviewed-version comparison,
+and mandatory later locked-source recheck. No new approval engine or persistence.
+Evidence: evidence/t06-content-preparation-verification.txt.
+Public two-stage request/review and exact-version reviewer downloads now connected.
+New cases use v2; original versions are retained on retry, current source is checked
+after storage I/O, and SHA256-verified full bytes are returned before any streaming.
+Legacy cases remain labelled metadata-only/ineligible for posting. Requires explicit
+COST_EVIDENCE_MAX_BYTES; no actual config or bucket settings changed.
+Evidence: evidence/t06-public-versioned-evidence-verification.txt.
+Local read-only inspection: RustFS bucket versioning NOT_ENABLED; capture limit
+absent. No configuration changed. This is a storage acceptance gate, not a reason
+to stop independent implementation. Own-operation evidence replay guard now requires
+matching actor, case/charge use, exact evidence and charge-domain receipt; ordinary
+consumed-case calls still reject. No valuation writer is implied.
+Evidence: evidence/t06-evidence-own-replay-verification.txt.
+Immutable additional-cost entries now extend the same valuation ledger, with
+zero added quantity, source links, exact allocation and case-use database guards.
+Caller-transaction append helper and atomic composition tests are implemented;
+frontend history distinguishes kinds and excludes charges from allocation sources.
+Evidence: evidence/t06-charge-valuation-verification.txt.
+Internal coordinator now composes prepared-content/source checks, case/charge use,
+valuation entries and receipt/outbox atomically. Explicit permission and central
+authority callbacks are mandatory on attempts and replays. Shared-session rollback
+and concurrent retries verified; no new UI/API action or schema.
+Evidence: evidence/t06-charge-posting-verification.txt.
+Factory-owned preparation-to-posting entry point now connects exact reviewed blob
+versions with the coordinator, rechecking permission/authority/source after I/O.
+Retries reread original versions; no transaction remains open during storage reads.
+Evidence: evidence/t06-prepared-posting-verification.txt.
+Persisted-case adapter now integrated: exact active-company/proposal/case lookup,
+shared approval/source checks before storage, no caller-supplied case binding.
+Evidence: evidence/t06-persisted-case-verification.txt.
+Durable central cost-pool authority now implemented using existing node identities,
+immutable consecutive epochs, same-company FKs and pool locks held through commit.
+Real guard tested with charge posting/replay; no node or pool activated.
+Evidence: evidence/t06-pool-authority-verification.txt.
+Typed central claims are now mandatory and their org/pool/node/epoch identity is
+bound into posting intent. Both entry points enforce persisted authority plus
+proposal/pool scope; extra callbacks cannot bypass those checks.
+Evidence: evidence/t06-authority-intent-verification.txt.
+Cost-pool list now shows read-only central writer state/epoch through the existing
+paginated API and table. No node identity, activation action or posting enablement.
+Evidence: evidence/t06-authority-status-verification.txt. Browser acceptance pending.
+Next: connect authenticated central-runtime identity. Existing branch authority
+must not stand in for central shared-pool
+authority; runtime enrollment/fencing remains a T21-T23 integration gate. Continue
+receipt costs and central reconciliation. Public financial posting remains off;
+validate actual RustFS version retention/configuration before enabling capture.
+Preserve source/permission guards and atomic own-operation retries. Do not expose private metadata
+fingerprints in generic financial-only case reads. Browser acceptance pending.
 
 T07 | Complete reservation lifecycle
 Status: Blocked
@@ -475,6 +552,10 @@ money or expired policies. T14 consumes this store from its first implementation
 Next action: Implement before tablet checkout; retain document copy in T15.
 
 VERIFICATION AND CHECKPOINT PRACTICE
+Owner-requested GitHub checkpoint (2026-10-03): full backend 1035 passed / 2 known
+legacy xfails; frontend 150 passed / 32 suites; normal production build passed with
+existing warnings. Evidence: evidence/20261003-github-checkpoint.txt.
+No whole-task completion or browser/pilot acceptance implied.
 UI refinement checkpoint (2026-10-02): access/read failure recovery, tablet order
 controls and user/role layout, contextual approval labels and branding. Evidence:
 ../../../FreightLens_Frontend/docs/UI-REFINEMENT-2026-10-02.txt.

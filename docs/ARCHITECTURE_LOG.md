@@ -1,5 +1,205 @@
 # FreightLens Architecture Log
 
+## 2026-10-03 - Central writer status in cost-pool workspace
+
+- **Change:** Typed state/epoch fields on existing pool page; one scoped bounded
+  latest-authority query. Existing React table shows read-only status, not a new
+  dashboard or enrollment workflow. No node identity or private reason exposed.
+- **Safety:** Existing module/permission gates; failure hides stale UI status.
+  Writer assigned explicitly does not mean public posting enabled.
+- **Verification:** 43 backend and 12 frontend targeted tests; see
+  planning/evidence/t06-authority-status-verification.txt for build evidence.
+- **Limits:** Browser acceptance remains pending; no schema, authority activation,
+  real data, runtime authentication or public financial posting change.
+- **Undo:** Remove status projection/column; preserve authority history.
+
+## 2026-10-03 - Central authority bound into charge posting intent
+
+- **Change:** Mandatory typed claim on both preparation/coordinator entry points;
+  persisted authority check plus exact proposal-pool lookup. Node/pool/company/
+  epoch form part of the immutable operation request digest.
+- **Safety:** No-op extra callbacks cannot bypass database authority. New valid
+  writers cannot relabel historical requests; old claims are fenced. Existing
+  unbound internal intents fail digest comparison rather than being upgraded.
+- **Verification:** 53 targeted checks, 12.41s; evidence in
+  planning/evidence/t06-authority-intent-verification.txt.
+- **Limits:** Runtime authentication/enrollment, storage acceptance and central
+  reconciliation remain pending. No API/UI activation, schema change or deployment.
+- **Undo:** Disconnect internal consumers; preserve receipts and authority history.
+
+## 2026-10-03 - Durable central cost-pool authority foundation
+
+- **Change:** CostPoolAuthorityEpoch reuses node identities and immutable-authority
+  guards; typed pool claim and same-database writer check added to existing service.
+  Empty additive startup migration; no real activation or runtime credentials.
+- **Safety:** Company-scoped pool/node FKs, consecutive epochs, immutable history,
+  shared pool lock held through commit versus exclusive authority-transition lock.
+  PostgreSQL guidance informed indexed lookup and bounded short transactions.
+- **Verification:** 43 targeted authority/coordinator tests passed; see
+  planning/evidence/t06-pool-authority-verification.txt.
+- **Limits:** Runtime authentication and intent binding, reviewed transitions,
+  distributed recovery, receipt costing and reconciliation remain incomplete.
+  No public posting or frontend changes. T06 remains In progress.
+- **Undo:** Disable consumers; retain append-only authority history.
+
+## 2026-10-03 - Persisted charge-case resolution
+
+- **Change:** Removed the prepared-posting case-loader callback; resolve exact
+  persisted case internally and reuse existing approval/current-source checks.
+  Both evidence checking and preparation share the same scoped case query.
+- **Safety:** Reject legacy, pending/rejected, missing, wrong-proposal and foreign
+  cases before storage reads. Original-version verification is still mandatory.
+- **Database:** Existing company/case unique index reused; PostgreSQL guidance
+  informed exact indexed scoping. No schema, migration or new approval store.
+- **Verification:** planning/evidence/t06-persisted-case-verification.txt.
+- **Limits:** Central-runtime authority, storage acceptance, receipt costing and
+  reconciliation remain pending; no public posting or frontend changes.
+- **Undo:** Disconnect internal preparation entry point; retain immutable records.
+
+## 2026-10-03 - Version verification connected to atomic charge posting
+
+- **Change:** Existing coordinator gains a factory-owned preparation entry point;
+  existing bounded storage verification runs after the snapshot transaction closes.
+  No duplicate storage client, new schema, API route or frontend control.
+- **Safety:** Exact persisted v2 company/proposal binding before I/O, original
+  version reads on retries, permission/authority rechecks after I/O, fail-closed
+  missing evidence and changed metadata. No approval consumed on failed preparation.
+- **Verification:** 40 targeted checks passed; evidence in
+  planning/evidence/t06-prepared-posting-verification.txt.
+- **Limits:** Authenticated central runtime/case adapters, storage acceptance,
+  receipt costs and reconciliation remain pending. Existing branch authority is
+  not shared-pool central authority. Public financial posting remains disabled.
+- **Undo:** Disconnect entry point consumers; preserve historical receipts/entries.
+
+## 2026-10-03 - Atomic charge-posting coordinator
+
+- **Change:** One internal coordinator composes existing prepared-content checks,
+  independent case approval, whole-charge consumption, valuation append and receipt.
+  No new schema, duplicate ledger, HTTP endpoint or frontend posting control.
+- **Safety:** Full intent fingerprint; permission and central-authority callbacks
+  run before replay. Exact source/content checks reject foreign or changed evidence.
+  Shared transactions retain outer rollback; callbacks cannot perform external I/O.
+- **Verification:** 28 focused tests passed; evidence in
+  planning/evidence/t06-charge-posting-verification.txt.
+- **Limits:** Authenticated central-runtime authority adapter, actual storage
+  configuration, receipt costing and reconciliation remain outstanding. Public
+  posting remains disabled; T06 remains in progress.
+- **Undo:** Disconnect coordinator consumers; preserve immutable audit records.
+
+## 2026-10-03 - Additional costs in the existing valuation ledger
+
+- **Change:** OPENING/CHARGE entries, original-source links, scoped insert guards,
+  replayable additive migration and caller-transaction append helper. No second
+  ledger. Quantity stays unchanged; costs remain unreconciled.
+- **Safety:** Expected stream versions, deterministic locks, whole-charge
+  conservation, mandatory authorization, immutable history and movement rejection.
+  PostgreSQL guidance informed scoped uniqueness and lock ordering.
+- **UI:** Existing history distinguishes charge rows and prevents selecting them
+  as new allocation sources; existing APIs and components are reused.
+- **Verification:** See planning/evidence/t06-charge-valuation-verification.txt.
+- **Limits:** Production coordinator, receipts/reconciliation, storage configuration
+  and browser acceptance remain pending. T06 is not complete; public posting off.
+- **Undo:** Disable consumers, retain immutable entries and additive schema.
+
+## 2026-10-03 - Own-operation charge-evidence replay guard
+
+- **Why:** Consumed approvals must reject reuse but permit the exact completed
+  posting to return its existing receipt after an uncertain response.
+- **Change:** Optional trusted replay identity checks same actor, case use, charge
+  use/evidence and charge-domain receipt, after ordinary source/permission checks.
+  Company-scoped indexed lookups reuse immutable records; no new ledger or schema.
+- **Verification:** Targeted evidence, charge-use and API checks; see
+  planning/evidence/t06-evidence-own-replay-verification.txt.
+- **Local inspection:** Bucket versioning not enabled; capture limit absent.
+  Read-only check only, no configuration changes. Storage acceptance remains open.
+- **Limits:** No actual valuation effect or public financial writer. Outer request
+  digest, valuation versions and atomic entries must still be composed. T06 ongoing.
+- **Undo:** Omit replay identity to retain strict consumed-case rejection.
+
+## 2026-10-03 - Public version-bound evidence workflow
+
+- **Why:** Connect existing preparation and review contracts to usable public
+  actions without I/O under posting locks or a latest-file download bypass.
+- **Change:** New requests capture v2; retries/reviews re-read original versions,
+  recheck locked metadata and reuse the case engine. Case-scoped downloads verify
+  complete bytes before returning. Frontend chooses pinned downloads and labels v1.
+- **Configuration:** Positive COST_EVIDENCE_MAX_BYTES required; no guessed default,
+  bucket mutation, business seed, schema migration or financial posting enabled.
+- **Verification:** 112 targeted backend / 27 frontend tests; build recorded in
+  planning/evidence/t06-public-versioned-evidence-verification.txt.
+- **Limits:** Real storage retention/compatibility and browser acceptance pending;
+  atomic charge/case/valuation and reconciliation still required. T06 In progress.
+- **Undo:** Disable public capture/pinned-download consumers; retain immutable cases.
+
+## 2026-10-03 - Two-stage charge-content preparation
+
+- **Why:** Storage reads must not hold posting transactions or silently use a new
+  file version in place of reviewed evidence.
+- **Change:** Reuses charge bindings, typed fingerprints and the strict blob reader.
+  Permission/source snapshot transaction closes before network reads; exact reviewed
+  versions are checked and a later locked-source comparison is mandatory.
+- **Verification:** 106 targeted checks in 8.34s; evidence file linked from queue.
+- **Limits:** Internal bridge only; HTTP preparation and exact-version downloads
+  remain pending. No UI, schema, real records, storage settings or posting changed.
+- **Undo:** Disable consumers of the additive preparation service.
+
+## 2026-10-03 - Persist content identities in existing charge reviews
+
+- **Why:** A metadata approval must not become financial evidence when the actual
+  document content or its storage version has never been independently reviewed.
+- **Change:** Typed internal fingerprints, exact linked-document coverage and locked
+  key/size comparison; source_version 2 case bindings retain private content identity.
+  Financial evidence loader requires matching freshly prepared fingerprints and
+  rejects all historical metadata-only cases. Existing approval/receipt engine reused.
+- **Verification:** Focused 98 checks; planning/evidence/t06-content-review-binding-verification.txt.
+- **Limits:** Public capture and exact-version downloads still need integration;
+  no I/O inside posting callbacks, schema migration, UI change or public writer.
+  Retention, central authority and atomic valuation remain gates. T06 In progress.
+- **Undo:** Disable content-consuming adapters; preserve immutable case history.
+
+## 2026-10-03 - Strict version-pinned evidence fingerprint primitive
+
+- **Why:** Metadata-only reviews and compatibility local-file fallback cannot
+  establish the actual supplier-document bytes used for financial evidence.
+- **Change:** Existing storage adapter gains a bounded SHA256 reader with explicit
+  byte limit, non-null version requirement, exact requested-version check, length
+  checks and deterministic stream closure. No fallback or storage configuration write.
+- **Verification:** Focused storage and evidence regressions only, per owner testing
+  cadence; planning/evidence/t06-versioned-blob-verification.txt.
+- **Limits:** Internal primitive only. Persisted review/download integration, actual
+  RustFS version retention and atomic valuation remain required. No UI/API change,
+  schema migration, live upload or new posting authority. T06 remains In progress.
+- **Undo:** Stop calling the new method; legacy readers are unchanged.
+
+## 2026-10-03 - Permission-separated charge evidence workspace
+
+- **Why:** Make existing invoice/FX review contracts usable without duplicating
+  suppliers, documents, approvals or leaking confidential source metadata.
+- **Change:** Typed paginated choices and case responses; request/review endpoints;
+  exact-company authenticated document downloads through the existing blob adapter.
+  Requires both modules, all source/financial permissions and field clearance.
+  Frontend shares picker, pagination, operation-intent and manager-case components.
+- **Migration:** None. Existing immutable case bindings retain the declarations.
+- **Verification:** planning/evidence/t06-evidence-workspace-verification.txt.
+- **Limits:** GENERAL/PO evidence only. File-version immutability, atomic posting,
+  receipt costing, reconciliation and browser acceptance remain open. No live posting.
+- **Undo:** Disable the evidence router and entry point; retain historical cases.
+
+## 2026-10-03 - Evidence-bound invoice and FX review contract
+
+- **Why:** Allocation approval must not be treated as verification of a supplier
+  invoice, eligible expense or exchange rate.
+- **Change:** Typed declaration, exact charge-fx-v1 conversion, locked existing
+  supplier/document/PO snapshots, distinct verify-charge case action and approved
+  current/unconsumed evidence loader. Reuses immutable manager cases; old allocation
+  approvals cannot satisfy charge verification. UI clarifies the distinction.
+- **Migration:** None; existing case binding stores the immutable review snapshot.
+- **Verification:** planning/evidence/t06-charge-evidence-review-verification.txt.
+- **Limits:** Internal adapter only. Permission-aware evidence picker/API, blob
+  version immutability and atomic charge/case/valuation integration remain pending.
+  No financial posting, actual evidence verification or full T06 completion claimed.
+- **Undo:** Disable internal evidence adapter; retain existing immutable cases.
+
 ## 2026-10-03 - Internal whole-charge consumption guard
 
 - **Why:** Distinct operation IDs or allocation proposals must not capitalise one
