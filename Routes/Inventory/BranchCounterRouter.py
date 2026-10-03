@@ -13,6 +13,7 @@ from auth.dependencies import get_org_context
 from auth.security_guards import require_permission
 from Services.settings_revision_service import (lock_settings_operation, require_matching_retry,
     require_current_version, SettingsConflict)
+from Services.default_stock_area_service import require_owned_stock_area
 
 BranchCounterRouter = APIRouter(prefix="/inventory/branches", tags=["Branch Counters"])
 
@@ -61,13 +62,16 @@ def save_counter(branch_id: int, counter_key: UUID, payload: CounterSave, db: Se
     try:
         lock_settings_operation(db, "counter-settings", context.org_id, payload.operation_key)
         branch_scope(db, context, branch_id, lock=True)
+        if payload.config.default_stock_location_id is not None:
+            try: require_owned_stock_area(db, context, branch_id, payload.config.default_stock_location_id)
+            except LookupError as error: raise HTTPException(404, str(error)) from error
         counter = counters(db, context).filter_by(counter_key=counter_key).one_or_none()
         if counter and counter.branch_id != branch_id:
             raise HTTPException(404, "Counter not found in this branch")
         if counter and counter.code != payload.code:
             raise HTTPException(409, "Counter code is permanent; edit the display name instead")
         prior = revisions(db, context).filter_by(operation_key=payload.operation_key).one_or_none()
-        config = payload.config.model_dump(mode="json")
+        config = payload.config.model_dump(mode="json", exclude_none=True)
         if prior:
             require_matching_retry(prior, target_matches=counter is not None and prior.counter_id == counter.id,
                 expected_version=payload.expected_version, actor_id=user.id, config=config,

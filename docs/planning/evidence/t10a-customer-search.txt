@@ -1,0 +1,20 @@
+T10A customer search — 2026-10-03
+
+Isolated PostgreSQL runner and mocked search provider; no real customer writes.
+pytest -q tests/test_customer_api.py tests/test_customer_search.py tests/test_customer_identity.py
+31 passed, 23 pre-existing deprecation warnings, 5.05s.
+Checks: exact company/provider filter, rehydration, foreign/stale hit denial,
+search outage503, permission before provider, bounded page, minimal projection,
+safe sync failure and existing identity/create/replay boundaries.
+
+Frontend CustomersPage, CustomerCreateForm, customersApi suites:
+17 tests passed / 3 suites, 3.107s. Includes submit/clear server search and existing
+selection, permissions, stale company responses and uncertain creation retries.
+Production build passed with existing ESLint/Browserslist warnings.
+Artifact: main.87225be5.js. API openapi health HTTP200.
+
+Not verified: live provider task completion, browser/tablet acceptance, durable
+projection delivery/repair, full regression. Search indexing is asynchronous;
+startup and exact creation retries resubmit records. Provider pagination caps apply.
+GET contact search access-log redaction requires release review. No real seeds,
+deployment, customer messaging or GitHub push. T10A remains in progress.

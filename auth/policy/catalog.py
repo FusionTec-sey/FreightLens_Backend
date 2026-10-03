@@ -23,6 +23,10 @@ def _specs(module: Optional[str], entries: list[tuple[str, str]]) -> list[Permis
 # deployments may retain retired permissions for audit history, but code may only
 # authorize names declared here.
 PERMISSION_CATALOG = [
+    *_specs('SALES', [
+        ('View_SalesDraft', 'View company-owned retail sales drafts'),
+        ('Manage_SalesDraft', 'Create and revise retail sales drafts, without confirming sales'),
+    ]),
     *_specs(None, [
         ("View_Dashboard", "View dashboard and summary statistics"),
         ("View_Report", "View reporting catalog, templates, and registers"),
@@ -48,6 +52,8 @@ PERMISSION_CATALOG = [
         ("View_Setting", "View settings"),
         ("Edit_Setting", "Update settings"),
         ("View_MasterData", "View shared reference data"),
+        ("View_Customer", "View company-owned retail customer identities"),
+        ("Manage_Customer", "Create company-owned retail customer identities"),
         ("Edit_MasterData", "Update shared reference data"),
         ("Add_RefData", "Add reference data"),
         ("Edit_RefData", "Edit reference data"),
@@ -111,6 +117,13 @@ PERMISSION_CATALOG = [
         ("View_consignee_name", "View consignee names"), ("View_arrivalDate", "View BL arrival dates"),
     ]),
     *_specs("INVENTORY", [
+        ('Request_ReservationRelease', 'Request exact saved-demand stock release review'),
+        ('Review_ReservationRelease', 'Approve or reject saved-demand stock release requests'),
+        ('Request_ReservationReallocation', 'Request exact same-store draft reservation reallocation'),
+        ('Review_ReservationReallocation', 'Review exact source and destination reservation reallocation'),
+        ('Request_ReservationDeadline', 'Request a reviewed reservation follow-up date'),
+        ('Review_ReservationDeadline', 'Review exact reservation follow-up dates'),
+        ('Schedule_ReservationReview', 'Apply an approved reservation follow-up date without releasing stock'),
         ("View_Product", "View products and stock levels"), ("Add_Product", "Create products"),
         ("Edit_Product", "Edit products"), ("Delete_Product", "Delete products"),
         ("Adjust_Stock", "Adjust stock with a reason"), ("View_ProductCategory", "View product categories"),

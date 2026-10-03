@@ -9,12 +9,96 @@ MEILI_KEY = os.getenv("MEILISEARCH_MASTER_KEY") or os.getenv("MEILI_MASTER_KEY")
 
 _client = None
 
+
+class CustomerSearchUnavailable(RuntimeError):
+    pass
+
+
+def _customer_task_succeeded(client, task):
+    """An accepted task is not proof that the private projection was applied."""
+    uid = getattr(task, 'task_uid', None)
+    if type(uid) is not int or uid < 0:
+        return False
+    completed = client.wait_for_task(uid, timeout_in_ms=1500, interval_in_ms=100)
+    return (getattr(completed, 'uid', None) == uid
+            and getattr(completed, 'index_uid', None) == 'retail_customers'
+            and getattr(completed, 'status', None) == 'succeeded')
+
+
+def init_customers_index():
+    """Private server-side projection; settings/additions are asynchronous tasks."""
+    client = get_meili_client()
+    if not client:
+        return False
+    try:
+        task = client.index('retail_customers').update_settings({
+            'searchableAttributes': ['name', 'contacts'],
+            'filterableAttributes': ['org_id', 'is_deleted'],
+            'displayedAttributes': ['id', 'org_id'],
+        })
+        return _customer_task_succeeded(client, task)
+    except Exception:
+        logger.warning('Customer search configuration unavailable')
+        return False
+
+
+def sync_customer_document(customer_key, org_id, profile):
+    # Never log names, contacts, queries or provider exception bodies.
+    try:
+        client = get_meili_client()
+        if not client:
+            return False
+        task = client.index('retail_customers').add_documents([{
+            'id': str(customer_key), 'org_id': org_id, 'is_deleted': False,
+            'name': profile['name'], 'contacts': [c['value'] for c in profile['contacts']],
+        }], primary_key='id')
+        return _customer_task_succeeded(client, task)
+    except Exception:
+        logger.warning('Customer search update unavailable; committed identity retained')
+        return False
+
+
+def bulk_index_all_customers(db):
+    from Model.containermgmt.MasterData.RetailCustomer import RetailCustomer
+    if not init_customers_index():
+        return
+    # Administrative startup repair; no user-facing cross-company endpoint.
+    for row in db.query(RetailCustomer).filter_by(is_deleted=False).yield_per(200):
+        if not sync_customer_document(row.customer_key, row.org_id, row.initial_profile):
+            break
+
+
+def search_customers(query, org_id, page, limit):
+    from uuid import UUID
+    if type(org_id) is not int or org_id <= 0:
+        raise CustomerSearchUnavailable('Customer search unavailable')
+    try:
+        client = get_meili_client()
+        if not client:
+            raise CustomerSearchUnavailable()
+        result = client.index('retail_customers').search(query, {
+            'filter': f'org_id = {org_id} AND is_deleted = false',
+            'page': page, 'hitsPerPage': limit, 'attributesToRetrieve': ['id', 'org_id'],
+        })
+        hits = result['hits']
+        total = result['totalHits']
+        if type(total) is not int or total < 0 or len(hits) > limit:
+            raise ValueError('Invalid search page')
+        if any(hit.get('org_id') != org_id for hit in hits):
+            raise ValueError('Invalid search scope')
+        keys = [UUID(hit['id']) for hit in hits]
+        if len(set(keys)) != len(keys):
+            raise ValueError('Repeated search identity')
+        return keys, total
+    except Exception as error:
+        raise CustomerSearchUnavailable('Customer search unavailable; retry or clear search') from error
+
 def get_meili_client():
     global _client
     if _client is None:
         try:
             import meilisearch
-            _client = meilisearch.Client(MEILI_URL, MEILI_KEY)
+            _client = meilisearch.Client(MEILI_URL, MEILI_KEY, timeout=5)
         except Exception as e:
             logger.warning("Could not initialize Meilisearch client: %s", e)
             return None
@@ -205,17 +289,23 @@ def search_products_with_total(
     query_str: str,
     filters: Optional[List[str]] = None,
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    strict_public: bool = False,
 ):
     """Search products using Meilisearch returning both hits and total hits."""
     client = get_meili_client()
     if not client:
+        if strict_public: raise RuntimeError('Product search unavailable')
         return [], 0
     try:
         search_params = {
             "limit": limit,
             "offset": offset,
         }
+        if strict_public:
+            # Sales search must not reveal vendor codes through match behaviour.
+            search_params['attributesToSearchOn'] = ['name', 'sku']
+            search_params['attributesToRetrieve'] = ['id', 'org_id']
         if filters:
             search_params["filter"] = " AND ".join(filters)
 
@@ -224,6 +314,7 @@ def search_products_with_total(
         total = res.get("totalHits") or res.get("estimatedTotalHits") or len(hits)
         return hits, total
     except Exception as e:
+        if strict_public: raise RuntimeError('Product search unavailable') from e
         logger.error("Meilisearch search_products_with_total error: %s", e)
         return [], 0
 

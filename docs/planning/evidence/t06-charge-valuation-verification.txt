@@ -1,0 +1,26 @@
+T06 - Additional-cost valuation entries - 2026-10-03
+
+Status: Implemented internal slice; T06 remains In progress.
+Existing ledger extended, not replaced. OPENING history/values retained; CHARGE
+adds value only and links the original opening, allocation and approved case use.
+Production posting coordinator and central reconciliation remain pending.
+
+Backend isolated runner (synthetic test database only):
+python -m pytest -q tests/test_charge_valuation.py tests/test_inventory_valuation.py
+ tests/test_cost_evidence_replay.py tests/test_cost_evidence_api.py
+ tests/test_cost_allocation_proposals.py
+Result: 57 passed, 23 dependency warnings, 12.12s.
+Covers immutable entries, matching approval links, rollback before retry, stale
+stream versions, physical-stock change rejection, concurrent exactly-once effect,
+opening compatibility, migration replay, charge-source exclusion and evidence/API
+guards. Migration replay is not a fresh-install or production-scale rehearsal.
+
+Frontend targeted: CostPoolValuations, CostAllocationPreview, CostAllocationRegister.
+Result: 11 tests, 3 suites passed in 2.887s.
+Production build: compiled with existing ESLint/Browserslist warnings; main.11ef2248.js.
+Strict CI=true build failed because existing lint warnings are treated as errors.
+Normal CI=false build succeeded; no lint suppression or dependency changes made.
+
+No full regression rerun, browser acceptance, real financial posting, storage
+configuration, external deployment or customer-data changes claimed. Public posting
+remains disabled. RustFS versioning/capture-limit acceptance remains outstanding.

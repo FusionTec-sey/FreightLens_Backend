@@ -1,5 +1,506 @@
 # FreightLens Architecture Log
 
+## 2026-10-03 - Shared GitHub checkpoint and revised collaborator assignment
+
+- Added owner-approved AGENTS reading protocol, canonical business decisions and
+  handoff; frontend points to backend records rather than duplicating the plan.
+- Corrected stale T10/no-customer and no-sales-consumer statements. Collaborator
+  owns new T33A count planning/blind entry/recounts/review, not T10. Stock posting,
+  movement reconciliation and price labels remain gated by later dependencies.
+- Documented protected interfaces, paired PRs, independent services/ports and
+  contributor setup confirmation. Another machine's environment is not verified.
+- Integration run exposed legacy blob-test auth module leakage at collection;
+  restore original modules after isolated router loading. No production auth change.
+- Checkpoint results and push/CI evidence: planning/evidence/20261003-parallel-checkpoint.txt.
+  No browser checks, real business mutations, deployment or pilot activation.
+
+## 2026-10-03 - Default local work-area allocation rule and counter setting
+
+- Owner clarified automatic allocation within the salesperson's current area;
+  alternative areas are chosen explicitly, not silently substituted on shortfall.
+- Added optional location root to immutable counter JSON configuration; scoped
+  server validation and missing/stale-default resolver. No data backfill/migration.
+- Reused paginated picker in counter settings; no manual location ID entry needed.
+- Fixed SalesIntent's missing referenced-customer model registration discovered by
+  isolated counter tests. Backend20 and frontend13 focused tests pass.
+- Actual work-context assignment and default-area planning/posting remain next;
+  counter configuration does not activate stock posting. Browser checks pending.
+
+## 2026-10-03 - Reviewed supplements preserve original hold segments
+
+- Same-bucket destination demand may already have holds. Reviewed reallocation
+  appends a separately attributed hold; original quantities/deadlines stay intact.
+- Indexed streamed target history binds exact quantities, attribution and schedule
+  versions. Combined demand cap and shared locks reject competing/stale approvals.
+- Reused reserve effects with exact consumed-parent/paired-release proof, not a
+  boolean exception. Replayable migration replaces obsolete uniqueness with a
+  deferred paired-reallocation guard and protects historical reservation identity.
+- Frontend requests explain segments; reviews show pre-request destination totals.
+- Affected backend110/frontend38 tests and build pass with existing warnings;
+  evidence: planning/evidence/t07-reservation-segments.txt. Browser checks pending.
+- Continue explicit multi-location approval and trusted runtime integration; paid
+  source adapters depend on later sales posting. T07 is not complete.
+
+## 2026-10-03 - Atomic reviewed reallocation and review workspace
+
+- Reused stock effects, manager cases and receipts for a same-bucket draft-demand
+  reallocation. Paired immutable history requires exact destination and approval.
+- Added scoped request/review API and permission-gated frontend review navigation;
+  no public stock execution, real records or entitlement changes.
+- PostgreSQL guidance informed indexed linkage guards and transaction boundaries.
+- Focused backend73 shared-boundary tests and19 API tests pass. Request-entry UI
+  reuses the paginated picker with fresh destination reads, exact uncertain retries
+  and no manual document IDs. Frontend46/5 suites pass; browser checks pending.
+- Evidence: planning/evidence/t07-approved-reallocation.txt. Continue remaining
+  lifecycle/runtime work; T07 is not complete.
+
+## 2026-10-03 - Company-wide overdue reservation inbox
+
+- Consolidated per-draft and overdue queries into one scoped read projection.
+  Added public stock labels, manager-only paginated due endpoint and branch filter.
+- PostgreSQL guidance informed safe indexed original-date prefilter and latest
+  history probes. Due checks never mutate holdings or infer approval application.
+- Reused reservation UI for the inbox, with fresh access-checked draft drill-down.
+  No new catalogue, manager-case store, KPI cards or automatic notifications.
+- Backend19/frontend16 focused tests and build pass; evidence:
+  planning/evidence/t07-due-followup-inbox.txt. Browser checks pending.
+- Continue reviewed reallocation and trusted runtime integration. T07 incomplete.
+
+## 2026-10-03 - Reviewed reservation follow-up schedules
+
+- Added immutable deadline history and replayable migration with scope/version and
+  exact approval-use guards. Reused source locking, manager cases and receipts.
+- Request/review/schedule API plus frontend now keep deadline approval separate
+  from application. Due flags do not release or cancel; quantities remain unchanged.
+- Competing releases/deadlines invalidate stale bindings; exact replay, rollback,
+  concurrency and security tests pass. PostgreSQL guidance informed indexed reads
+  and short transactions. No public physical stock writer is enabled.
+- Backend45/frontend33 focused checks and production build pass; evidence:
+  planning/evidence/t07-reservation-deadlines.txt. Browser acceptance pending.
+- Next: company-wide due inbox, approved reallocation and trusted runtime adapters.
+
+## 2026-10-03 - Durable local sales intent and retry recovery
+
+- Implemented whitelisted browser-local intent store scoped to company/user with
+  explicit branch attribution. Browser locks and expected revisions prevent silent
+  competing-tab overwrite; quota/unsupported locking fail visibly.
+- Editor persists exact operation before network, restores pending retries and
+  clears only after confirmed save. Local drafts and Keep locally and close reuse
+  existing editor and permissions. No autonomous posting or sensitive profile copy.
+- Full frontend196/40, affected backend22 and build pass with existing warnings.
+  Evidence: planning/evidence/t15a-local-draft-recovery.txt. Native browser acceptance
+  remains pending; T15A implemented—verification pending. Resume independent T07.
+
+## 2026-10-03 - Linked reservation request workspace
+
+- Added scoped paginated linked holds and release-request form from draft details,
+  reusing existing stock/source indexes, cases and operation intents. PostgreSQL
+  guidance informed bounded indexed reads; no migration or stock mutation.
+- Exact quantity validation, unconfirmed retry locks, stale-source refresh and
+  dirty-discard protection tested. Durable navigation recovery remains T15A.
+- Backend17/frontend11 focused tests and production build pass (existing warnings).
+  Evidence: planning/evidence/t07-release-request-ui.txt. Preview HTTP200 both services.
+- No browser acceptance, real records/entitlements, deployment, messaging or push.
+  Continue T07 deadline/reallocation and trusted runtime integration.
+
+## 2026-10-03 - Reviewed reservation release checkpoint
+
+- Reused manager cases and stock posting for exact-source release approval and
+  atomic consumption. Source/permission checks also precede retry; later changes
+  cannot reuse approval. No automatic release on approval or expiry.
+- Added module/permission-scoped request/review APIs and reused ManagerCases in
+  Sales drafts. No public stock writer or entitlement changes.
+- Verified backend58, frontend23/3 suites and production build (existing warnings).
+  Evidence: planning/evidence/t07-reviewed-release.txt. No browser acceptance.
+- Next: linked-hold listing/request UI, deadline/reallocation, paid-order adapters
+  and trusted runtime integration. T07 remains in progress.
+
+## 2026-10-03 - Tie holds to saved sales demand
+
+- Extended existing reserve boundary with typed source identity/version, immutable
+  same-company link and locked quantity/product/store validation. Exact retries
+  remain authority/permission checked and source identity is in the fingerprint.
+- Draft changes share the document lock and protect remaining holds. Compatible
+  increases are allowed; held ownership/removal/reclassification changes are denied.
+- Added read-only reserved-demand totals to draft detail/editor. Generic release
+  cannot bypass the unfinished reviewed release workflow for these linked holds.
+- Focused backend55 passed, then43 passed after the release-bypass guard; frontend10
+  passed and build passed with existing warnings. Real hold/edit race has one winner.
+  Migration replay, rollback and immutable attribution checks pass. Evidence:
+  planning/evidence/t07-source-linked-reservations.txt.
+- T07 remains in progress: reviewed release/reallocation/deadline cases, protected
+  paid holds, approved exceptions and trusted public runtime adapters remain.
+  No real holds created, deployment/push, browser checks or auto-cancellation.
+
+
+## 2026-10-03 - Sales draft editor and source selection
+
+- Added scoped paginated source selectors over existing stores/products/policies.
+  Product search reuses existing Meilisearch service with public matching fields,
+  bounded IDs and DB rehydration; provider/stale/foreign hits fail closed.
+- Editor reuses customer selection, operation intents and pagination. Creates or
+  revises demand only; retains uncertain requests, blocks conflicts, confirms dirty
+  discard, clears on identity/company changes. No durable local recovery claim.
+- Existing platform configuration can enable SALES explicitly; no actual company
+  subscriptions or business data changed. Current product labels are display-only.
+- Focused backend41 checks and full frontend179/37 pass. Subsequent read-label/unit
+  changes have affected frontend10 pass and production build pass with existing
+  warnings. Full backend checkpoint is being recorded in t13a-editor-integration.txt.
+- Browser/provider acceptance remains pending. T15A recovery and T07 source-linked
+  reservations are next dependent work, not reasons to expand the T13A editor.
+
+
+## 2026-10-03 - Durable sales drafts and read workspace
+
+- Added stable document parent and immutable header/line revisions, scoped FKs,
+  empty replayable migration and atomic versioned saves using existing receipts.
+- Same-operation and competing-operation PostgreSQL tests prove one effect/one
+  version winner. Rollback, history immutability and revoked retry checks pass.
+- Added separately SALES-gated API and personal-data/product/draft permissions.
+  Paginated frontend register can inspect latest saved lines and clears stale data.
+- 32 source/persistence/API tests plus 3 concurrency tests pass; 12 frontend
+  register/navigation tests and production build pass with existing warnings.
+  Evidence: planning/evidence/t13a-durable-drafts.txt. Preview HTTP checks pass.
+- T13A remains in progress: editor, source selectors and module configuration
+  control still required. Browser acceptance pending; no real entitlements enabled,
+  stock holds, financial posting, deployment, customer messaging or GitHub push.
+
+
+## 2026-10-03 - Customer checkpoint and sales-intent source foundation
+
+- Full isolated backend checkpoint: 1077 passed, 2 known legacy xfailed. Prior
+  frontend integration checkpoint remains 169 tests/35 suites and build passing.
+- T10A implementation is acceptance-pending, not an ever-expanding dependency on
+  later durable sync. T13A starts against its tested identity/policy contracts.
+- Added bounded typed draft lines and locked scoped source validation, reusing
+  customer reads and reviewed unit conversions. No new catalogue or posting engine.
+- Thirteen focused PostgreSQL/schema checks pass. Initial run caught inherited
+  eager supplier joins conflicting with row locks; disabled unused eager loading
+  and restricted product locks, then reran successfully.
+- Draft persistence, API/editor and retry/rollback tests remain next. No migration,
+  real data, financial effect, deployment, browser action or GitHub push this slice.
+
+
+## 2026-10-03 - Frontend integration checkpoint
+
+- Owner requested frontend implementation. Inspected current queue/screen coverage;
+  inventory setup/review/cost and customer public workflows have existing screens.
+- Closed customer result gap: persistent save/indexing status, direct saved-record
+  opening and fresh permission-checked details above the table. No duplicate screen.
+- Removed sidebar API-client dependency by extracting route constant. Full frontend
+  run exposed and then verified the navigation import regression fix.
+- 169 tests / 35 suites and production build passed with existing warnings. Evidence:
+  planning/evidence/frontend-customer-integration.txt. Backend unchanged this slice.
+- Browser acceptance remains pending. Future sales/returns/offline foundations still
+  need backend implementation; no fake actions or operational activation added.
+
+## 2026-10-03 - Confirm customer search task results
+
+- Settings and document sync now verify matching provider task/index and succeeded
+  status instead of treating queue acceptance as completion. Missing IDs, pending,
+  failed, canceled and timed-out tasks remain unconfirmed without logging PII.
+- Shared search client has a five-second request timeout; task polling budget is
+  1500ms, not a strict wall-clock cap on in-flight requests.
+- Customer creation exposes search_indexed separately from the durable receipt.
+  Frontend distinguishes saved identity from unconfirmed search indexing and warns
+  against creating a duplicate. Exact creation retries can repair the projection.
+- 22 targeted backend tests and 16 frontend tests pass; evidence:
+  planning/evidence/t10a-search-task-confirmation.txt.
+- Live provider/browser acceptance and durable background repair remain open.
+  No schema migration, real data, deployment or push. Full regression/build deferred.
+
+## 2026-10-03 - Keep customer search terms out of URLs
+
+- Replaced GET search argument with read-only POST /customers/search and strict
+  bounded request schema. Browse remains GET; the former query argument is rejected.
+- Reused one page implementation and the same authentication/personal-data guards.
+  Added no-store to successful customer responses. No write permission/receipt is
+  needed for search, because it does not create records.
+- Frontend sends search only in the body. Deployment must still avoid body logging.
+- Focused verification: 15 backend tests and 12 frontend tests passed. Evidence:
+  planning/evidence/t10a-search-privacy.txt. No full build/regression or browser run.
+- T10A provider task/recovery acceptance remains open. No real business writes.
+
+## 2026-10-03 - Company-scoped customer search
+
+- Extended existing search service with customer projection/settings, after-commit
+  sync and streamed startup repair. No second search client or catalogue.
+- Paginated search requires existing personal-data permissions, exact company
+  filtering and DB rehydration. PostgreSQL guidance informed bounded indexed IDs.
+- Provider outages/foreign/stale hits fail closed. Async indexing may lag; committed
+  customer creation is not rolled back by projection failure. No SQL LIKE fallback.
+- Customer register submits/clears search and resets pagination; selection is reused.
+- 31 focused backend tests and 17 frontend tests pass; production build passes with
+  existing warnings. Evidence: planning/evidence/t10a-customer-search.txt.
+- Pending: real provider/browser acceptance, durable projection repair and query
+  access-log redaction review before release. T10A not declared complete.
+
+## 2026-10-03 - Reuse customer register for selection
+
+- Added optional selection mode to CustomersPage rather than a second register.
+- Detail API rechecks permission/identity/version before returning scoped selection.
+  Refresh/company changes abort in-flight selections; late completions are ignored.
+- No sales entitlement or document writer is introduced. Consuming documents must
+  revalidate the returned customer reference at their own posting boundary.
+- Focused frontend tests: 16 passed / 3 suites. Evidence:
+  planning/evidence/t10a-customer-selection.txt. Full suite/build deferred for this
+  component-only slice; browser gate remains pending. T10A still needs search.
+
+## 2026-10-03 - Customer creation workspace
+
+- Added Manage_Customer-gated creation with multiple contacts and one primary,
+  explicit dirty-discard confirmation and field-level server validation feedback.
+- Reused useOperationIntent and company-pinned customer API. Uncertain outcomes
+  retain exact payload/key and disable editing/cancel; matching receipt confirms save.
+- Aborted/unmounted requests cannot update a new company screen. No PII browser
+  storage. In-memory retention and unload warning are not durable draft recovery.
+- Verification: 16 focused frontend tests, 25 backend contract tests and production
+  build passed (existing warnings). Evidence: planning/evidence/t10a-customer-create-ui.txt.
+- T10A remains in progress: search/reusable selection and browser acceptance pending.
+  No real records seeded, deployment, push or customer financial functionality.
+
+## 2026-10-03 - Protected customer API and read workspace
+
+- Added scoped paginated GET/detail and receipt-backed POST with customer and
+  personal-data permissions. Missing PERSONAL field mapping fails closed.
+- Customer permissions are cross-module master-data rights, not sales entitlements.
+- Frontend Customers entry supports list/contact inspection, customer-only menu
+  visibility, company-pinned requests and stale-response cancellation.
+- PostgreSQL guidance retained indexed organisation filtering and bounded reads.
+- Verified 29 focused backend tests, 4 frontend tests and production build.
+  Evidence: planning/evidence/t10a-customer-api-verification.txt.
+- T10A remains in progress: creation/select UI, search and browser acceptance pending.
+  No real seed, balances, auto-merges, deployment or GitHub push.
+
+## 2026-10-03 - Start T10A retail customer identity
+
+- **Why:** T10A is dependency-ready on T03/T04 while T06 runtime gates remain open.
+  Freight consignee records are not retail customers; no existing retail entity found.
+- **Change:** Scoped UUID identity/original profile, bounded typed contacts, empty
+  additive migration, creation/read service using existing atomic receipts.
+- **Safety:** Explicit personal-data permission callback, exact company scope,
+  stable retries, original snapshot immutability, no automatic contact/balance merge.
+  PostgreSQL guidance informed same-company keys and receipt ownership.
+- **Verification:** 17 focused tests passed; evidence in
+  planning/evidence/t10a-customer-identity-verification.txt.
+- **Limits:** Internal foundation only; protected API, paginated frontend/select,
+  search and revision work remain. No real seed, credit, public customer access or
+  financial posting. T10A In progress; T06 remains open.
+
+## 2026-10-03 - Opening valuation authority parity
+
+- **Change:** Opening valuations now require persisted central pool authority,
+  exact source-pool match and authority-bound retry intent. Shared pool-before-
+  product lock order aligns opening and additional-cost writers.
+- **Safety:** No-op extra guards cannot bypass authority; suspended/stale/foreign
+  claims and newer-epoch reuse are denied. Existing source, evidence and permission
+  callbacks remain mandatory. No schema, API or frontend changes.
+- **Verification:** planning/evidence/t06-opening-authority-verification.txt.
+- **Tracking:** Corrected stale top-of-queue baseline to the completed GitHub
+  checkpoint; no whole-task completion or new full-suite claim.
+- **Limits:** Runtime authentication, receipt costs and reconciliation still open;
+  public financial posting remains disabled. Changes local, not automatically pushed.
+
+## 2026-10-03 - Central writer status in cost-pool workspace
+
+- **Change:** Typed state/epoch fields on existing pool page; one scoped bounded
+  latest-authority query. Existing React table shows read-only status, not a new
+  dashboard or enrollment workflow. No node identity or private reason exposed.
+- **Safety:** Existing module/permission gates; failure hides stale UI status.
+  Writer assigned explicitly does not mean public posting enabled.
+- **Verification:** 43 backend and 12 frontend targeted tests; see
+  planning/evidence/t06-authority-status-verification.txt for build evidence.
+- **Limits:** Browser acceptance remains pending; no schema, authority activation,
+  real data, runtime authentication or public financial posting change.
+- **Undo:** Remove status projection/column; preserve authority history.
+
+## 2026-10-03 - Central authority bound into charge posting intent
+
+- **Change:** Mandatory typed claim on both preparation/coordinator entry points;
+  persisted authority check plus exact proposal-pool lookup. Node/pool/company/
+  epoch form part of the immutable operation request digest.
+- **Safety:** No-op extra callbacks cannot bypass database authority. New valid
+  writers cannot relabel historical requests; old claims are fenced. Existing
+  unbound internal intents fail digest comparison rather than being upgraded.
+- **Verification:** 53 targeted checks, 12.41s; evidence in
+  planning/evidence/t06-authority-intent-verification.txt.
+- **Limits:** Runtime authentication/enrollment, storage acceptance and central
+  reconciliation remain pending. No API/UI activation, schema change or deployment.
+- **Undo:** Disconnect internal consumers; preserve receipts and authority history.
+
+## 2026-10-03 - Durable central cost-pool authority foundation
+
+- **Change:** CostPoolAuthorityEpoch reuses node identities and immutable-authority
+  guards; typed pool claim and same-database writer check added to existing service.
+  Empty additive startup migration; no real activation or runtime credentials.
+- **Safety:** Company-scoped pool/node FKs, consecutive epochs, immutable history,
+  shared pool lock held through commit versus exclusive authority-transition lock.
+  PostgreSQL guidance informed indexed lookup and bounded short transactions.
+- **Verification:** 43 targeted authority/coordinator tests passed; see
+  planning/evidence/t06-pool-authority-verification.txt.
+- **Limits:** Runtime authentication and intent binding, reviewed transitions,
+  distributed recovery, receipt costing and reconciliation remain incomplete.
+  No public posting or frontend changes. T06 remains In progress.
+- **Undo:** Disable consumers; retain append-only authority history.
+
+## 2026-10-03 - Persisted charge-case resolution
+
+- **Change:** Removed the prepared-posting case-loader callback; resolve exact
+  persisted case internally and reuse existing approval/current-source checks.
+  Both evidence checking and preparation share the same scoped case query.
+- **Safety:** Reject legacy, pending/rejected, missing, wrong-proposal and foreign
+  cases before storage reads. Original-version verification is still mandatory.
+- **Database:** Existing company/case unique index reused; PostgreSQL guidance
+  informed exact indexed scoping. No schema, migration or new approval store.
+- **Verification:** planning/evidence/t06-persisted-case-verification.txt.
+- **Limits:** Central-runtime authority, storage acceptance, receipt costing and
+  reconciliation remain pending; no public posting or frontend changes.
+- **Undo:** Disconnect internal preparation entry point; retain immutable records.
+
+## 2026-10-03 - Version verification connected to atomic charge posting
+
+- **Change:** Existing coordinator gains a factory-owned preparation entry point;
+  existing bounded storage verification runs after the snapshot transaction closes.
+  No duplicate storage client, new schema, API route or frontend control.
+- **Safety:** Exact persisted v2 company/proposal binding before I/O, original
+  version reads on retries, permission/authority rechecks after I/O, fail-closed
+  missing evidence and changed metadata. No approval consumed on failed preparation.
+- **Verification:** 40 targeted checks passed; evidence in
+  planning/evidence/t06-prepared-posting-verification.txt.
+- **Limits:** Authenticated central runtime/case adapters, storage acceptance,
+  receipt costs and reconciliation remain pending. Existing branch authority is
+  not shared-pool central authority. Public financial posting remains disabled.
+- **Undo:** Disconnect entry point consumers; preserve historical receipts/entries.
+
+## 2026-10-03 - Atomic charge-posting coordinator
+
+- **Change:** One internal coordinator composes existing prepared-content checks,
+  independent case approval, whole-charge consumption, valuation append and receipt.
+  No new schema, duplicate ledger, HTTP endpoint or frontend posting control.
+- **Safety:** Full intent fingerprint; permission and central-authority callbacks
+  run before replay. Exact source/content checks reject foreign or changed evidence.
+  Shared transactions retain outer rollback; callbacks cannot perform external I/O.
+- **Verification:** 28 focused tests passed; evidence in
+  planning/evidence/t06-charge-posting-verification.txt.
+- **Limits:** Authenticated central-runtime authority adapter, actual storage
+  configuration, receipt costing and reconciliation remain outstanding. Public
+  posting remains disabled; T06 remains in progress.
+- **Undo:** Disconnect coordinator consumers; preserve immutable audit records.
+
+## 2026-10-03 - Additional costs in the existing valuation ledger
+
+- **Change:** OPENING/CHARGE entries, original-source links, scoped insert guards,
+  replayable additive migration and caller-transaction append helper. No second
+  ledger. Quantity stays unchanged; costs remain unreconciled.
+- **Safety:** Expected stream versions, deterministic locks, whole-charge
+  conservation, mandatory authorization, immutable history and movement rejection.
+  PostgreSQL guidance informed scoped uniqueness and lock ordering.
+- **UI:** Existing history distinguishes charge rows and prevents selecting them
+  as new allocation sources; existing APIs and components are reused.
+- **Verification:** See planning/evidence/t06-charge-valuation-verification.txt.
+- **Limits:** Production coordinator, receipts/reconciliation, storage configuration
+  and browser acceptance remain pending. T06 is not complete; public posting off.
+- **Undo:** Disable consumers, retain immutable entries and additive schema.
+
+## 2026-10-03 - Own-operation charge-evidence replay guard
+
+- **Why:** Consumed approvals must reject reuse but permit the exact completed
+  posting to return its existing receipt after an uncertain response.
+- **Change:** Optional trusted replay identity checks same actor, case use, charge
+  use/evidence and charge-domain receipt, after ordinary source/permission checks.
+  Company-scoped indexed lookups reuse immutable records; no new ledger or schema.
+- **Verification:** Targeted evidence, charge-use and API checks; see
+  planning/evidence/t06-evidence-own-replay-verification.txt.
+- **Local inspection:** Bucket versioning not enabled; capture limit absent.
+  Read-only check only, no configuration changes. Storage acceptance remains open.
+- **Limits:** No actual valuation effect or public financial writer. Outer request
+  digest, valuation versions and atomic entries must still be composed. T06 ongoing.
+- **Undo:** Omit replay identity to retain strict consumed-case rejection.
+
+## 2026-10-03 - Public version-bound evidence workflow
+
+- **Why:** Connect existing preparation and review contracts to usable public
+  actions without I/O under posting locks or a latest-file download bypass.
+- **Change:** New requests capture v2; retries/reviews re-read original versions,
+  recheck locked metadata and reuse the case engine. Case-scoped downloads verify
+  complete bytes before returning. Frontend chooses pinned downloads and labels v1.
+- **Configuration:** Positive COST_EVIDENCE_MAX_BYTES required; no guessed default,
+  bucket mutation, business seed, schema migration or financial posting enabled.
+- **Verification:** 112 targeted backend / 27 frontend tests; build recorded in
+  planning/evidence/t06-public-versioned-evidence-verification.txt.
+- **Limits:** Real storage retention/compatibility and browser acceptance pending;
+  atomic charge/case/valuation and reconciliation still required. T06 In progress.
+- **Undo:** Disable public capture/pinned-download consumers; retain immutable cases.
+
+## 2026-10-03 - Two-stage charge-content preparation
+
+- **Why:** Storage reads must not hold posting transactions or silently use a new
+  file version in place of reviewed evidence.
+- **Change:** Reuses charge bindings, typed fingerprints and the strict blob reader.
+  Permission/source snapshot transaction closes before network reads; exact reviewed
+  versions are checked and a later locked-source comparison is mandatory.
+- **Verification:** 106 targeted checks in 8.34s; evidence file linked from queue.
+- **Limits:** Internal bridge only; HTTP preparation and exact-version downloads
+  remain pending. No UI, schema, real records, storage settings or posting changed.
+- **Undo:** Disable consumers of the additive preparation service.
+
+## 2026-10-03 - Persist content identities in existing charge reviews
+
+- **Why:** A metadata approval must not become financial evidence when the actual
+  document content or its storage version has never been independently reviewed.
+- **Change:** Typed internal fingerprints, exact linked-document coverage and locked
+  key/size comparison; source_version 2 case bindings retain private content identity.
+  Financial evidence loader requires matching freshly prepared fingerprints and
+  rejects all historical metadata-only cases. Existing approval/receipt engine reused.
+- **Verification:** Focused 98 checks; planning/evidence/t06-content-review-binding-verification.txt.
+- **Limits:** Public capture and exact-version downloads still need integration;
+  no I/O inside posting callbacks, schema migration, UI change or public writer.
+  Retention, central authority and atomic valuation remain gates. T06 In progress.
+- **Undo:** Disable content-consuming adapters; preserve immutable case history.
+
+## 2026-10-03 - Strict version-pinned evidence fingerprint primitive
+
+- **Why:** Metadata-only reviews and compatibility local-file fallback cannot
+  establish the actual supplier-document bytes used for financial evidence.
+- **Change:** Existing storage adapter gains a bounded SHA256 reader with explicit
+  byte limit, non-null version requirement, exact requested-version check, length
+  checks and deterministic stream closure. No fallback or storage configuration write.
+- **Verification:** Focused storage and evidence regressions only, per owner testing
+  cadence; planning/evidence/t06-versioned-blob-verification.txt.
+- **Limits:** Internal primitive only. Persisted review/download integration, actual
+  RustFS version retention and atomic valuation remain required. No UI/API change,
+  schema migration, live upload or new posting authority. T06 remains In progress.
+- **Undo:** Stop calling the new method; legacy readers are unchanged.
+
+## 2026-10-03 - Permission-separated charge evidence workspace
+
+- **Why:** Make existing invoice/FX review contracts usable without duplicating
+  suppliers, documents, approvals or leaking confidential source metadata.
+- **Change:** Typed paginated choices and case responses; request/review endpoints;
+  exact-company authenticated document downloads through the existing blob adapter.
+  Requires both modules, all source/financial permissions and field clearance.
+  Frontend shares picker, pagination, operation-intent and manager-case components.
+- **Migration:** None. Existing immutable case bindings retain the declarations.
+- **Verification:** planning/evidence/t06-evidence-workspace-verification.txt.
+- **Limits:** GENERAL/PO evidence only. File-version immutability, atomic posting,
+  receipt costing, reconciliation and browser acceptance remain open. No live posting.
+- **Undo:** Disable the evidence router and entry point; retain historical cases.
+
+## 2026-10-03 - Evidence-bound invoice and FX review contract
+
+- **Why:** Allocation approval must not be treated as verification of a supplier
+  invoice, eligible expense or exchange rate.
+- **Change:** Typed declaration, exact charge-fx-v1 conversion, locked existing
+  supplier/document/PO snapshots, distinct verify-charge case action and approved
+  current/unconsumed evidence loader. Reuses immutable manager cases; old allocation
+  approvals cannot satisfy charge verification. UI clarifies the distinction.
+- **Migration:** None; existing case binding stores the immutable review snapshot.
+- **Verification:** planning/evidence/t06-charge-evidence-review-verification.txt.
+- **Limits:** Internal adapter only. Permission-aware evidence picker/API, blob
+  version immutability and atomic charge/case/valuation integration remain pending.
+  No financial posting, actual evidence verification or full T06 completion claimed.
+- **Undo:** Disable internal evidence adapter; retain existing immutable cases.
+
 ## 2026-10-03 - Internal whole-charge consumption guard
 
 - **Why:** Distinct operation IDs or allocation proposals must not capitalise one

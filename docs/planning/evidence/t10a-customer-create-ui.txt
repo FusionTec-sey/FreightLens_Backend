@@ -1,0 +1,22 @@
+T10A customer creation workspace — 2026-10-03
+
+Frontend targeted test paths:
+src/component/Pages/MasterData/CustomerCreateForm.test.js
+src/component/Pages/MasterData/CustomersPage.test.js
+src/hooks/useOperationIntent.test.js
+src/services/customersApi.test.js
+Result: 16 passed / 4 suites, 2.39s.
+Checks: create permission visibility, company-pinned request, multiple/primary
+contacts, empty inputs, stable uncertain retry, 422 correction/new identity,
+explicit discard, no duplicate in-flight submit, ignored unmounted completion.
+
+Isolated PostgreSQL runner, synthetic data only:
+pytest -q tests/test_customer_api.py tests/test_customer_identity.py
+Result: 25 passed, 23 existing deprecation warnings, 4.76s.
+No backend behavior/schema changed in this slice.
+
+Production build passed with existing ESLint/Browserslist warnings.
+Artifact: build/static/js/main.cfeb519e.js.
+Full regression and browser acceptance deferred; not a T10A completion claim.
+Creation drafts are in-memory only; navigation recovery remains T15. Search and
+reusable selection remain pending. No real seeds, deployments or GitHub push.

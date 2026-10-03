@@ -1,0 +1,21 @@
+2026-10-03 — Salesperson work-area default configuration
+Owner rule: automatically allocate eligible local-area stock; show shortfall without
+automatic spillover. Explicit alternative choice retains applicable approvals.
+
+CounterConfig.default_stock_location_id uses existing immutable settings revisions.
+Optional/unset preserves historical configuration but blocks default resolution.
+Same-company/branch active location is checked before saves and retries. Legacy
+retry comparison remains compatible by omitting null fields from stored snapshots.
+Counter UI reuses paginated location selection; does not create business stock.
+Internal resolver requires a trusted typed versioned branch-action context and
+fails for missing, disabled, stale or unavailable area. No public posting endpoint.
+Staff work-context assignment, descendant-area automatic plan and atomic posting
+are remaining work, not represented as completed by this configuration slice.
+
+Isolated PostgreSQL: test_branch_counters.py —20 passed,23 existing warnings,7.55s.
+Initial isolated run exposed missing RetailCustomer metadata registration through
+SalesIntent import; fixed the model dependency and reran successfully.
+Frontend BranchCounters and SalesDraftEditor —13 passed/2 suites,3.453s.
+Affected sales-reservation model/source checks:13 passed,21 warnings,5.46s.
+Production build passed with existing ESLint/Browserslist warnings;main.5cc708d9.js.
+No real company settings changed, no stock posted, no browser acceptance or deployment.

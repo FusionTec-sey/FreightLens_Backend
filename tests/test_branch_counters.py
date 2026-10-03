@@ -19,6 +19,37 @@ def base(f, branch=None):
     return f"/inventory/branches/{branch or f.own}/counters"
 
 
+def test_counter_default_area_is_scoped_versioned_and_never_falls_back(locations):
+    from Model.containermgmt.Inventory.Location import StockLocation
+    from Services.branch_action_context_service import BranchActionContext
+    from Services.default_stock_area_service import require_default_stock_area
+    from Services.branch_business_date_service import MissingBranchConfiguration
+    from datetime import date
+    f = locations
+    own = StockLocation(org_id=f.org_a, branch_id=f.own, code='AREA', name='Synthetic work area', kind='SITE')
+    foreign = StockLocation(org_id=f.org_b, branch_id=f.foreign, code='AREA', name='Foreign area', kind='SITE')
+    f.db.add_all([own, foreign]); f.db.commit()
+    key = uuid4(); body = payload(); body['config']['default_stock_location_id'] = foreign.id
+    assert f.client.put(f'{base(f)}/{key}', json=body).status_code == 404
+    body['config']['default_stock_location_id'] = own.id
+    first = f.client.put(f'{base(f)}/{key}', json=body)
+    assert first.status_code == 200, first.text
+    assert first.json()['config']['default_stock_location_id'] == own.id
+    assert f.client.put(f'{base(f)}/{key}', json=body).json() == first.json()
+    second = payload(expected_version=1, config={**body['config'], 'is_enabled': True})
+    assert f.client.put(f'{base(f)}/{key}', json=second).status_code == 200
+    context = BranchActionContext(f.own, first.json()['id'], 1, 2, date(2026, 10, 3), 'CHECKOUT')
+    with f.db.begin_nested():
+        assert require_default_stock_area(f.db, f.context, context).id == own.id
+    cleared = payload(expected_version=2, config={**second['config'], 'default_stock_location_id': None})
+    assert f.client.put(f'{base(f)}/{key}', json=cleared).status_code == 200
+    with f.db.begin_nested(), pytest.raises(MissingBranchConfiguration, match='changed'):
+        require_default_stock_area(f.db, f.context, context)
+    from dataclasses import replace
+    with f.db.begin_nested(), pytest.raises(MissingBranchConfiguration, match='Set the counter'):
+        require_default_stock_area(f.db, f.context, replace(context, counter_settings_version=3))
+
+
 def test_counter_identity_revisions_retry_and_pagination(locations):
     f = locations
     key = uuid4(); data = payload(); url = f"{base(f)}/{key}"

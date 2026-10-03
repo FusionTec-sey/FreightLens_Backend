@@ -240,6 +240,83 @@ class RustFSClient:
             }
         return None
 
+    def fingerprint_file_version(self, object_key: str, *, max_bytes: int,
+                                 version_id: Optional[str] = None) -> dict:
+        return self._fingerprint_file_version(object_key, max_bytes=max_bytes, version_id=version_id)
+
+    def read_verified_file_version(self, fingerprint: dict, *, max_bytes: int) -> bytes:
+        """Return only the fully validated bytes of an internally saved fingerprint."""
+        if not fingerprint.get('version_id') or fingerprint.get('version_id') == 'null':
+            raise ValueError('An exact reviewed object version is required')
+        if fingerprint.get('bucket') != self.bucket_name:
+            raise ValueError('Evidence bucket mismatch')
+        content = BytesIO()
+        actual = self._fingerprint_file_version(fingerprint['object_key'], max_bytes=max_bytes,
+            version_id=fingerprint['version_id'], content=content)
+        if actual != fingerprint:
+            raise ValueError('Reviewed evidence content changed')
+        return content.getvalue()
+
+    def _fingerprint_file_version(self, object_key: str, *, max_bytes: int,
+                                  version_id: Optional[str] = None, content=None) -> dict:
+        """Hash one complete, non-null object version without any local fallback.
+
+        Internal evidence primitive, NOT an authorization boundary. The owning
+        service must authorize/scoped-resolve the key and persist the returned
+        version/hash before review. Later checks must request that exact version.
+        Versioning is not retention: missing/deleted versions fail closed. This
+        method neither configures buckets nor uploads/copies/locks objects.
+        """
+        clean_key = _safe_key(object_key)
+        if type(max_bytes) is not int or max_bytes <= 0:
+            raise ValueError('An explicit positive evidence size limit is required')
+
+        def valid_version(value):
+            return (isinstance(value, str) and bool(value.strip()) and value != 'null'
+                    and len(value) <= 1024 and not any(ord(c) < 32 or ord(c) == 127 for c in value))
+
+        if version_id is not None and not valid_version(version_id):
+            raise ValueError('A non-null object version is required')
+        params = dict(Bucket=self.bucket_name, Key=clean_key)
+        if version_id is not None:
+            params['VersionId'] = version_id
+        # Deliberately do not call get_file: its compatibility fallback cannot
+        # establish a version-pinned evidence identity.
+        response = self.client.get_object(**params)
+        body = response.get('Body')
+        try:
+            actual_version = response.get('VersionId')
+            if not valid_version(actual_version) or (version_id is not None and actual_version != version_id):
+                raise ValueError('Evidence object version is unavailable or mismatched')
+            if response.get('DeleteMarker') or response.get('ContentRange'):
+                raise ValueError('Complete evidence object required')
+            size = response.get('ContentLength')
+            if type(size) is not int or not 0 < size <= max_bytes:
+                raise ValueError('Evidence object size is missing, empty or exceeds the configured limit')
+            if body is None:
+                raise ValueError('Evidence object body is missing')
+            digest = hashlib.sha256()
+            received = 0
+            while True:
+                chunk = body.read(min(64 * 1024, size - received + 1))
+                if not isinstance(chunk, bytes):
+                    raise ValueError('Evidence stream must contain bytes')
+                if not chunk:
+                    break
+                received += len(chunk)
+                if received > size:
+                    raise ValueError('Evidence stream exceeds declared size')
+                digest.update(chunk)
+                if content is not None:
+                    content.write(chunk)
+            if received != size:
+                raise ValueError('Evidence stream is incomplete')
+            return dict(policy='blob-sha256-v1', bucket=self.bucket_name, object_key=clean_key,
+                        version_id=actual_version, size=received, sha256=digest.hexdigest())
+        finally:
+            if body is not None:
+                body.close()
+
     def get_file_range(
         self,
         object_key: str,

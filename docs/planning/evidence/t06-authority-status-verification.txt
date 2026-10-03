@@ -1,0 +1,20 @@
+T06 - Read-only central authority status - 2026-10-03
+
+Existing cost-pool page response/table extended with latest state and epoch.
+No node identity, reasons, credentials, enrollment or posting controls exposed.
+PostgreSQL guidance informed one indexed, page-bounded status query, not N+1 reads.
+
+Isolated backend: tests/test_inventory_cost_pools.py tests/test_cost_pool_authority.py
+43 passed, 23 dependency warnings, 9.97s. Includes route authentication, permission,
+module denial, tenant isolation, latest status, absent status, no private fields,
+pagination and persisted authority regression checks.
+Frontend: CostPoolSetup.test.js - 12 passed, 1 suite, 2.57s. Includes all status
+labels, unavailable fields, no writes, failed-refresh stale-state hiding and
+existing navigation/assignment/pagination behavior.
+Normal production build passed with existing ESLint/Browserslist warnings;
+main.6cb5712e.js. Strict CI warning gate remains unresolved; not rerun this slice.
+
+Browser acceptance pending; no claim of tablet/visual validation. No full-suite
+rerun, schema, real data or authority configuration changes. T06 remains In progress.
+Runtime authentication, storage acceptance, receipt costing and reconciliation
+remain outstanding; public financial posting stays disabled.

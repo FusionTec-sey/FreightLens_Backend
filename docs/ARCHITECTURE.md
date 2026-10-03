@@ -2,7 +2,406 @@
 
 ## Status
 
+### Parallel-development checkpoint (2026-10-03)
+
+The canonical queue, BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt are in
+docs/planning. Decision BD-20261003-05 assigns the new, non-posting T33A cycle-count
+workspace to the collaborator; existing T10A customer work is not reassigned or
+rebuilt. Shared inventory/valuation/sales contracts remain integrator-owned.
+See BASELINE-REVISIONS.txt for the paired repositories and checkpoint evidence.
+Older progress paragraphs below describe historical slices; current status above
+them and the canonical queue supersede statements that those slices are pending.
+No cycle-count implementation, deployment or operational activation is introduced
+by this handoff. Browser/hardware/provider gates remain separate.
+
+### Work-area default allocation rule (owner clarification)
+
+Ordinary eligible stock allocation should be automatic within the salesperson's
+current configured area. Insufficient stock produces a shortfall, never automatic
+cross-area selection. Explicit alternative choices use applicable manager review.
+CounterConfig now has optional default_stock_location_id in existing immutable JSON
+revisions; no schema/data backfill. Saving validates active same-company/branch
+location, including retries. Counter UI reuses a paginated location picker.
+The internal versioned work-context resolver fails closed for missing/stale/disabled
+defaults. This is configuration only: staff assignment, descendant-area planning,
+runtime authority and actual automatic holds remain pending. No stock is posted.
+
+### Local draft recovery (T15A implemented; browser acceptance pending)
+
+The React sales editor now persists whitelisted intent and exact pending operation
+IDs before network save. Company/user-scoped browser records carry branch identity;
+Web Locks and expected local revisions reject competing-tab overwrites. Local drafts
+reopens references/quantities without names, contacts, secrets, prices, reservations
+or approvals. Storage/locking failures are explicit and block network submission.
+This is not authority, backup, encrypted shared-device storage or offline posting.
+Backend source/permission/version checks remain unchanged on every save/retry.
+Full frontend196/40 and build pass; affected backend22 pass. Native browser acceptance
+is pending. Evidence: planning/evidence/t15a-local-draft-recovery.txt.
+
+### Source-linked reservations (T07 in progress)
+
+Approved same-bucket reallocation composes existing release/reserve effects under
+one authority-checked transaction. Sorted document locks and target-source locks
+protect source/target demand; immutable paired history binds exact manager-case
+use and destination line/version. Child operations contain stock deltas; the parent
+outbox event only groups them. Failed destination allocation rolls back release,
+case use and all receipts. Replays recheck authority and unchanged source/target.
+Request/review APIs and Sales drafts -> Reallocation reviews reuse manager cases.
+No HTTP execution endpoint accepts client authority. Existing-target supplements
+append separate hold segments; original quantities/dates are never overwritten.
+The source-line allocation lock and streamed indexed history digest bind the exact
+destination state, including each follow-up revision, and combined remaining holds
+cannot exceed current demand. A supplemental child requires the exact consumed
+parent case and paired release. A deferred database guard requires that paired
+reallocation at commit; a historical-identity trigger prevents quantity/date edits,
+deletion or released-quantity reversal. Generic duplicate reservation remains denied.
+The idempotent segment migration replaces only the obsolete one-hold uniqueness;
+it preserves all rows and existing source indexes. Paid demand and other-store
+allocation remain blocked. Reserved stock now offers
+a reallocation request form using the shared paginated draft picker and a fresh
+permission-checked destination read. Exact line/version/quantity/date are retained
+for uncertain retries; the server remains authoritative for eligibility and caps.
+Evidence: planning/evidence/t07-approved-reallocation.txt and
+planning/evidence/t07-reservation-segments.txt. T07 remains in progress.
+
+The company-wide due endpoint reuses reservation_source_read_service with per-draft
+holds. Server pagination, current-company joins and explicit public labels preserve
+access boundaries; indexed original deadlines prefilter candidates before latest
+history checks. Remaining quantities and database time determine due status. Fully
+released or future-scheduled holds are excluded, while merely approved changes do
+not alter the inbox. Manager-only due access and fresh draft reads support frontend
+drill-down. This is a pull-based inbox, not notification delivery. Evidence:
+planning/evidence/t07-due-followup-inbox.txt.
+
+ReservationDeadline now records immutable consecutive follow-up schedule versions.
+The reviewed deadline service reuses locked source loading, manager cases and atomic
+receipts. SQL guards tie history to exact approved case use and same-company hold;
+the additive migration seeds nothing. Request/review/schedule API permissions are
+separate, under both SALES and INVENTORY. Schedule changes metadata only, never
+stock or customer money. Original hold dates remain historical; read projections
+use the latest scheduled version and flag remaining overdue holds without releasing
+them. Later deadline changes invalidate earlier release bindings and vice versa.
+The frontend reuses existing reservation, case and confirmation components.
+Evidence: planning/evidence/t07-reservation-deadlines.txt. Delivered notifications,
+reallocation, paid sources and public stock runtime remain.
+
+Internal reserve_stock accepts an explicit SalesDemandReference (document, line,
+version). A stable document-namespaced stock source identity avoids collisions
+between equal line UUIDs in different documents. The existing authority/receipt
+boundary rechecks and locks current demand on every attempt; caps use exact unit
+conversion. Customer demand must match the stock product/base unit and selling
+branch. Other-store fulfilment remains blocked pending explicit approved workflow.
+An immutable SalesReservationSource binds each hold to the same-company saved line
+revision in the stock transaction. No side receipt or duplicate stock engine.
+
+Draft revisions share the document lock: active holds prevent ownership changes,
+removal/reclassification of held lines, or reduction below total remaining holds.
+Compatible quantity increases remain possible. Read projections aggregate remaining
+reserved demand; frontend labels it separately from payment and physical collection.
+Generic release is disabled for linked holds. Reviewed release now revalidates an
+exact current draft/hold snapshot and consumes the existing manager case inside
+the same stock/receipt transaction. Replay normalizes only its own recorded release;
+later source changes and revoked access still deny retries. Request/review APIs
+require both SALES/INVENTORY and separate request/review permissions. The frontend
+reuses ManagerCases through Sales drafts; approval alone has no stock effect.
+Evidence: planning/evidence/t07-reviewed-release.txt. A bounded company/document
+linked-hold GET now supports the release-request form in Sales drafts. Existing
+source indexes and stock keys serve pagination; no duplicate stock records or new
+schema. Request quantities remain exact strings, unconfirmed retries retain their
+operation identity and conflicts require refresh. Evidence:
+planning/evidence/t07-release-request-ui.txt. Trusted public writer integration
+remains pending. No expiry cancellation or
+payment/confirmed-order claim is introduced.
+The optional source-less path remains internal legacy compatibility, not a public
+adapter. Public reservation writing still needs trusted runtime identity and the
+reviewed lifecycle. Evidence: planning/evidence/t07-source-linked-reservations.txt.
+
+### Sales-intent source foundation (T13A implemented; acceptance pending)
+
+SalesIntentInput defines bounded stable line identities, exact quantity strings,
+customer version and reviewed product-policy versions. The internal source helper
+requires a caller transaction and permission callback, rechecks exact company/store,
+customer and active products, and snapshots reviewed unit conversion rules. Product
+shared locks serialize against policy activation; a bounded latest-policy query
+avoids per-line reads. Evidence: planning/evidence/t13a-source-foundation.txt.
+
+SalesIntent now supplies a stable UUID parent and append-only header/line revisions.
+Line identity is (company, document UUID, line UUID); later reservation adapters must
+carry document and version, not treat a free line UUID as authority. Saves lock the
+parent, check expected version, validate sources and append history with a receipt
+in one transaction. Retained line IDs cannot change product. Exact retries recheck
+permissions and return the historical result without duplicating a revision.
+Same-company foreign keys bind customers, branches, policies and receipts. Database
+triggers reject history updates/deletes. Additive startup migration follows policy
+activation. No data or module entitlements are seeded.
+
+/sales/drafts exposes paginated summaries, latest detail and versioned PUT under
+the separate SALES module plus draft/product/customer/personal-data permissions.
+It never posts money, confirms orders or reserves stock. The frontend now creates
+and edits drafts using the existing customer selector plus bounded selling-store
+and product choices. Product search reuses the existing index with name/SKU-only
+matching and ID-only results, then exact-company database rehydration. Missing
+reviewed policies disable selection. Stored policy units are shown on reopening;
+product name/SKU are current display labels, not historical invoice snapshots.
+The existing platform module-toggle supports explicit SALES configuration; no real
+organisation is automatically enabled. Uncertain saves retain identical operation
+payloads, validation retains edits, conflicts block overwrite and dirty cancellation
+requires confirmation. T15A now adds local recovery as described above.
+Evidence: planning/evidence/t13a-editor-integration.txt. Browser/provider acceptance
+is pending; no claim of complete checkout or source-linked reservations.
+
+### Retail customer identity foundation (T10A implemented; acceptance pending)
+
+RetailCustomer is a company-owned stable UUID identity with immutable original
+profile, distinct from freight Consignee and suppliers. Its creation operation UUID
+is also its customer key, with a deferred same-company receipt FK. PostgreSQL scoped
+keys support future sales references. Initial profile requires PERSON/BUSINESS,
+bounded display name and 1..16 explicit contacts with exactly one primary contact.
+No country, consent, tax exemption, payment terms or credit is inferred. Shared
+contact values across customers never cause an automatic merge.
+
+`customer_identity_service` reuses execute_once for version-zero creation, atomic
+receipt/event and actor-bound exact retry. Reads require an explicit personal-data
+permission guard and exact active-company scope, including root contexts. Generic
+event/result fields contain identity/version only, not names or contacts. The
+additive startup migration creates an empty table/immutable guard and seeds nothing.
+Authenticated /master-data/customers provides paginated reads, detail and
+version-zero idempotent creation. Cross-module View_Customer and Manage_Customer
+permissions do not grant sales rights; View_Personal_Data plus the PERSONAL field
+mapping are mandatory, failing closed when absent. Frontend register pins company/token,
+aborts stale reads and clears failed loads. Manage_Customer enables the multi-contact
+creation form. It reuses operation intents, retains validation failures, locks uncertain
+requests to identical retries and checks the returned identity/version before success.
+Drafts are in-memory only; browser unload warning is not durable navigation recovery.
+The same CustomersPage accepts optional onSelect for reusable paginated selection.
+Selection rereads the exact customer and requires unchanged identity/version, returns
+company/key/version plus profile, and aborts on list refresh or company change.
+Consumers must independently validate ownership/version when saving a document;
+this is not sales/credit eligibility. SalesDraftEditor now consumes this selection
+and its writer independently revalidates the identity/version.
+Customer name/contact search now uses the existing search service's private
+retail_customers index. Exact active-company/deletion filters and bounded ID hits
+precede indexed PostgreSQL rehydration; foreign/stale hits and provider failure
+return503, not empty success. No index profile is returned directly. Search settings
+and writes use asynchronous provider tasks; exact create retries and streamed startup
+repair resubmit immutable profiles after commit. Provider pagination caps apply.
+Customer settings/document helpers now wait for the exact provider task (1500ms
+polling budget) and require matching task ID/index plus succeeded status. The shared
+Meilisearch client uses a five-second per-request timeout; polling budget is not a
+strict end-to-end deadline. Customer creation returns search_indexed independently
+of the immutable receipt; failed indexing never undoes creation. UI warns against
+duplicate creation and directs users to unfiltered browsing when unconfirmed.
+Durable background repair, live search acceptance and profile revisions
+remain pending. Search now uses read-only POST /master-data/customers/search with
+a strict bounded body, not URL parameters; GET rejects the former search argument.
+Successful customer responses specify Cache-Control: no-store. Request-body logging
+must remain disabled/redacted at deployment; POST is not a substitute for that policy.
+No query/provider exception bodies are logged by the customer search helper.
+No SQL search fallback is introduced.
+T10A implementation and automated checks are complete; browser/provider acceptance
+is pending. Those external checks do not block independent sales-draft development.
+Evidence: planning/evidence/t10a-customer-api-verification.txt.
+
+### Central cost-pool writer authority (T06 foundation)
+
+Opening valuation now requires the same CostPoolAuthorityClaim as charge posting.
+The persisted guard precedes product locking; mapped source pool must equal the
+claimed pool. Both writers use pool-before-product lock order. Full authority
+identity is in opening intent, so a new epoch cannot relabel an old receipt and a
+no-op permission callback cannot bypass fencing. Runtime authentication remains a
+separate release gate. Evidence: planning/evidence/t06-opening-authority-verification.txt.
+
+`CostPoolAuthorityEpoch` extends existing authority models and reuses StoreNode
+identities. It is separate from branch stock ownership: one organisation/cost pool
+has a consecutive ACTIVE/SUSPENDED writer-epoch history. Composite foreign keys
+bind the pool and node to the same company; immutable triggers reject history
+changes. The unique org/pool/epoch index supports current-writer lookup.
+`require_cost_pool_authority` accepts a typed trusted runtime claim, requires an
+active exact-company pool and matching current node/epoch, and holds a shared pool
+lock to transaction end. Epoch insertion takes the exclusive pool lock, preventing
+an authority change beneath an in-flight posting. Missing/suspended/stale/foreign
+claims fail closed; branch authority never substitutes for central authority.
+
+The additive startup migration `migrate_20261003_cost_pool_authority.py` creates an
+empty table and guards, with bounded lock wait and no seeds. Tests connect the real
+guard to the charge coordinator and verify replay revocation and concurrency. This
+is same-database fencing only: runtime authentication, reviewed enrollment/transition
+APIs and disconnected recovery remain gates.
+No HTTP authority writer or financial-posting activation is exposed. Evidence:
+planning/evidence/t06-pool-authority-verification.txt.
+
+Both charge coordinator entry points now require CostPoolAuthorityClaim. The
+database guard runs before evidence work and replay, with an exact proposal/pool
+check. The full organisation/pool/node/epoch identity is included in the normalized
+operation request. A valid newer epoch cannot relabel an old operation, while its
+old claim is rejected as stale. Additional runtime checks remain callbacks but
+cannot bypass the persisted guard. Earlier internal intents without authority
+identity conflict rather than being silently reinterpreted. No runtime identity
+is inferred from user roles or request fields; authenticated enrollment remains
+required before any public adapter. No schema change in this integration slice.
+Evidence: planning/evidence/t06-authority-intent-verification.txt.
+
+The existing paginated cost-pool GET now adds central_authority_state and epoch
+without exposing node identities, reasons or credentials. One company-scoped
+DISTINCT ON query covers only pool IDs on the returned page, using the authority
+history index; no per-row API/query loop. NOT_CONFIGURED is explicit; ACTIVE means
+writer assigned, not runtime authenticated or financial posting enabled. Existing
+INVENTORY/View_Product access remains mandatory. The CostPoolSetup table displays
+these read-only states and clears stale presentation on failed refresh. No
+enrollment control or new screen is introduced. Browser acceptance remains pending.
+
 ### Source-linked opening valuation (T06 in progress)
+
+The same immutable ledger now supports OPENING and CHARGE kinds. Charge rows add
+value, never quantity, and reference their original opening. A partial unique
+opening-source index preserves opening deduplication; operation/balance uniqueness
+permits multi-line allocations. The additive valuation_charges migration preserves
+historical values and is replayable. Database insert guards require the matching
+allocation, whole-charge use and version-2 evidence-case use in the same operation.
+`append_allocated_charge_values` uses the caller's transaction and explicit guard,
+locks product streams deterministically, checks expected versions and conservation,
+and rejects physical movement pending late-cost reconciliation. It never commits,
+changes selling prices or performs storage I/O. Allocation previews exclude CHARGE
+rows, preventing recursive allocation. History exposes kind and source reference.
+`charge_posting_service.post_allocated_charge` now composes case/charge consumption,
+entries, receipt and outbox in one transaction using the existing services. Its
+intent binds exact prepared evidence, proposal, case and product-stream versions.
+Mandatory permission and central-authority callbacks run before replay; exact
+current content/source checks remain mandatory. Caller-owned sessions are supported
+without committing. No storage I/O occurs inside posting. The authenticated central
+runtime adapter/public writer is still pending; branch stock authority must not be
+substituted for shared-pool valuation authority. No public financial posting is
+enabled. Evidence: planning/evidence/t06-charge-posting-verification.txt; ledger
+schema evidence: planning/evidence/t06-charge-valuation-verification.txt.
+
+`prepare_and_post_allocated_charge` is the factory-owned entry point connecting
+the existing preparation and coordinator. It resolves the persisted v2 case
+internally and rejects foreign, legacy or mismatched proposal bindings before
+storage access. Permission and central-authority guards precede preparation and
+run again inside posting. The preparation transaction closes before pinned-version
+reads; every retry rereads those original versions. Missing evidence blocks even
+completed receipt replay without undoing the original posting. No client hashes,
+latest-file fallback or automatic bucket changes are accepted. The shared exact
+company/proposal/case lookup uses the existing (org_id, case_key) unique index.
+`reviewed_charge_binding` reuses approval/source validation before file I/O:
+pending/rejected cases cannot trigger evidence reads, and root allowed-company
+lists do not widen the active company. Saved fingerprints are only preparation
+inputs, not proof of current bytes; the subsequent storage read remains mandatory.
+The runtime authority adapter remains required; no HTTP route calls this entry point.
+Evidence: planning/evidence/t06-prepared-posting-verification.txt.
+Persisted-loader verification: planning/evidence/t06-persisted-case-verification.txt.
+
+The approved-evidence loader now supports narrowly scoped own-operation replay.
+Default callers still reject consumed cases. A replay requires exact actor/key,
+matching case use, matching whole-charge use/evidence and a committed receipt under
+inventory.valuation.charge.v1. Permissions and current content/source bindings are
+checked first; outer execute_once must still match the full request digest and
+return the prior result without applying another effect. This is a replay guard,
+not the freight valuation writer; no financial-posting endpoint is enabled.
+Read-only local storage inspection found versioning NOT_ENABLED and no configured
+COST_EVIDENCE_MAX_BYTES. Neither setting was changed; live capture acceptance stays
+blocked while independent development proceeds. Evidence:
+planning/evidence/t06-evidence-own-replay-verification.txt.
+
+Public evidence requests now use two-stage preparation and persist version-2 cases.
+Retries read the original saved object versions rather than capturing replacement
+files; changed declarations or metadata conflict. Reviews re-read pinned content
+outside posting, then start a fresh caller-owned transaction and compare locked
+sources before invoking the same manager-case engine. PostgreSQL guidance informed
+short preparation transactions and exact active-company lookups. Legacy version-1
+cases retain their historical review path and remain ineligible for financial use.
+
+Case-scoped document downloads authorize the pool/proposal/case/document chain,
+read the exact recorded version through blob_storage, and buffer only up to the
+configured limit. Complete size and SHA256 comparison must pass before any bytes
+are returned. No latest-version or disk fallback exists on that endpoint. Eligibility
+is checked again after I/O; responses are attachment/no-store with no storage keys.
+The React evidence panel selects this endpoint for v2 and labels historical v1
+downloads as current files, not verified historical bytes.
+
+New capture and pinned downloads require positive `COST_EVIDENCE_MAX_BYTES`; absent
+or invalid configuration returns503. No actual value or bucket setting is seeded.
+Storage version retention and provider compatibility still need real acceptance;
+this enables reviews, never financial posting. No migration. Verification:
+planning/evidence/t06-public-versioned-evidence-verification.txt.
+
+`cost_content_preparation_service.prepare_charge_content` now bridges the strict
+storage reader and typed review fingerprints. An authorized source loader runs in
+a short factory-owned transaction, whose detached snapshot is retained; storage
+reads occur only after it closes. Reviews require exact saved versions, bucket/key,
+digest and size; missing identities cannot fall back to latest content. Returned
+PreparedChargeContent supplies a require_current comparison for the later locked
+source check and a detached typed map. Owning adapters must reauthorize before
+posting. This internal preparation creates no approval or financial record; public
+capture/download integration remains pending. Targeted evidence:
+planning/evidence/t06-content-preparation-verification.txt.
+
+Content-bound review support now persists typed DocumentContentFingerprint maps in
+existing immutable manager-case bindings under source_version 2. The trusted owning
+adapter prepares/re-reads exact versioned content BEFORE the posting transaction;
+callbacks do no storage I/O. Locked document keys/known sizes must match, and every
+linked invoice/FX document must have exactly one typed fingerprint, with no extras.
+Version, bucket, digest and byte-count changes invalidate the exact review snapshot.
+`approved_charge_evidence` now rejects all source_version 1 metadata-only approvals
+and requires current server-prepared content even for version 2. Historical records
+are not rewritten or upgraded. Shared permission, independent-decision and single-use
+checks remain. Public HTTP capture/downloads still use metadata-only cases and cannot
+supply financial evidence; next wire a two-stage capture outside the transaction,
+then exact-version reviewer downloads. No new schema, UI or financial posting.
+Evidence: planning/evidence/t06-content-review-binding-verification.txt.
+
+`RustFSClient.fingerprint_file_version` adds an internal strict evidence reader to
+the existing storage adapter. It computes SHA256 over a bounded complete stream,
+pins/rechecks a non-null server version ID, rejects unknown/oversized/truncated
+content, and closes bodies on failure. There is no local fallback, configuration
+mutation, upload, presigned link or new HTTP authority. The caller must authorize
+and resolve a company-owned document first and supply an explicit byte limit.
+The result includes private bucket/key/version metadata and must not be exposed
+through general reads. This is NOT Object Lock or retention verification. Public
+reviews/downloads still use their existing metadata contract until the next
+integration; historical cases must never silently acquire byte verification.
+Evidence: planning/evidence/t06-versioned-blob-verification.txt.
+
+`CostChargeDeclaration` and `cost_charge_review_service` now provide the internal
+evidence-bound manager-case adapter, distinct from allocation-only approval.
+The action `inventory.cost.verify-charge` binds the exact existing allocation,
+issuer, invoice reference/date, declared eligible source amount, SCR-per-source-unit
+rate, capitalisation explanation, invoice/FX document metadata and linked PO state.
+Foreign currency requires explicit FX evidence; SCR requires rate1. `charge-fx-v1`
+converts exact six-place amounts with eight-place rates using isolated Decimal
+precision and HALF_UP six-place SCR rounding, rejects overflow/rounded-zero, and
+requires the result to equal the complete saved allocation. No market rate or tax
+treatment is inferred. Eligibility is a reviewer declaration, not automatic law.
+
+Sources are permission-guarded before lookup, scoped and locked; linked POs must
+belong to the company and the invoice PO must name the declared supplier. Original
+metadata snapshots detect changed paths, dates, confidentiality and parent state.
+The shared case service supplies immutable decisions, self-review denial and
+single-use semantics. `approved_charge_evidence` accepts only the distinct approved,
+independently reviewed, current and unconsumed charge case and returns the existing
+typed CostChargeEvidence fingerprint. Allocation-only approvals never satisfy it.
+This is not a public writer or financial authority: the same case must still be
+consumed with charge use and valuation atomically. Own-operation replay after
+consumption must be explicitly composed by that future coordinator.
+
+No schema migration or second invoice/approval store is needed. CostEvidenceRouter
+now exposes bounded existing supplier/document choices, explicit safe case projections,
+request/review endpoints and authenticated UUID document downloads via blob_storage.
+Both INVENTORY and ORDERS modules and product/supplier/document/financial permissions
+are mandatory; financial and supplier field policies can still deny access. Writes
+also require Manage_Financials. Exact active-company filters remain in root contexts.
+The initial document selector accepts GENERAL/PO only, rejects mismatched/unbound PO
+parents and excludes payment/quotation records. No private storage keys or raw case
+bindings are returned. Downloads recheck eligibility, have no legacy fallback and
+are attachment-only/no-store. Allocation-only APIs remain permission-separated.
+
+React adds a shared paginated evidence picker and exact declaration form to saved
+cost proposals, then adapts the existing ManagerCases screen for independent evidence
+review. Failed saves retain fields and operation identity; exits require explicit
+discard. No financial posting is exposed. Immutable blob-version guarantees remain
+a posting gate: metadata hashing cannot prove bytes or prevent in-place replacement.
+Browser acceptance remains pending. Evidence:
+planning/evidence/t06-evidence-workspace-verification.txt.
 
 The internal `cost_charge_use_service` adds whole-charge duplicate protection;
 it is not an invoice store, payable ledger, evidence verifier or public writer.

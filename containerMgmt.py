@@ -169,8 +169,12 @@ async def startup_event():
     ensure_inventory_cost_pools_schema()
     from Utils.migrate_20261002_inventory_posting import ensure_inventory_posting_schema
     ensure_inventory_posting_schema()
+    from Utils.migrate_20261003_retail_customers import ensure_retail_customers_schema
+    ensure_retail_customers_schema()
     from Utils.migrate_20261002_posting_authority import ensure_posting_authority_schema
     ensure_posting_authority_schema()
+    from Utils.migrate_20261003_cost_pool_authority import ensure_cost_pool_authority_schema
+    ensure_cost_pool_authority_schema()
     from Utils.migrate_20261002_branch_settings import ensure_branch_settings_schema
     ensure_branch_settings_schema()
     from Utils.migrate_20261002_branch_counters import ensure_branch_counters_schema
@@ -188,6 +192,16 @@ async def startup_event():
     ensure_inventory_policy_drafts_schema()
     from Utils.migrate_20261002_policy_activation import ensure_policy_activation_schema
     ensure_policy_activation_schema()
+    from Utils.migrate_20261003_sales_intents import ensure_sales_intents_schema
+    ensure_sales_intents_schema()
+    from Utils.migrate_20261003_sales_reservation_sources import ensure_sales_reservation_sources_schema
+    ensure_sales_reservation_sources_schema()
+    from Utils.migrate_20261003_reservation_deadlines import ensure_reservation_deadlines_schema
+    ensure_reservation_deadlines_schema()
+    from Utils.migrate_20261003_reservation_reallocations import ensure_reservation_reallocations_schema
+    ensure_reservation_reallocations_schema()
+    from Utils.migrate_20261003_reservation_segments import ensure_reservation_segments_schema
+    ensure_reservation_segments_schema()
     from Utils.migrate_20261002_unit_barcodes import ensure_unit_barcodes_schema
     ensure_unit_barcodes_schema()
     from Utils.migrate_20261002_barcode_retirements import ensure_barcode_retirements_schema
@@ -196,6 +210,8 @@ async def startup_event():
     ensure_stock_reclassification_schema()
     from Utils.migrate_20261003_inventory_valuation import ensure_inventory_valuation_schema
     ensure_inventory_valuation_schema()
+    from Utils.migrate_20261003_valuation_charges import ensure_valuation_charges_schema
+    ensure_valuation_charges_schema()
     from Utils.migrate_20261003_cost_allocation import ensure_cost_allocation_schema
     ensure_cost_allocation_schema()
     from Utils.migrate_20261003_cost_charge_uses import ensure_cost_charge_uses_schema
@@ -234,10 +250,11 @@ async def startup_event():
     # ── Initialize Meilisearch Search Engine ─────────────────────────────────
     logger.info("Initializing Meilisearch Indices (Products & Orders)...")
     try:
-        from Services.search_service import bulk_index_all_products, bulk_index_all_orders
+        from Services.search_service import bulk_index_all_products, bulk_index_all_orders, bulk_index_all_customers
         meili_db = SessionLocal()
         bulk_index_all_products(meili_db)
         bulk_index_all_orders(meili_db)
+        bulk_index_all_customers(meili_db)
         meili_db.close()
     except Exception as e:
         logger.error("Failed to initialize Meilisearch: %s", e)
@@ -310,6 +327,7 @@ app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(LocationRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(CostPoolRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(CostEvidenceRouter)
 app.include_router(PolicyDraftRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(BranchSettingsRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(BranchCounterRouter, dependencies=[Depends(require_module("INVENTORY"))])
@@ -319,6 +337,18 @@ app.include_router(UnitBarcodeRouter, dependencies=[Depends(require_module("INVE
 app.include_router(BarcodeRetirementRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(MasterDataRouter)
+from Routes.MasterData.CustomerRouter import CustomerRouter
+app.include_router(CustomerRouter)
+from Routes.Orders.SalesIntentRouter import SalesIntentRouter
+app.include_router(SalesIntentRouter)
+from Routes.Orders.SalesSourceRouter import SalesSourceRouter
+app.include_router(SalesSourceRouter)
+from Routes.Inventory.ReservationReleaseCaseRouter import ReservationReleaseCaseRouter
+app.include_router(ReservationReleaseCaseRouter)
+from Routes.Inventory.ReservationReallocationRouter import ReservationReallocationRouter
+app.include_router(ReservationReallocationRouter)
+from Routes.Inventory.ReservationDeadlineRouter import ReservationDeadlineRouter
+app.include_router(ReservationDeadlineRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
 

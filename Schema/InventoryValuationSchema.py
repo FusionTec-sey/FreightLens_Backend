@@ -8,6 +8,8 @@ from Services.inventory_costing_service import MAX_VALUE
 
 class InventoryValuationRead(BaseModel):
     id: int
+    kind: Literal['OPENING', 'CHARGE'] = 'OPENING'
+    source_valuation_id: int | None = None
     product_id: int
     product_name: str
     balance_id: int

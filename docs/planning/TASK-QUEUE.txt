@@ -1,15 +1,41 @@
 FreightLens sequential development task queue
 Updated: 2026-10-03
 
+PARALLEL OWNERSHIP — BD-20261003-05
+Read BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt before work.
+Integrator retains inventory/allocation/valuation/reservations/sales foundations.
+Collaborator owns new T33A cycle-count workspace, not existing T10 customer work.
+No shared-file changes without interface coordination; linked PRs to integration.
+
 LATEST VERIFICATION
-See evidence/t06-charge-dedup-verification.txt for the current baseline:
-backend874 passed/2 known C12 xfails; frontend138 tests/30 suites; production
-build passed with existing warnings. Safe reviewed alternate-unit extensions are usable
+Parallel integration checkpoint: backend1199 passed/2 known C12 xfails;
+frontend213 passed/41 suites; production build passed with existing warnings.
+Evidence: evidence/20261003-parallel-checkpoint.txt. Fixed legacy blob-test auth
+module leakage exposed by the first full run; production auth unchanged.
+No all-module completion or browser/provider acceptance claim. Earlier checkpoint
+counts, including T13A/T15A, remain historical.
+Focused checks do not increase that verified full-suite total.
+Safe reviewed alternate-unit extensions are usable
 against original stock snapshots. Authorised T05 demo/tablet checks passed for the
 recorded surfaces; this is not acceptance of every later workflow.
 Counts within older task entries are historical slice checkpoints.
 
 EXECUTION CONTRACT
+Owner clarification: automatically allocate eligible stock within the salesperson's
+configured current work area. A shortfall must not silently spill into other areas.
+Other locations are an explicit salesperson choice with applicable manager approval.
+Do not require a manager case for an ordinary eligible local-area allocation.
+Counter settings now persist an optional scoped default stock-location root; missing
+or stale defaults fail closed. Staff work-context assignment and automatic planning/
+posting integration remain to be implemented; this setting alone makes no holds.
+Owner clarification 2026-10-03: a verified slice is a progress checkpoint, not a
+reason to end execution. Continue to the next authorised dependency-ready item
+within the active turn. End for completion, explicit stop, a genuine required
+decision or an actual runtime limitation; state the precise reason. Do not require
+another "continue" after tests pass. Do not expand task acceptance by repeatedly
+adding unrelated later-phase infrastructure. Browser/hardware gates remain pending
+without blocking independent implementation. This does not authorise live posting,
+deployment, messaging or removal of safety/permission gates.
 This queue is the current execution order over the historical Cxx phase plan.
 Continue the next dependency-ready task without routine confirmation. Required
 backend contracts must be verified before dependent implementation; an independent
@@ -20,6 +46,11 @@ unless an external blocker is explicitly named. No phase is declared complete he
 States: Ready; In progress; Implemented—verification pending; Verified; Blocked.
 
 COMMON ACCEPTANCE FOR EVERY IMPLEMENTATION TASK
+Owner update 2026-10-03: use affected-feature tests and relevant shared-boundary
+checks during development. Full regression at task completion, major integration
+and before release, not after every slice. Frontend component checks when changed;
+production build for shared/dependency changes and milestones. Broaden checks for
+cross-cutting risk. Always record selected tests and deliberately deferred checks.
 Reuse FastAPI/React, existing catalogues, typed schemas and organisation helpers.
 Include usable frontend where applicable, additive replayable migrations, tests,
 architecture/progress updates and evidence. Check permission/tenant boundaries,
@@ -245,12 +276,120 @@ Existing supplier/document records reused; no second invoice store or public wri
 Evidence: evidence/t06-charge-dedup-verification.txt. Next: connect authoritative
 supplier invoice/FX evidence and bind it to review before composing charge use,
 approval consumption and valuation. Current allocation approval is not that proof.
+Evidence-review internal adapter implemented: declared invoice/eligible amount/FX
+with exact conversion; locked document/supplier/PO state and distinct manager-case
+action. Approved current unconsumed evidence can populate the existing charge-use
+contract. No second invoice or approval system. Old allocation approvals remain
+insufficient. Evidence: evidence/t06-charge-evidence-review-verification.txt.
+Permission-aware supplier/document picker and evidence request/review API are now
+implemented with separate supplier/document/financial field gates. Explicit case
+projections never expose private keys; GENERAL/PO downloads have exact-company
+eligibility and no legacy fallback. Shared React picker, failed-save protection
+and existing manager-case review UI are connected; no duplicate records introduced.
+Evidence: evidence/t06-evidence-workspace-verification.txt.
+Version-pinned byte fingerprint primitive added to existing blob_storage: strict
+non-null version, bounded complete stream SHA256, mandatory size limit, no disk
+fallback, stream closure on errors. Internal only; no bucket configuration changes.
+Evidence: evidence/t06-versioned-blob-verification.txt.
+Internal version-2 review bindings now retain exact typed document content maps;
+current content identity is mandatory for approved financial evidence. Historical
+metadata-only cases cannot be upgraded implicitly. No parallel approval store or
+storage I/O inside transactions. Evidence: evidence/t06-content-review-binding-verification.txt.
+Two-stage preparation helper implemented: authorized detached source snapshot,
+transaction closed before strict storage reads, exact reviewed-version comparison,
+and mandatory later locked-source recheck. No new approval engine or persistence.
+Evidence: evidence/t06-content-preparation-verification.txt.
+Public two-stage request/review and exact-version reviewer downloads now connected.
+New cases use v2; original versions are retained on retry, current source is checked
+after storage I/O, and SHA256-verified full bytes are returned before any streaming.
+Legacy cases remain labelled metadata-only/ineligible for posting. Requires explicit
+COST_EVIDENCE_MAX_BYTES; no actual config or bucket settings changed.
+Evidence: evidence/t06-public-versioned-evidence-verification.txt.
+Local read-only inspection: RustFS bucket versioning NOT_ENABLED; capture limit
+absent. No configuration changed. This is a storage acceptance gate, not a reason
+to stop independent implementation. Own-operation evidence replay guard now requires
+matching actor, case/charge use, exact evidence and charge-domain receipt; ordinary
+consumed-case calls still reject. No valuation writer is implied.
+Evidence: evidence/t06-evidence-own-replay-verification.txt.
+Immutable additional-cost entries now extend the same valuation ledger, with
+zero added quantity, source links, exact allocation and case-use database guards.
+Caller-transaction append helper and atomic composition tests are implemented;
+frontend history distinguishes kinds and excludes charges from allocation sources.
+Evidence: evidence/t06-charge-valuation-verification.txt.
+Internal coordinator now composes prepared-content/source checks, case/charge use,
+valuation entries and receipt/outbox atomically. Explicit permission and central
+authority callbacks are mandatory on attempts and replays. Shared-session rollback
+and concurrent retries verified; no new UI/API action or schema.
+Evidence: evidence/t06-charge-posting-verification.txt.
+Factory-owned preparation-to-posting entry point now connects exact reviewed blob
+versions with the coordinator, rechecking permission/authority/source after I/O.
+Retries reread original versions; no transaction remains open during storage reads.
+Evidence: evidence/t06-prepared-posting-verification.txt.
+Persisted-case adapter now integrated: exact active-company/proposal/case lookup,
+shared approval/source checks before storage, no caller-supplied case binding.
+Evidence: evidence/t06-persisted-case-verification.txt.
+Durable central cost-pool authority now implemented using existing node identities,
+immutable consecutive epochs, same-company FKs and pool locks held through commit.
+Real guard tested with charge posting/replay; no node or pool activated.
+Evidence: evidence/t06-pool-authority-verification.txt.
+Typed central claims are now mandatory and their org/pool/node/epoch identity is
+bound into posting intent. Both entry points enforce persisted authority plus
+proposal/pool scope; extra callbacks cannot bypass those checks.
+Evidence: evidence/t06-authority-intent-verification.txt.
+Cost-pool list now shows read-only central writer state/epoch through the existing
+paginated API and table. No node identity, activation action or posting enablement.
+Evidence: evidence/t06-authority-status-verification.txt. Browser acceptance pending.
+Opening valuations now also require persisted central authority and bind the claim
+into retry intent, using the same pool-before-product lock order as charge posting.
+Evidence: evidence/t06-opening-authority-verification.txt. No UI/API activation.
+Next: connect authenticated central-runtime identity. Existing branch authority
+must not stand in for central shared-pool
+authority; runtime enrollment/fencing remains a T21-T23 integration gate. Continue
+receipt costs and central reconciliation. Public financial posting remains off;
+validate actual RustFS version retention/configuration before enabling capture.
+Preserve source/permission guards and atomic own-operation retries. Do not expose private metadata
+fingerprints in generic financial-only case reads. Browser acceptance pending.
 
 T07 | Complete reservation lifecycle
-Status: Blocked
+Status: In progress
 Dependencies: T04,T05,T13A
 Acceptance / evidence: Authoritative source links, approved release/reallocation/deadline review; protected paid holds and explicit multi-location approval.
-Next action: Extend verified internal holds; add source and approval gates.
+Saved-document/line/version links, exact caps and draft-edit protection now extend
+existing holds; read-only reserved-demand totals are in the frontend. Evidence:
+evidence/t07-source-linked-reservations.txt. Reviewed internal release now consumes
+an exact approval atomically; generic source-linked release stays blocked. Request/
+review APIs and the reused frontend review panel are implemented. Focused backend58,
+frontend23 and production build pass; evidence/t07-reviewed-release.txt. No public
+posting identity is inferred, and approval never automatically releases stock.
+Linked-hold list/request UI now joins the reviewed workflow through Sales drafts ->
+View -> Reserved stock. Backend17/frontend11 focused tests and build pass;
+evidence/t07-release-request-ui.txt. Browser acceptance pending.
+Reviewed follow-up requests/decisions and explicit schedule now append immutable
+deadline history with no stock release. Frontend reuses the request/review/action
+panels; linked holds show current dates and due flags. Backend45/frontend33 and
+build pass; evidence/t07-reservation-deadlines.txt. Browser acceptance pending.
+Company-wide due inbox now reuses the per-draft read projection and reservation UI;
+manager permissions, latest deadline/remaining filters and fresh draft drill-down
+are verified. Backend19/frontend16 and build pass; evidence/t07-due-followup-inbox.txt.
+Pull-based inbox does not claim T04 delivered notifications.
+Atomic same-bucket reallocation now composes release/reserve with exact reviewed
+source/target and immutable paired history. Request/review APIs plus permission-
+gated Sales drafts -> Reallocation reviews implemented. Backend73/19, frontend24
+focused checks and build pass; evidence/t07-approved-reallocation.txt. This is
+unconfirmed draft demand only; existing-target merge/top-up remains blocked.
+Request entry now reuses paginated saved drafts and fresh target-line selection;
+uncertain retry locks source/target/date/quantity and retains its exact operation.
+Affected frontend46/5 suites pass. Browser acceptance remains pending.
+Existing-target same-bucket supplements now append independently reviewed hold
+segments, preserving original quantity/date and enforcing combined demand caps.
+Exact history digest invalidates concurrent/stale reviews; deferred DB guard
+requires paired reallocation. Backend110/frontend38 and build pass; evidence:
+evidence/t07-reservation-segments.txt. Prior existing-target restriction is superseded.
+Next action: Resolve salesperson work context and default-area automatic allocation,
+then explicit other-area/multi-location exceptions and
+trusted runtime adapters. Protect paid holds; no automatic expiry or other-store
+allocation. Source-less internal compatibility is not a public sales capability.
+T13A automated contract is ready; external browser/provider acceptance stays pending.
 
 T08 | Replace legacy stock writers
 Status: Blocked
@@ -270,9 +409,10 @@ T10 | Build customer workspace
 Status: Blocked
 Dependencies: T03,T04,T10A
 Acceptance / evidence: Profiles/contacts, scoped history and controlled duplicate review; no automatic balance merge.
-Next action: Extend the customer foundation from T10A; no retail customer entity
-was found in the inspected baseline. Reuse authentication and organisation helpers,
-not purchasing suppliers as customer accounts.
+Next action: Extend the existing T10A RetailCustomer identity, multi-contact
+create/search/select API and UI with versioned profile updates, audited history
+and controlled duplicate review. Preserve sales references to original profiles.
+No automatic balance merge. Unassigned; collaborator owns T33A instead.
 
 T11 | Implement pricing and tax
 Status: Blocked
@@ -410,9 +550,27 @@ Next action: Extend existing reporting, not another reporting database.
 
 T33 | Implement labels and cycle counts
 Status: Blocked
-Dependencies: T09,T11
+Dependencies: T09,T11,T33A
 Acceptance / evidence: Price-label queues/blind counts/recounts/movement-aware reconciliation/annual coverage.
-Next action: Add scoped queues and count workflows.
+Next action: Integrate T33A counts with movement-aware reconciliation after T09;
+price labels after T11. Do not rebuild the collaborator's count workspace.
+
+T33A | Cycle-count planning and blind-count workspace
+Status: Ready
+Dependencies: T03,T04,T05
+Owner: Collaborator; integrator owns shared interface review and merges.
+Acceptance / evidence: New annual product-location schedules, assignments, blind
+entry, immutable submissions/recounts, provisional discrepancies and audited
+manager review with backend-enforced scope/permissions, pagination, exact units,
+expected versions, retry/concurrency tests and usable frontend. No expected stock
+or earlier counts exposed to blind counters. No real stock or business seeds.
+Implementation-ready foundations exist; browser/provider gates remain separate.
+No implementation or collaborator environment verification is claimed yet.
+Next action: Confirm paired baseline and isolated setup, propose schema/API and
+shared-file integration changes, then build count-specific services/UI. Reuse
+existing products, locations, unit policies, cases and receipts. No inventory
+adjustment posting, freeze, valuation, price labels or final reconciliation.
+Movement-aware adjustment interface remains T09/T33, not guessed in this slice.
 
 T34 | Complete readiness and supervised pilot gates
 Status: Blocked
@@ -441,19 +599,41 @@ five screens; shared configuration lock/retry/version primitives, unchanged API
 and storage contracts. One canonical queue in the backend checkout.
 Verification: evidence/consolidation-verification.txt; full suites/build pass,
 38 task dependency references validated without missing nodes or cycles.
-Next action: Resume remaining T05 work using these shared contracts. No full phase
-completion or deferred browser acceptance is implied.
+Next action: Reuse these shared contracts in remaining dependency-ready tasks.
+T05 agreed implementation scope is complete; its acceptance gates remain pending.
 
 T10A | Minimal customer identity foundation
-Status: Ready
+Status: Implemented—verification pending
 Dependencies: T03,T04
 Acceptance / evidence: One tenant-owned customer identity with name/contact data,
 backend permissions, stable keys, expected versions and usable basic create/select
 UI. No balances, auto-merge, credit or guessed real customers. T10 extends this.
-Next action: Implement after inventory policy/valuation foundations, before T13A.
+Internal stable company-owned identity and immutable initial contact profile added,
+using existing atomic receipts and exact scoped reads. No automatic merge, balances,
+consent or terms. Evidence: evidence/t10a-customer-identity-verification.txt.
+Started independent ready work while T06 runtime gates remain open; not a declaration
+that T06 is complete. Protected personal-data API and paginated read/inspect screen
+now implemented (29 backend and 4 frontend focused checks, build passed). Next:
+Creation UI now added with multiple contacts and exact uncertain retries; 16 targeted
+frontend and 25 backend tests pass, production build passes. Reusable selection now
+extends the existing register with fresh detail/version check and scoped callback;
+16 selected frontend tests pass. T13A now consumes this selector. Search API/UI now implemented
+with exact scope and DB rehydration: 31 backend/17 frontend tests and build pass.
+Task completion now requires confirmed provider success; creation reports indexing
+separately and warns on unconfirmed projection. 22 backend/16 frontend checks pass.
+Next: live provider/browser acceptance and durable projection recovery verification;
+search now uses a strict POST body and successful responses are no-store (15 backend,
+12 frontend focused checks). Deployment body logging still needs release review. Durable navigation recovery
+remains T15. Search evidence: evidence/t10a-customer-search.txt. Selection evidence:
+evidence/t10a-customer-selection.txt. Creation evidence:
+evidence/t10a-customer-create-ui.txt. Earlier API evidence:
+evidence/t10a-customer-api-verification.txt. Automated integration checkpoint:
+backend1077 passed/2 known legacy xfails; frontend169/35 suites and build passed.
+Browser/live-provider acceptance remains pending; durable projection repair belongs
+to later synchronization work, not a prerequisite for isolated draft development.
 
 T13A | Authoritative sales-intent document and line foundation
-Status: Blocked
+Status: Implemented—verification pending
 Dependencies: T05,T10A
 Acceptance / evidence: Durable scoped intent header/lines with stable UUIDs, owning
 customer/branch/product references, exact requested units/quantities and versions.
@@ -462,19 +642,41 @@ validate real locked source lines; no free UUID supplied as proof of entitlement
 Reuse these identities in T13 invoice posting and T29 quote/order workflows; record
 links/snapshots on conversion instead of building a duplicate catalogue/order store.
 Include minimal draft editor/API, source ownership/version/retry/rollback tests.
-Next action: Define and persist intent records before finishing T07 adapters.
+Typed source validation implemented: exact quantities, locked scoped references,
+reviewed unit snapshots, no stock/financial effect. Thirteen focused tests passed;
+evidence/t13a-source-foundation.txt. Browser/provider gates on dependencies remain
+visible but do not block this independent local implementation.
+Durable header/line revisions, atomic saves, protected API and read/inspect frontend
+are implemented. Retry/rollback/immutability and real concurrent-save checks pass:
+evidence/t13a-durable-drafts.txt. No stock or financial effects; SALES entitlement
+is not auto-enabled. Line references include document and version, not UUID alone.
+Source selectors/editor and explicit platform module configuration are now added.
+Full backend1118/2 known xfails, frontend179/37 and production build pass; evidence:
+evidence/t13a-editor-integration.txt. No company automatically enabled. Browser/live
+provider acceptance is pending, not a blocker for independent T07/T15A development.
+Next action: Obtain scoped visual/provider acceptance when approved; do not add
+payment, checkout or durable offline recovery to this minimal foundation's scope.
 
 T15A | Durable draft and retry recovery foundation
-Status: Blocked
+Status: Implemented—verification pending
 Dependencies: T13A
 Acceptance / evidence: Reuse T13A server drafts plus tenant/user/branch-scoped local
 recovery for edits and uncertain operation IDs. Navigation/reload/failed-save
 recovery, explicit discard and optimistic conflicts; no autonomous offline posting.
 Do not persist secrets or card data. Local recovery is not authority to use stock,
 money or expired policies. T14 consumes this store from its first implementation.
-Next action: Implement before tablet checkout; retain document copy in T15.
+Implemented: local whitelist store with company/user/branch identity, browser-lock
+and revision-checked writes; editor recovery, exact pending save persistence before
+network, Local drafts list and explicit discard. Full frontend196/40 and build pass;
+affected backend22 pass. Evidence: evidence/t15a-local-draft-recovery.txt.
+Next action: Native browser reload/multi-tab acceptance when approved. Reuse the
+store in T14; retain document copy in T15. Independent T07 work can continue.
 
 VERIFICATION AND CHECKPOINT PRACTICE
+Owner-requested GitHub checkpoint (2026-10-03): full backend 1035 passed / 2 known
+legacy xfails; frontend 150 passed / 32 suites; normal production build passed with
+existing warnings. Evidence: evidence/20261003-github-checkpoint.txt.
+No whole-task completion or browser/pilot acceptance implied.
 UI refinement checkpoint (2026-10-02): access/read failure recovery, tablet order
 controls and user/role layout, contextual approval labels and branding. Evidence:
 ../../../FreightLens_Frontend/docs/UI-REFINEMENT-2026-10-02.txt.

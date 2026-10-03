@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+_original_modules = {name: sys.modules.get(name) for name in ("Utils", "auth", "auth.dependencies")}
 if "Utils" not in sys.modules:
     utils_package = types.ModuleType("Utils")
     utils_package.__path__ = [str(ROOT / "Utils")]
@@ -32,7 +33,16 @@ MODULE_SPEC = importlib.util.spec_from_file_location(
     ROOT / "Routes" / "BlobRouter.py",
 )
 blob_router_module = importlib.util.module_from_spec(MODULE_SPEC)
-MODULE_SPEC.loader.exec_module(blob_router_module)
+try:
+    MODULE_SPEC.loader.exec_module(blob_router_module)
+finally:
+    # The isolated router keeps its captured stub, but other test modules must
+    # retain their real auth dependencies regardless of collection order.
+    for name, original in _original_modules.items():
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
 BlobRouter = blob_router_module.BlobRouter
 _open_clients = []
 

@@ -33,6 +33,13 @@ from Services.serial_stock_service import record_serial_opening, verify_serial_p
 from Services.policy_activation_service import active_policy
 from Services.policy_compatibility_service import extends_policy
 from Utils.org_filter import apply_org_filter
+from Schema.SalesReservationSchema import SalesDemandReference
+from Model.containermgmt.Inventory.SalesReservationSource import SalesReservationSource
+from Services.sales_reservation_source_service import validate_reservation_source
+from Services.reservation_release_service import load_release_binding
+from Services.manager_case_service import CaseBinding, consume_case
+from Model.containermgmt.Inventory.ReservationReallocation import ReservationReallocation
+from Services.reservation_reallocation_service import load_reallocation_binding, reallocation_keys, require_reallocation_reserve
 
 
 def _uuid(value):
@@ -272,7 +279,7 @@ Policy transitions need a separate reviewed workflow, never another opening.
 
 def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, reservation_key,
                   source_line_key, quantity: Decimal, review_at: datetime, reason, input_unit=None,
-                  business_date: date | None = None, authorize=None, authority=None):
+                  business_date: date | None = None, authorize=None, authority=None, sales_source=None, reallocation_parent=None):
     _uuid(reservation_key); _uuid(source_line_key); _positive(quantity); _reason(reason)
     if not isinstance(review_at, datetime) or review_at.utcoffset() is None:
         raise ValueError("Reservation review time must include a timezone")
@@ -282,6 +289,27 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
         "source_line_key": str(source_line_key), "quantity": str(quantity),
         "review_at": review_at.isoformat(), "reason": reason, "input_unit": input_unit,
         "business_date": business_date.isoformat() if business_date else None}
+    if sales_source is not None:
+        if not isinstance(sales_source, SalesDemandReference) or source_line_key != sales_source.stock_source_key():
+            raise ValueError('Sales source identity must match the saved document and line')
+        request['sales_source'] = sales_source.model_dump(mode='json')
+    if reallocation_parent is not None:
+        _uuid(reallocation_parent)
+        request['reallocation_parent'] = str(reallocation_parent)
+    def source_guard(db):
+        if not callable(authorize): raise ValueError('Reservation action permission guard required')
+        authorize(db)
+        line = None
+        if sales_source is not None:
+            line = validate_reservation_source(db, context, sales_source, balance_id, quantity, input_unit)
+        if reallocation_parent is not None:
+            if line is None or input_unit is None: raise ValueError('Reallocation requires saved demand and explicit base units')
+            if input_unit != line.base_unit: raise ValueError('Reallocation quantity must use base units')
+            snapshot = require_reallocation_reserve(db, context, actor_id, reallocation_parent, operation_key,
+                reservation_key, sales_source, balance_id, quantity, review_at)
+            with localcontext(Context(prec=48)):
+                if Decimal(snapshot['remaining']) + quantity > line.base_quantity:
+                    raise PostingConflict('Combined destination holds exceed saved line quantity')
 
     def apply(db):
         # Serialize even distinct bucket requests for one source line. No mixed-lot
@@ -301,7 +329,7 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
             StockReservation.source_line_key == source_line_key, StockReservation.balance_id != balance_id).first()
         if other_hold:
             raise PostingConflict("Source line already uses another stock bucket; mixed-batch or multi-location fulfilment requires an approved request")
-        if _query(db, StockReservation, context).filter_by(balance_id=balance_id,
+        if reallocation_parent is None and _query(db, StockReservation, context).filter_by(balance_id=balance_id,
                                                           source_line_key=source_line_key).first():
             raise PostingConflict("Source line already has a reservation for this stock bucket")
         before = _snapshot(balance)
@@ -310,20 +338,40 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
             reservation_key=reservation_key, source_line_key=source_line_key, quantity=base_quantity,
             released=ZERO, review_at=review_at, created_by=actor_id)
         db.add(hold); db.flush()
+        if sales_source is not None:
+            db.add(SalesReservationSource(org_id=context.org_id, reservation_key=reservation_key,
+                document_key=sales_source.document_key, version=sales_source.version,
+                line_key=sales_source.line_key, created_by=actor_id))
         balance.reserved = after.reserved
         balance.version += 1
         balance.updated_by = actor_id
         return _record(db, balance, operation_key, actor_id, "RESERVE", reason, before, hold)
     return _post_stock(factory, context, actor_id, operation_key, "stock.reserve.v2", request, apply,
-                        authorize=authorize, authority=authority, balance_id=balance_id)
+                        authorize=source_guard, authority=authority, balance_id=balance_id)
 
 
 def release_stock(factory, context, actor_id, operation_key, *, balance_id, reservation_key,
-                  source_line_key, quantity: Decimal, reason, input_unit=None, authorize=None, authority=None):
+                  source_line_key, quantity: Decimal, reason, input_unit=None, authorize=None, authority=None,
+                  case_key=None, release_binding=None):
     """Only an approved release adapter may call this; a deadline is NOT approval."""
     _uuid(reservation_key); _uuid(source_line_key); _positive(quantity); _reason(reason)
     request = {"balance_id": balance_id, "reservation_key": str(reservation_key),
         "source_line_key": str(source_line_key), "quantity": str(quantity), "reason": reason, "input_unit": input_unit}
+    if case_key is not None or release_binding is not None:
+        _uuid(case_key)
+        if not isinstance(release_binding, CaseBinding) or release_binding.action != 'inventory.reservation.release':
+            raise ValueError('Exact reservation release binding required')
+        request.update(case_key=str(case_key), release_binding=release_binding.snapshot())
+    def load(db):
+        return load_release_binding(db, context, reservation_key, quantity, input_unit,
+            replay_operation=operation_key, case_key=case_key, expected=release_binding)
+    def guard(db):
+        if not callable(authorize): raise ValueError('Release action permission guard required')
+        authorize(db)
+        if release_binding is not None:
+            current = load(db)
+            if current.snapshot() != release_binding.snapshot() or current.details['balance_id'] != balance_id or current.details['source_line_key'] != str(source_line_key):
+                raise PostingConflict('Reviewed reservation release changed')
 
     def apply(db):
         # Release needs no source-allocation lock: it cannot create another bucket.
@@ -335,17 +383,82 @@ def release_stock(factory, context, actor_id, operation_key, *, balance_id, rese
             reservation_key=reservation_key, source_line_key=source_line_key).populate_existing().with_for_update().one_or_none()
         if hold is None:
             raise ValueError("Owned reservation not found")
-        with localcontext(Context(prec=48)):
-            remaining = hold.quantity - hold.released
-            new_released = hold.released + base_quantity
-        if base_quantity > remaining:
-            raise ValueError("Release exceeds this reservation's remaining quantity")
-        before = _snapshot(balance)
-        balance.reserved = before.release(base_quantity).reserved
-        balance.version += 1
-        balance.updated_by = actor_id
-        hold.released = new_released
-        hold.updated_by = actor_id
-        return _record(db, balance, operation_key, actor_id, "RELEASE", reason, before, hold)
+        if _query(db, SalesReservationSource, context).filter_by(reservation_key=reservation_key).first():
+            if release_binding is None:
+                raise PostingConflict("Source-linked reservations require the reviewed release lifecycle; generic release is disabled")
+            consume_case(db, context, actor_id, operation_key, case_key=case_key, binding=release_binding,
+                load_binding=load, authorize=authorize)
+        return _release_amount(db, balance, hold, operation_key, actor_id, base_quantity, reason)
     return _post_stock(factory, context, actor_id, operation_key, "stock.release.v2", request, apply,
-                        authorize=authorize, authority=authority, balance_id=balance_id)
+                        authorize=guard, authority=authority, balance_id=balance_id)
+
+
+def _release_amount(db, balance, hold, operation_key, actor_id, base_quantity, reason):
+    """Private effect shared by approved release and atomic reallocation only."""
+    with localcontext(Context(prec=48)):
+        remaining = hold.quantity - hold.released
+        new_released = hold.released + base_quantity
+    if base_quantity > remaining:
+        raise ValueError('Release exceeds this reservation\'s remaining quantity')
+    before = _snapshot(balance)
+    balance.reserved = before.release(base_quantity).reserved
+    balance.version += 1
+    balance.updated_by = actor_id
+    hold.released = new_released
+    hold.updated_by = actor_id
+    return _record(db, balance, operation_key, actor_id, 'RELEASE', reason, before, hold)
+
+
+def reallocate_reservation(factory, context, actor_id, operation_key, *, case_key, binding,
+                           business_date, reason, authority, authorize):
+    """One transaction, approved source/target, two existing stock effects.
+
+    The outer receipt/event groups the paired child movements; it is not a third
+    stock delta. No route may supply its own runtime authority or business date.
+    """
+    _uuid(operation_key); _uuid(case_key); _reason(reason)
+    if not isinstance(binding, CaseBinding) or binding.action != 'inventory.reservation.reallocate':
+        raise ValueError('Exact reallocation approval required')
+    if type(business_date) is not date: raise ValueError('Trusted branch business date required')
+    details = binding.details; source_key = UUID(binding.source_key)
+    target = SalesDemandReference.model_validate(details['target'])
+    quantity = Decimal(details['quantity']); _positive(quantity)
+    review_at = datetime.fromisoformat(details['target_review_at'])
+    balance_id = details['balance_id']; release_op, reserve_op, target_key = reallocation_keys(operation_key)
+    def load(db):
+        return load_reallocation_binding(db, context, source_key, target, quantity, review_at,
+            replay_operation=operation_key, case_key=case_key, expected=binding)
+    def guard(db):
+        if not callable(authorize): raise ValueError('Explicit reallocation permission guard required')
+        authorize(db)
+        if load(db).snapshot() != binding.snapshot(): raise PostingConflict('Reviewed reallocation changed')
+    def apply(db):
+        consume_case(db, context, actor_id, operation_key, case_key=case_key, binding=binding,
+            load_binding=load, authorize=authorize)
+        # Parent guard retains document/allocation/stock locks until outer commit.
+        # The shared release effect is not exposed as a generic release bypass.
+        def release_effect(session):
+            balance = _locked_balance(session, context, balance_id)
+            hold = _query(session, StockReservation, context).filter_by(reservation_key=source_key, balance_id=balance_id).populate_existing().with_for_update().one()
+            base = convert_quantity(_effective_policy(session, context, balance), quantity, balance.base_unit)
+            return _release_amount(session, balance, hold, release_op, actor_id, base, reason)
+        released = _post_stock(db, context, actor_id, release_op, 'stock.reallocation-release.v1',
+            dict(parent_operation=str(operation_key), case_key=str(case_key), binding=binding.snapshot(), reason=reason),
+            release_effect, authority=authority, authorize=authorize, balance_id=balance_id)
+        reserved = reserve_stock(db, context, actor_id, reserve_op, balance_id=balance_id, reservation_key=target_key,
+            source_line_key=target.stock_source_key(), quantity=quantity, review_at=review_at, reason=reason,
+            input_unit=details['base_unit'], business_date=business_date, authority=authority, authorize=authorize,
+            sales_source=target, reallocation_parent=operation_key)
+        db.add(ReservationReallocation(org_id=context.org_id, operation_key=operation_key, case_key=case_key,
+            source_key=source_key, target_key=target_key, release_operation=release_op, reserve_operation=reserve_op,
+            quantity=quantity, created_by=actor_id))
+        db.flush()
+        return PostingEffect(dict(source_reservation_key=str(source_key), target_reservation_key=str(target_key),
+            source_remaining=released.result['reservation_remaining'], target_remaining=reserved.result['reservation_remaining'],
+            balance_id=balance_id, stock_version=reserved.result['version'], reserved=reserved.result['reserved'],
+            release_operation=str(release_op), reserve_operation=str(reserve_op)),
+            dict(kind='stock.reservation.reallocated', source_reservation_key=str(source_key), target_reservation_key=str(target_key),
+                child_operations=[str(release_op), str(reserve_op)]))
+    return _post_stock(factory, context, actor_id, operation_key, 'stock.reallocate.v1',
+        dict(case_key=str(case_key), binding=binding.snapshot(), business_date=business_date.isoformat(), reason=reason),
+        apply, authority=authority, authorize=guard, balance_id=balance_id)

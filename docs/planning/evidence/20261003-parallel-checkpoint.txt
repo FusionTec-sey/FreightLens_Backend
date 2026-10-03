@@ -1,0 +1,47 @@
+Owner-approved GitHub / parallel-development checkpoint — 2026-10-03
+Decision: BD-20261003-05. Collaborator T33A, not T10.
+
+Backend: python -m pytest -q in freightlens-pos-phase0-runner /work, with current
+source copied from /app and REQUIRE_TEST_DATABASE=1. Dedicated synthetic phase0
+PostgreSQL test database; not the preview or a real operational database.
+Final full run:1199 passed,2 known legacy stock-writer xfailed,23 warnings,347.62s.
+First run:1170 passed,29 failed,2 xfailed. All failures were unexpected401 responses
+in reservation API tests. Root cause: tests/test_blobs.py replaced sys.modules auth
+objects globally during collection, leaving incompatible captured dependencies.
+Fix: restore original modules in finally after loading its isolated blob router.
+No production authentication/permission change, no skipped or weakened assertions.
+Combined blob/reservation regression:40 passed,23 warnings,29.44s; full rerun above.
+
+Frontend: full CRA test run CI=true --watchAll=false --runInBand:
+213 passed /41 suites,40.762s. Normal production build CI=false passed, with existing
+ESLint and outdated Browserslist warnings. main.5cc708d9.js. Strict warning gate is
+not certified. No frontend application code changed after these tests/build.
+
+Task graph:39 tasks, no missing task dependencies or cycles after adding T33A.
+Read-only HTTP checks: frontend3000 and API9000/openapi.json returned200; preserved
+preview. No browser visual acceptance performed. No local fresh-install rehearsal
+this turn; GitHub Backend tests workflow includes separate fresh-install job.
+
+Publication review: changed/untracked path inventory contains source, tests and
+project docs, no env/private PDF/database/build/node_modules/runtime files.
+Common token/private-key scan had no matches; credential-literal matches were
+synthetic frontend test sentinels only. This is not a full historical secret audit.
+Existing historical credential-rotation gate in AGENTS.md remains unresolved.
+Both repositories fetched with0 ahead/0 behind before checkpoint commits.
+No active local Git hooks or custom hook path. GitHub API returned no repository
+webhooks, only active test/build workflows, and no recent deployments for either
+repo. This cannot prove absence of independently configured external polling.
+No deployment workflow/hook configuration was changed or invoked.
+
+Branch: codex/pos-development in both repositories. Paired revisions are recorded
+in ../BASELINE-REVISIONS.txt. At commit time pushes/CI necessarily remain pending;
+the final handoff must verify exact remote SHAs and each associated workflow run.
+CI evidence remains attached to those immutable GitHub commit checks, not a promise
+that local tests substitute for CI. Do not label a one-repository push ready.
+
+Added shared handoff/business decisions, owner-approved AGENTS reading instruction
+and T33A ownership. Corrected stale T10 descriptions; existing T10A not rebuilt.
+Collaborator machine, separate checkout/services/ports/test database are NOT yet
+verified. Its setup confirmation is required before parallel-development readiness.
+Browser/hardware/provider/accounting/offline/import/pilot acceptance remains open.
+No real business records, money posting, customer messaging or deployment authorised.

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from Model.db import get_db
 from Model.containermgmt.Inventory.Location import InventoryBranch
 from Model.containermgmt.Inventory.CostPool import InventoryCostPool, BranchCostPool
+from Model.containermgmt.Inventory.PostingAuthority import CostPoolAuthorityEpoch
 from Schema.InventoryLocationSchema import LocationPage
 from Schema.InventoryCostPoolSchema import CostPoolCreate, CostPoolRead, BranchCostPoolAssign, BranchCostPoolRead
 from Routes.Inventory.LocationRouter import page_result, save, scoped_branch
@@ -175,7 +176,7 @@ def list_valuations(pool_id: int, page: int = Query(1, ge=1), limit: int = Query
     total = query.count()
     rows = query.order_by(InventoryValuation.id.desc()).offset((page - 1) * limit).limit(limit).all()
     items = [{**{field: getattr(row, field) for field in ('id', 'product_id', 'balance_id', 'source_version',
-        'version', 'base_unit', 'status', 'reason', 'created_at')}, 'product_name': name,
+        'version', 'base_unit', 'status', 'reason', 'created_at', 'kind', 'source_valuation_id')}, 'product_name': name,
         **{field: format(getattr(row, field), '.6f') for field in ('quantity', 'goods_value_scr',
         'additional_cost_scr', 'pool_quantity', 'pool_value_scr')}} for row, name in rows]
     return dict(items=items, total=total, page=page, limit=limit, pages=max(1, (total + limit - 1) // limit))
@@ -203,7 +204,7 @@ def preview_cost_allocation(pool_id: int, payload: CostAllocationPreviewRequest,
         InventoryCostPool.org_id == context.org_id, InventoryCostPool.is_deleted.is_(False)), InventoryCostPool, context).first()
     if pool is None:
         raise HTTPException(404, 'Cost pool not found')
-    rows = visible_valuations(db, context, pool_id).filter(InventoryValuation.id.in_(payload.valuation_ids)).order_by(InventoryValuation.id).all()
+    rows = visible_valuations(db, context, pool_id).filter(InventoryValuation.id.in_(payload.valuation_ids), InventoryValuation.kind == 'OPENING').order_by(InventoryValuation.id).all()
     if len(rows) != len(payload.valuation_ids):
         raise HTTPException(404, 'One or more valuation sources are unavailable in this pool')
     if payload.basis == 'BASE_QUANTITY' and len({row.base_unit for row, _ in rows}) != 1:
@@ -223,7 +224,23 @@ def list_cost_pools(page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=
                     db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
                     user=Depends(require_permission("View_Product"))):
     query = apply_org_filter(db.query(InventoryCostPool).filter(InventoryCostPool.is_deleted == False), InventoryCostPool, context)
-    return page_result(query, page, limit, CostPoolRead, InventoryCostPool)
+    result = page_result(query, page, limit, CostPoolRead, InventoryCostPool)
+    ids = [row.id for row in result['items']]
+    if ids:
+        # One bounded page lookup, never one query per pool or a full history load.
+        authority = apply_org_filter(db.query(CostPoolAuthorityEpoch).filter(
+            CostPoolAuthorityEpoch.cost_pool_id.in_(ids), CostPoolAuthorityEpoch.is_deleted.is_(False)),
+            CostPoolAuthorityEpoch, context).distinct(
+                CostPoolAuthorityEpoch.org_id, CostPoolAuthorityEpoch.cost_pool_id).order_by(
+                CostPoolAuthorityEpoch.org_id, CostPoolAuthorityEpoch.cost_pool_id,
+                CostPoolAuthorityEpoch.epoch.desc()).all()
+        latest = {(row.org_id, row.cost_pool_id): row for row in authority}
+        for pool in result['items']:
+            row = latest.get((pool.org_id, pool.id))
+            if row:
+                pool.central_authority_state = row.state
+                pool.central_authority_epoch = row.epoch
+    return result
 
 
 @CostPoolRouter.post("/cost-pools", response_model=CostPoolRead, status_code=201)

@@ -1,0 +1,31 @@
+T06 evidence own-operation replay - 2026-10-03
+
+Read-only local inspection
+Preview API storage client queried bucket versioning only; no object contents or
+credentials were printed. Result: versioning NOT_ENABLED; capture limit not set.
+No bucket/settings changes made. Capture acceptance remains an explicit open gate.
+
+Implementation
+approved_charge_evidence defaults to rejecting consumed cases. Optional internal
+replay actor/key permits only matching case-use, whole-charge use and immutable
+charge-domain posting receipt. Exact typed evidence, source state, permission and
+independent decision checks remain mandatory. The outer execute_once checks request
+digest and returns its original result; no second domain effect is permitted.
+PostgreSQL guidance informed exact company-scoped existing indexed lookups.
+
+Targeted verification
+python -m pytest -q tests/test_cost_evidence_replay.py tests/test_cost_content_reviews.py
+ tests/test_cost_charge_reviews.py tests/test_cost_charge_uses.py tests/test_cost_evidence_api.py
+106 passed, 23 existing warnings, 13.74 seconds (isolated PostgreSQL test runner).
+New tests cover exact replay, other actor/key rejection, wrong receipt domain,
+missing charge use, rollback of combined charge/case consumption, revoked permission,
+changed document fingerprint and concurrent same-operation single effect.
+Synthetic domain effects only: these tests do not claim actual valuation posting.
+git diff --check passed; existing line-ending notices only.
+No frontend changes: frontend tests/build deferred. Full regression not rerun.
+
+Next
+Immutable additional-cost valuation entries and atomic integration with existing
+charge/case/receipt services. Configure/accept versioned local storage separately
+before enabling capture; do not infer retention from versioning alone. T06 ongoing.
+No schema migration, financial records, deployment, business data or GitHub push.

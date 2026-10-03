@@ -1,0 +1,18 @@
+T10A customer API/read workspace — 2026-10-03
+
+Isolated local test runner, synthetic rollback-only identities; no preview DB writes.
+python -m pytest -q tests/test_customer_api.py tests/test_customer_identity.py tests/test_permission_catalog.py
+Result: 29 passed, 23 existing deprecation warnings, 4.43 seconds.
+Checks: permission and PERSONAL field mapping denial, anonymous denial, exact company
+reads including root, bounded pagination, validation, immutable identities, atomic
+creation/retry/conflict, concurrency and rollback (identity suite).
+
+Frontend targeted CustomersPage.test.js: 4 passed, 1 suite, 1.798 seconds.
+Checks: list/inspect, personal-data denial, refresh failure clears data, company
+switch ignores late responses. Shared PaginationToolbar/theme reused.
+Production build passed with existing lint/Browserslist warnings.
+Artifact: build/static/js/main.0a42c4c1.js.
+
+Full regression deliberately deferred per owner instruction. Browser acceptance
+not run. Creation/select UI, search and profile revisions remain pending. T10A is
+not complete. No real seeds, credit/balances, messaging, deployment or new push.

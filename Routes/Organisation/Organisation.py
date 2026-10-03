@@ -232,7 +232,7 @@ async def update_org_modules(
     if not org_context.is_root:
         raise HTTPException(status_code=403, detail="Admin Console is restricted to Root Organisation administrators.")
     
-    valid_modules = {"LOGISTICS", "ORDERS", "INVENTORY"}
+    valid_modules = {"LOGISTICS", "ORDERS", "INVENTORY", "SALES"}
     if not set(modules).issubset(valid_modules):
         raise HTTPException(status_code=400, detail=f"Invalid modules specified. Allowed: {list(valid_modules)}")
     
