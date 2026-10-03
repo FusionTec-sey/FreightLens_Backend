@@ -8,6 +8,7 @@ from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 import argparse
+import os
 import secrets
 from sqlalchemy import text
 from Model.db import engine, SessionLocal
@@ -28,6 +29,7 @@ from Services.policy_activation_service import activate_initial_policy
 from Services.unit_barcode_service import register_barcode
 from Services.barcode_retirement_service import load_retirement_binding, retire_barcode
 from Services.stock_ledger_service import open_untracked_stock, open_batch_stock, open_serial_stock, reserve_stock
+from Services.inventory_valuation_service import record_opening_value
 from Services.inventory_quantity_service import QuantityBreakdown
 from Services.posting_authority_service import AuthorityClaim
 from Utils.org_filter import OrgContext
@@ -37,8 +39,14 @@ NAME = "DEMO ONLY - FreightLens T05"
 CODE = "DEMO-T05-V1"
 
 
-def seed_demo(db, viewer_ids):
-    if db.bind.url.database not in {"freightlens_pos_preview", "containermgmt_test"}:
+def seed_demo(db, viewer_ids, *, allow_shared_dev=False):
+    dedicated_database = db.bind.url.database in {"freightlens_pos_preview", "containermgmt_test"}
+    approved_shared_dev = (
+        allow_shared_dev
+        and db.bind.url.database == "containermgmt_pg"
+        and os.getenv("ENVIRONMENT", "").lower() == "development"
+    )
+    if not dedicated_database and not approved_shared_dev:
         raise ValueError("T05 demo requires the dedicated local preview or isolated test database")
     db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('freightlens-demo-t05-v1', 0))"))
     existing = db.query(Organisation).filter_by(name=NAME).one_or_none()
@@ -103,6 +111,10 @@ def seed_demo(db, viewer_ids):
             product_id=row.id, base_unit=policy.base_unit, tracking_policy="UNTRACKED", policy=policy,
             quantities=QuantityBreakdown(Decimal("20"), damaged=Decimal("1"), quarantined=Decimal("1")),
             reason="DEMO ONLY - synthetic opening", authority=claim, authorize=authorize).result["balance_id"]
+    def value(balance_id, goods_value, additional_cost):
+        return record_opening_value(db, context, actor, uuid4(), balance_id=balance_id,
+            expected_version=0, goods_value_scr=Decimal(goods_value), additional_cost_scr=Decimal(additional_cost),
+            reason="DEMO ONLY - synthetic opening valuation", authorize=authorize).result["valuation_id"]
     product("SETUP", "Not configured")
     row = product("DRAFT", "Saved policy draft"); draft(row, ordinary)
     for state in ("PENDING", "APPROVED", "REJECTED"):
@@ -111,10 +123,11 @@ def seed_demo(db, viewer_ids):
     tile_policy = InventoryPolicyConfig(base_unit="M2", quantity_step="0.01", tracking="BATCH",
         require_shade=True, require_calibre=True, conversions=[{"unit": "BOX", "factor": "1.44"}])
     tile = product("TILE", "Batch tiles and barcode reviews", tile_policy); draft(tile, tile_policy); case(tile, "APPROVED", True)
-    open_batch_stock(db, context, actor, uuid4(), branch_id=branch.id, location_id=location.id, product_id=tile.id,
+    tile_balance = open_batch_stock(db, context, actor, uuid4(), branch_id=branch.id, location_id=location.id, product_id=tile.id,
         policy=tile_policy, batch=StockBatchIdentity(batch_key=uuid4(), code="DEMO-LOT-A", shade="DEMO-A", calibre="DEMO-60"),
         quantities=QuantityBreakdown(Decimal("28.80"), damaged=Decimal("1.44"), quarantined=Decimal("2.88")),
-        reason="DEMO ONLY - synthetic tile opening", authority=claim, authorize=authorize)
+        reason="DEMO ONLY - synthetic tile opening", authority=claim, authorize=authorize).result["balance_id"]
+    value(tile_balance, "4320", "350")
     barcode(tile, "DEMO-TILE-BOX", "BOX")
     for state in ("PENDING", "APPROVED", "RETIRED"):
         identity = barcode(tile, "DEMO-CODE-" + state, "BOX")
@@ -129,13 +142,15 @@ def seed_demo(db, viewer_ids):
             retire_barcode(db, context, actor, uuid4(), case_key=key, binding=binding, authorize=authorize)
     serial_policy = InventoryPolicyConfig(base_unit="PCS", quantity_step="1", tracking="SERIAL")
     row = product("SERIAL", "Serial identities", serial_policy); draft(row, serial_policy); case(row, "APPROVED", True)
-    open_serial_stock(db, context, actor, uuid4(), branch_id=branch.id, location_id=location.id, product_id=row.id,
+    serial_balance = open_serial_stock(db, context, actor, uuid4(), branch_id=branch.id, location_id=location.id, product_id=row.id,
         policy=serial_policy, serials=SerialOpening(items=[{"serial_key": uuid4(), "serial_number": "DEMO-SERIAL-" + str(i),
             "condition": condition} for i, condition in enumerate(("AVAILABLE", "DAMAGED", "QUARANTINED"), 1)]),
-        reason="DEMO ONLY - synthetic serial opening", authority=claim, authorize=authorize)
+        reason="DEMO ONLY - synthetic serial opening", authority=claim, authorize=authorize).result["balance_id"]
+    value(serial_balance, "3000", "150")
     for state in ("EXTENSION", "EXTENDED", "BLOCKED"):
         row = product(state, state.title() + " stock policy"); draft(row, ordinary); case(row, "APPROVED", True)
         balance = stock(row, ordinary); barcode(row, "DEMO-" + state + "-PCS", "PCS")
+        value(balance, "1000", "75")
         reserve_stock(db, context, actor, uuid4(), balance_id=balance, reservation_key=uuid4(), source_line_key=uuid4(),
             quantity=Decimal("2"), review_at=datetime.now(timezone.utc) + timedelta(days=7),
             reason="DEMO ONLY - synthetic hold, not a sale", authority=claim, authorize=authorize)
@@ -150,13 +165,20 @@ def seed_demo(db, viewer_ids):
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--confirm-demo-only", action="store_true")
+    parser.add_argument("--allow-shared-dev", action="store_true")
+    parser.add_argument("--viewer", action="append", default=[])
     args = parser.parse_args()
-    if not args.confirm_demo_only or engine.url.database != "freightlens_pos_preview" or engine.url.host != "db":
+    dedicated_preview = engine.url.database == "freightlens_pos_preview" and engine.url.host in {"db", "postgres"}
+    shared_development = (args.allow_shared_dev and engine.url.database == "containermgmt_pg"
+        and engine.url.host in {"db", "postgres", "127.0.0.1", "localhost"}
+        and os.getenv("ENVIRONMENT", "").lower() == "development")
+    if not args.confirm_demo_only or not (dedicated_preview or shared_development):
         raise SystemExit("Refusing: explicit confirmation and local preview container database required")
     with SessionLocal.begin() as db:
-        # Fixed existing preview administrators; never modify credentials or roles.
-        viewers = db.query(User.id).filter(User.username.in_(["admin", "admin_sahaj"]), User.org_id == 1).all()
-        org_id, created = seed_demo(db, [row.id for row in viewers])
+        # Explicit existing development viewers; never modify credentials or roles.
+        viewer_names = args.viewer or ["admin", "admin_sahaj"]
+        viewers = db.query(User.id).filter(User.username.in_(viewer_names), User.org_id == 1).all()
+        org_id, created = seed_demo(db, [row.id for row in viewers], allow_shared_dev=args.allow_shared_dev)
     from Services.search_service import sync_product_document
     with SessionLocal() as db:
         for row in db.query(Product).filter(Product.org_id == org_id, Product.is_deleted.is_(False)):
