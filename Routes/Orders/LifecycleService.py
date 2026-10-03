@@ -12,6 +12,7 @@ from Model.containermgmt.Orders.POItemHistory import POItemHistory
 from Model.containermgmt.Orders.POStageTransition import POStageTransition
 from Model.containermgmt.Orders.VendorQuote import VendorQuote
 from Model.containermgmt.Cinfo.Supplier import Supplier
+from Services.currency_service import CurrencyRateNotFound, sync_order_for_current_stage
 
 logger = logging.getLogger("containerMgmt.lifecycle")
 
@@ -420,6 +421,12 @@ class LifecycleService:
             },
             user_id=user_id
         )
+
+        try:
+            db.flush()
+            sync_order_for_current_stage(db, po)
+        except CurrencyRateNotFound as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         db.commit()
         db.refresh(po)

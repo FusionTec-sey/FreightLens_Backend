@@ -11,6 +11,7 @@ from Model.containermgmt.Orders.POItem import POItem
 from Model.containermgmt.Orders.VendorQuote import VendorQuote
 from Model.containermgmt.Orders.VendorQuoteItem import VendorQuoteItem
 from Model.containermgmt.Cinfo.Supplier import Supplier
+from Services.currency_service import CurrencyRateNotFound, sync_order_for_current_stage
 
 logger = logging.getLogger("containerMgmt.quote_comparison")
 
@@ -532,6 +533,11 @@ class QuoteComparisonService:
                     matching_qi.is_awarded = True
 
             child_po.total_amount = child_po_total
+            db.flush()
+            try:
+                sync_order_for_current_stage(db, child_po)
+            except CurrencyRateNotFound as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
             created_pos.append(child_po)
 
         # Update parent RFQ

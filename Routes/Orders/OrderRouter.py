@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_, and_, desc, asc, func
 import math
 from Services.search_service import search_orders_with_total, sync_order_document, remove_order_document
+from Services.currency_service import CurrencyRateNotFound, sync_order_for_current_stage, to_base
 from Routes.Orders.order_serialization import order_to_dict
 
 from Model.db import get_db
@@ -50,6 +51,14 @@ def is_accounts_user(user: User, org_context: OrgContext) -> bool:
 
 def can_user_view_supplier(user: User, org_context: OrgContext) -> bool:
     return can_view_supplier_user(user, org_context)
+
+
+def _sync_base_currency(db: Session, order: PurchaseOrder) -> None:
+    try:
+        db.flush()
+        sync_order_for_current_stage(db, order)
+    except CurrencyRateNotFound as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @OrderRouter.get("")
@@ -1039,6 +1048,8 @@ def create_order(
     db.add(hist)
     db.flush()
 
+    _sync_base_currency(db, new_order)
+
     # Capture initial version snapshot
     from .LifecycleService import LifecycleService
     LifecycleService.capture_po_snapshot(
@@ -1448,6 +1459,8 @@ def update_order(
         total_order = float(order.total_amount or 0)
         order.balance_amount = max(0.0, total_order - total_paid)
 
+    _sync_base_currency(db, order)
+
     order.updated_by = current_user.id
     db.commit()
     db.refresh(order)
@@ -1692,6 +1705,8 @@ async def record_payment(
             detail="Cannot record payments on an RFQ document. Payments are only permitted on awarded Purchase Orders (PO)."
         )
 
+    _sync_base_currency(db, order)
+
     raw_amt = float(payload.get("amount") or 0)
     p_type = (payload.get("payment_type") or "ADVANCE").strip().upper()
 
@@ -1718,7 +1733,7 @@ async def record_payment(
         OrderPayment.po_id == order.id,
         OrderPayment.is_deleted == False
     ).all()
-    current_paid = sum(float(p.amount or 0) for p in current_active_payments)
+    current_paid_base = sum(float(p.base_amount or 0) for p in current_active_payments)
 
     total_order = float(order.total_amount or 0)
     if total_order <= 0:
@@ -1727,35 +1742,44 @@ async def record_payment(
             total_order = items_total
             order.total_amount = items_total
 
-    remaining_due = max(0.0, total_order - current_paid)
-
-    if p_type == "RETURN":
-        if abs(amt) > (current_paid + 0.01):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Return payment ({abs(amt):.2f}) cannot exceed the total amount already paid ({current_paid:.2f})."
-            )
-    else:
-        if total_order > 0 and amt > (remaining_due + 0.01):
-            if not allow_overpayment:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Payment amount ({amt:.2f}) exceeds the remaining order due ({remaining_due:.2f}). Overpayment is restricted without explicit authorization."
-                )
-
     paid_d = None
     if payload.get("paid_date"):
         try:
             paid_d = datetime.strptime(payload["paid_date"][:10], "%Y-%m-%d").date()
         except Exception:
             paid_d = date.today()
+    payment_currency = payload.get("currency", order.currency or "USD")
+    try:
+        _, amount_base, base_currency = to_base(
+            db, order.org_id, payment_currency, amt, paid_d or date.today()
+        )
+    except CurrencyRateNotFound as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    total_order_base = float(order.total_amount_base or 0)
+    remaining_due_base = max(0.0, total_order_base - current_paid_base)
+
+    if p_type == "RETURN":
+        if abs(float(amount_base or 0)) > (current_paid_base + 0.01):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Return payment cannot exceed {current_paid_base:.2f} {base_currency} already paid."
+            )
+    else:
+        if total_order_base > 0 and float(amount_base or 0) > (remaining_due_base + 0.01):
+            if not allow_overpayment:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Payment exceeds the remaining {remaining_due_base:.2f} {base_currency}. Overpayment is restricted without explicit authorization."
+                )
 
     payment = OrderPayment(
         org_id=order.org_id,
         po_id=order.id,
         payment_type=p_type,
         amount=amt,
-        currency=payload.get("currency", order.currency or "USD"),
+        currency=payment_currency,
+        base_currency=base_currency,
+        base_amount=amount_base,
         paid_date=paid_d,
         status="RETURNED" if p_type == "RETURN" else "PAID",
         payment_method=payload.get("payment_method"),
@@ -1792,6 +1816,8 @@ async def record_payment(
         order.payment_status = "PART_PAID"
     else:
         order.payment_status = "NONE"
+
+    _sync_base_currency(db, order)
 
     db.commit()
     db.refresh(payment)
@@ -1859,6 +1885,8 @@ async def update_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment record not found")
 
+    _sync_base_currency(db, order)
+
     raw_amt = float(payload.get("amount") if "amount" in payload else (payment.amount or 0))
     p_type = (payload.get("payment_type") or payment.payment_type or "ADVANCE").strip().upper()
 
@@ -1883,7 +1911,7 @@ async def update_payment(
         OrderPayment.id != payment.id,
         OrderPayment.is_deleted == False
     ).all()
-    other_paid = sum(float(p.amount or 0) for p in other_payments)
+    other_paid_base = sum(float(p.base_amount or 0) for p in other_payments)
 
     total_order = float(order.total_amount or 0)
     if total_order <= 0:
@@ -1892,33 +1920,41 @@ async def update_payment(
             total_order = items_total
             order.total_amount = items_total
 
-    remaining_due = max(0.0, total_order - other_paid)
-
-    if p_type == "RETURN":
-        if abs(amt) > (other_paid + 0.01):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Return payment ({abs(amt):.2f}) cannot exceed the total amount already paid ({other_paid:.2f})."
-            )
-    else:
-        if total_order > 0 and amt > (remaining_due + 0.01):
-            if not allow_overpayment:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Payment amount ({amt:.2f}) exceeds the remaining order due ({remaining_due:.2f}). Overpayment is restricted without explicit authorization."
-                )
-
     paid_d = payment.paid_date
     if "paid_date" in payload and payload["paid_date"]:
         try:
             paid_d = datetime.strptime(payload["paid_date"][:10], "%Y-%m-%d").date()
         except Exception:
             pass
+    payment_currency = payload.get("currency") or payment.currency or order.currency or "USD"
+    try:
+        _, amount_base, base_currency = to_base(
+            db, order.org_id, payment_currency, amt, paid_d or date.today()
+        )
+    except CurrencyRateNotFound as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    total_order_base = float(order.total_amount_base or 0)
+    remaining_due_base = max(0.0, total_order_base - other_paid_base)
+
+    if p_type == "RETURN":
+        if abs(float(amount_base or 0)) > (other_paid_base + 0.01):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Return payment cannot exceed {other_paid_base:.2f} {base_currency} already paid."
+            )
+    else:
+        if total_order_base > 0 and float(amount_base or 0) > (remaining_due_base + 0.01):
+            if not allow_overpayment:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Payment exceeds the remaining {remaining_due_base:.2f} {base_currency}. Overpayment is restricted without explicit authorization."
+                )
 
     payment.payment_type = p_type
     payment.amount = amt
-    if "currency" in payload and payload["currency"]:
-        payment.currency = payload["currency"]
+    payment.currency = payment_currency
+    payment.base_currency = base_currency
+    payment.base_amount = amount_base
     payment.paid_date = paid_d
     payment.status = "RETURNED" if p_type == "RETURN" else "PAID"
     if "payment_method" in payload:
@@ -1963,6 +1999,8 @@ async def update_payment(
         order.payment_status = "PART_PAID"
     else:
         order.payment_status = "NONE"
+
+    _sync_base_currency(db, order)
 
     db.commit()
     db.refresh(payment)
@@ -2050,6 +2088,8 @@ async def delete_payment(
         order.payment_status = "PART_PAID"
     else:
         order.payment_status = "NONE"
+
+    _sync_base_currency(db, order)
 
     db.commit()
     sync_order_document(order)

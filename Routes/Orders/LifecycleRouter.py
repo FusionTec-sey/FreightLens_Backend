@@ -487,7 +487,7 @@ def update_vendor_quote(
                     po_it = db.query(POItem).filter(POItem.id == item_in.po_item_id, POItem.is_deleted == False).first()
                     if po_it:
                         po_it.unit_price = Decimal(str(item_in.unit_price))
-                        po_it.total_amount = Decimal(str(po_it.quantity_ordered or 0)) * Decimal(str(item_in.unit_price))
+                        po_it.total_price = Decimal(str(po_it.quantity_ordered or 0)) * Decimal(str(item_in.unit_price))
 
     db.commit()
     db.refresh(quote)

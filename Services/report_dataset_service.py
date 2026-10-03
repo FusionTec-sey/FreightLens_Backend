@@ -678,9 +678,9 @@ PO_REGISTER_COLUMNS = [
     ColumnDefinition(key="status", label="Status", data_type="badge", align="center", width="10%"),
     ColumnDefinition(key="lifecycle_stage", label="Pipeline Stage", data_type="string", align="center", width="12%"),
     ColumnDefinition(key="currency", label="Curr", data_type="string", align="center", width="6%"),
-    ColumnDefinition(key="total_amount", label="Total Value", data_type="currency", align="right", width="13%", is_numeric=True, aggregatable=True, restricted_permission="View_Financials"),
-    ColumnDefinition(key="advance_amount", label="Advance Paid", data_type="currency", align="right", width="13%", is_numeric=True, aggregatable=True, restricted_permission="View_Financials"),
-    ColumnDefinition(key="balance_amount", label="Balance Due", data_type="currency", align="right", width="13%", is_numeric=True, aggregatable=True, restricted_permission="View_Financials"),
+    ColumnDefinition(key="total_amount", label="Total Value (Base)", data_type="currency", currency_field="currency", align="right", width="13%", is_numeric=True, aggregatable=True, restricted_permission="View_Financials"),
+    ColumnDefinition(key="advance_amount", label="Advance Paid (Base)", data_type="currency", currency_field="currency", align="right", width="13%", is_numeric=True, aggregatable=True, restricted_permission="View_Financials"),
+    ColumnDefinition(key="balance_amount", label="Balance Due (Base)", data_type="currency", currency_field="currency", align="right", width="13%", is_numeric=True, aggregatable=True, restricted_permission="View_Financials"),
 ]
 
 PO_REGISTER_FILTERS = [
@@ -765,11 +765,16 @@ def resolve_po_procurement_register(
     can_financial = policy.allows_field_class("FINANCIAL")
     can_vendor = policy.allows_field_class("SUPPLIER_IDENTITY")
 
-    fields = ["id", "po_number", "po_date", "status", "lifecycle_stage", "currency"]
+    transaction_currency = (spec.custom_filters or {}).get("currency_mode") == "transaction"
+    fields = ["id", "po_number", "po_date", "status", "lifecycle_stage", "currency", "base_currency"]
     if can_vendor:
         fields.append("supplier_name")
     if can_financial:
-        fields.extend(("total_amount", "advance_amount", "balance_amount"))
+        fields.extend(
+            ("total_amount", "advance_amount", "balance_amount")
+            if transaction_currency
+            else ("total_amount_base", "advance_amount_base", "balance_amount_base")
+        )
 
     filters = []
     if spec.date_from:
@@ -815,10 +820,11 @@ def resolve_po_procurement_register(
             "supplier_name": (row.get("supplier_name") or "N/A") if can_vendor else "[REDACTED]",
             "status": row.get("status") or "DRAFT",
             "lifecycle_stage": row.get("lifecycle_stage") or "DRAFT",
-            "currency": row.get("currency") or "USD",
-            "total_amount": float(row.get("total_amount") or 0) if can_financial else None,
-            "advance_amount": float(row.get("advance_amount") or 0) if can_financial else None,
-            "balance_amount": float(row.get("balance_amount") or 0) if can_financial else None,
+            "currency": (row.get("currency") if transaction_currency else row.get("base_currency")) or "SCR",
+            "base_currency": row.get("base_currency") or "SCR",
+            "total_amount": float(row.get("total_amount" if transaction_currency else "total_amount_base") or 0) if can_financial else None,
+            "advance_amount": float(row.get("advance_amount" if transaction_currency else "advance_amount_base") or 0) if can_financial else None,
+            "balance_amount": float(row.get("balance_amount" if transaction_currency else "balance_amount_base") or 0) if can_financial else None,
         })
 
     org_rec = db.query(Organisation).filter(Organisation.id == org_context.org_id).first()
@@ -828,7 +834,8 @@ def resolve_po_procurement_register(
     if spec.date_from or spec.date_to:
         filters_applied["date_range"] = f"{spec.date_from or 'Start'} to {spec.date_to or 'Present'}"
 
-    is_grouped = bool(spec.group_by and spec.group_by != "none")
+    effective_group_by = "currency" if transaction_currency else spec.group_by
+    is_grouped = bool(effective_group_by and effective_group_by != "none")
     groups = []
     grand_totals = {
         "total_amount": round(sum(r["total_amount"] or 0 for r in records), 2) if can_financial else 0,
@@ -839,9 +846,13 @@ def resolve_po_procurement_register(
     if is_grouped:
         groups, grand_totals = _group_and_aggregate_records(
             records=records,
-            group_field=spec.group_by,
+            group_field=effective_group_by,
             columns=PO_REGISTER_COLUMNS,
         )
+        if transaction_currency:
+            # Currency groups have meaningful subtotals; a cross-currency grand
+            # total would be financially invalid.
+            grand_totals = {}
 
     return DatasetResult(
         report_key="po_procurement_register",
@@ -855,7 +866,7 @@ def resolve_po_procurement_register(
         records=records,
         total_records=total_count,
         is_grouped=is_grouped,
-        group_field=spec.group_by,
+        group_field=effective_group_by,
         groups=groups,
         grand_totals=grand_totals,
         summary_metrics={
@@ -1095,7 +1106,7 @@ def render_dataset_pdf(
                         {% for col in columns %}
                             <td style="text-align: {{ col.align }}; {% if col.width %}width: {{ col.width }}; max-width: {{ col.width }};{% endif %} {% if col.overflow_mode == 'truncate' %}white-space: nowrap; overflow: hidden; text-overflow: ellipsis;{% else %}white-space: normal; word-break: break-word;{% endif %}">
                                 {% if col.data_type == 'currency' and row[col.key] is not none %}
-                                    {{ row[col.key] | format_currency }}
+                                    {{ row[col.key] | format_currency(row.currency) }}
                                 {% elif col.data_type == 'number' and row[col.key] is not none %}
                                     {{ row[col.key] | format_number }}
                                 {% elif col.data_type == 'date' and row[col.key] is not none %}
@@ -1114,7 +1125,7 @@ def render_dataset_pdf(
                                     Subtotal — {{ grp.group_label }}
                                 {% elif col.aggregatable and grp.subtotals[col.key] is defined %}
                                     {% if col.data_type == 'currency' %}
-                                        {{ grp.subtotals[col.key] | format_currency }}
+                                        {{ grp.subtotals[col.key] | format_currency(grp.records[0].currency if grp.records else '') }}
                                     {% else %}
                                         {{ grp.subtotals[col.key] | format_number }}
                                     {% endif %}
@@ -1140,7 +1151,7 @@ def render_dataset_pdf(
                     {% for col in columns %}
                         <td style="text-align: {{ col.align }}; {% if col.width %}width: {{ col.width }}; max-width: {{ col.width }};{% endif %} {% if col.overflow_mode == 'truncate' %}white-space: nowrap; overflow: hidden; text-overflow: ellipsis;{% else %}white-space: normal; word-break: break-word;{% endif %}">
                             {% if col.data_type == 'currency' and row[col.key] is not none %}
-                                {{ row[col.key] | format_currency }}
+                                {{ row[col.key] | format_currency(row.currency) }}
                             {% elif col.data_type == 'number' and row[col.key] is not none %}
                                 {{ row[col.key] | format_number }}
                             {% elif col.data_type == 'date' and row[col.key] is not none %}
@@ -1164,7 +1175,7 @@ def render_dataset_pdf(
                         GRAND TOTAL ({{ total_records }} Records)
                     {% elif col.aggregatable and grand_totals[col.key] is defined %}
                         {% if col.data_type == 'currency' %}
-                            {{ grand_totals[col.key] | format_currency }}
+                            {{ grand_totals[col.key] | format_currency(records[0].currency if records else '') }}
                         {% else %}
                             {{ grand_totals[col.key] | format_number }}
                         {% endif %}

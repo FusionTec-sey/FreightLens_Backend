@@ -17,6 +17,7 @@ from Model.containermgmt.Cinfo.Venue import UnloadVenue
 from Model.containermgmt.Orders.Product import Product, ProductCategory
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.containermgmt.Orders.VendorQuote import VendorQuote
+from Model.Credentials.Organisation import Organisation
 from auth.security_guards import has_permission, is_financial_user
 from Utils.org_filter import apply_org_filter, OrgContext
 
@@ -695,17 +696,20 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
             if is_financial_user(current_user, org_context):
                 try:
                     spend_result = db.query(
-                        func.sum(PurchaseOrder.total_amount)
+                        func.sum(PurchaseOrder.total_amount_base)
                     ).filter(
                         PurchaseOrder.is_deleted == False,
                         func.upper(PurchaseOrder.status) != "CANCELLED",
                         extract('year', func.coalesce(PurchaseOrder.order_mail_date, PurchaseOrder.created_at)) == current_year
                     )
                     spend_result = apply_org_filter(spend_result, PurchaseOrder, org_context).scalar()
+                    active_org_id = org_context.selected_org_id or org_context.current_org_id
+                    organisation = db.query(Organisation).filter(Organisation.id == active_org_id).first()
+                    base_currency = organisation.base_currency if organisation else "SCR"
                     data["po_spend_overview"] = {
                         "value": round(float(spend_result or 0), 2),
-                        "formatted": f"${(spend_result or 0):,.2f}",
-                        "unit": "USD",
+                        "formatted": f"{(spend_result or 0):,.2f} {base_currency}",
+                        "unit": base_currency,
                         "year": current_year
                     }
                 except Exception as e:

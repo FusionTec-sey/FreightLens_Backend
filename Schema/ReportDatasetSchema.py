@@ -29,6 +29,7 @@ class ColumnDefinition(BaseModel):
     width: Optional[str] = None  # e.g. "15%", "120px"
     overflow_mode: Optional[str] = "wrap"  # "wrap" | "truncate"
     format: Optional[str] = None  # e.g. "%Y-%m-%d", "$#,##0.00"
+    currency_field: Optional[str] = None
     is_numeric: bool = False
     aggregatable: bool = False  # can be summed in subtotals
     restricted_permission: Optional[str] = None  # e.g. "View_Financials", "View_Supplier"

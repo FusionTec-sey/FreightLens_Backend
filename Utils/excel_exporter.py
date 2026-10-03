@@ -73,7 +73,14 @@ def _safe_excel_text(value: Any) -> str:
     return text_value
 
 
-def _format_cell_value(cell, val: Any, col_def: ColumnDefinition):
+def _currency_format(currency: str | None) -> str:
+    code = (currency or "").strip().upper().replace('"', '')
+    return f'#,##0.00 "{code}"' if code else "#,##0.00"
+
+
+def _format_cell_value(
+    cell, val: Any, col_def: ColumnDefinition, row_data: Optional[Dict[str, Any]] = None
+):
     """Sets cell value and proper Excel number/date formatting."""
     if val is None or val == "":
         cell.value = "—"
@@ -92,7 +99,8 @@ def _format_cell_value(cell, val: Any, col_def: ColumnDefinition):
     elif data_type == "currency":
         try:
             cell.value = float(val)
-            cell.number_format = "$#,##0.00"
+            currency = (row_data or {}).get(col_def.currency_field or "currency")
+            cell.number_format = _currency_format(currency)
             cell.alignment = ALIGN_RIGHT
         except (ValueError, TypeError):
             cell.value = _safe_excel_text(val)
@@ -139,7 +147,7 @@ def _write_table_block(
         for col_idx, col in enumerate(columns, 1):
             cell = ws.cell(row=curr_row, column=col_idx)
             val = row_data.get(col.key)
-            _format_cell_value(cell, val, col)
+            _format_cell_value(cell, val, col, row_data)
             cell.font = FONT_DATA
             cell.border = BORDER_CELL
             if r_idx % 2 == 1:
@@ -162,7 +170,8 @@ def _write_table_block(
             elif col.aggregatable or col.is_numeric:
                 col_letter = get_column_letter(col_idx)
                 cell.value = f"=SUM({col_letter}{first_data_row}:{col_letter}{last_data_row})"
-                cell.number_format = "$#,##0.00" if col.data_type == "currency" else "#,##0.00"
+                currency = records[0].get(col.currency_field or "currency")
+                cell.number_format = _currency_format(currency) if col.data_type == "currency" else "#,##0.00"
                 cell.alignment = ALIGN_RIGHT
             else:
                 cell.value = ""
@@ -222,7 +231,8 @@ def build_excel_workbook(
             for ac in aggregatable_cols:
                 sub_val = grp.subtotals.get(f"total_{ac.key}") or grp.subtotals.get(ac.key) or 0
                 cell = summary_ws.cell(row=sum_row, column=c_offset, value=float(sub_val))
-                cell.number_format = "$#,##0.00" if ac.data_type == "currency" else "#,##0.00"
+                currency = grp.records[0].get(ac.currency_field or "currency") if grp.records else None
+                cell.number_format = _currency_format(currency) if ac.data_type == "currency" else "#,##0.00"
                 cell.alignment = ALIGN_RIGHT
                 cell.border = BORDER_CELL
                 c_offset += 1
@@ -236,7 +246,7 @@ def build_excel_workbook(
             tot_val = dataset.grand_totals.get(f"total_{ac.key}") or dataset.grand_totals.get(ac.key) or 0
             cell = summary_ws.cell(row=sum_row, column=c_offset, value=float(tot_val))
             cell.font = FONT_GRAND_TOTAL
-            cell.number_format = "$#,##0.00" if ac.data_type == "currency" else "#,##0.00"
+            cell.number_format = _currency_format(None) if ac.data_type == "currency" else "#,##0.00"
             cell.alignment = ALIGN_RIGHT
             cell.border = BORDER_TOTAL
             c_offset += 1
@@ -337,7 +347,13 @@ def build_excel_workbook(
                 tot_val = dataset.grand_totals.get(f"total_{col.key}") or dataset.grand_totals.get(col.key)
                 if tot_val is not None:
                     cell.value = float(tot_val)
-                    cell.number_format = "$#,##0.00" if col.data_type == "currency" else "#,##0.00"
+                    currencies = {
+                        row.get(col.currency_field or "currency")
+                        for row in dataset.records
+                        if row.get(col.currency_field or "currency")
+                    }
+                    currency = next(iter(currencies)) if len(currencies) == 1 else None
+                    cell.number_format = _currency_format(currency) if col.data_type == "currency" else "#,##0.00"
                     cell.alignment = ALIGN_RIGHT
             else:
                 cell.value = ""
