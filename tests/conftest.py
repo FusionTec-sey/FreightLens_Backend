@@ -84,8 +84,18 @@ def test_engine(test_database_url):
         with engine.begin() as connection:
             connection.execute(text("CREATE SCHEMA IF NOT EXISTS testsupport"))
             TestBase.metadata.create_all(connection)
+            from Utils.migrate_20261002_stock_ledger import prepare_product_stock_scope
+            prepare_product_stock_scope(connection)
+            from Utils.migrate_20261002_stock_unit_policy import prepare_stock_unit_policy
+            prepare_stock_unit_policy(connection)
+            from Utils.migrate_20261002_stock_batches import prepare_stock_batches
+            prepare_stock_batches(connection)
+            from Utils.migrate_20261002_stock_serials import prepare_stock_serials
+            prepare_stock_serials(connection)
     except OperationalError as exc:
         engine.dispose()
+        if os.getenv("REQUIRE_TEST_DATABASE") == "1":
+            pytest.fail("Required isolated PostgreSQL test database is unavailable")
         pytest.skip(f"isolated PostgreSQL test database is unavailable: {exc.orig}")
 
     yield engine

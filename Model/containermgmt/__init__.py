@@ -46,7 +46,24 @@ from .Report.OrgPrintProfile import OrgPrintProfile
 from .Report.ReportFieldClass import ReportFieldClass
 from .Report.ReportTemplateAssignment import ReportTemplateAssignment
 
+from .Inventory.Location import InventoryBranch, StockLocation
+from .Inventory.CostPool import InventoryCostPool, BranchCostPool
+from .Inventory.PostingOperation import PostingOperation
+from .Inventory.PostingAuthority import StoreNode, BranchAuthorityEpoch
+from .Inventory.BranchSettings import BranchSettingsRevision
+from .Inventory.BranchCounter import BranchCounter, CounterSettingsRevision
+from .Inventory.ManagerCase import ManagerCase, ManagerCaseDecision, ManagerCaseUse
+from .Inventory.StockLedger import StockBalance, StockReservation, StockMovement
+from .Inventory.StockSerial import StockSerialIdentity, StockSerialPosition
+from .Inventory.ProductPolicyDraft import ProductPolicyDraft
+from .Inventory.ProductPolicyActivation import ProductPolicyActivation
+from .Inventory.UnitBarcode import UnitBarcode
+from .Inventory.Valuation import InventoryValuation
+from .Inventory.CostAllocation import CostAllocationProposal
+from .Inventory.CostChargeUse import CostChargeUse
+
 __all__ = [
+    "InventoryBranch", "StockLocation",
     "ContainerDetails", "ContainerDocs", "DocType", "BillOfLanding",
     "PackingList", "ReportDetails", "ReportImage", "DamageProduct",
     "Supplier", "Consignee", "ContainerType", "ShippingDocument",

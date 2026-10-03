@@ -1454,12 +1454,19 @@ def update_product(
     if not has_permission(current_user, "Edit_Product"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to edit products.")
 
+    from Services.policy_activation_service import require_catalogue_update_compatible
+    from Services.inventory_posting_service import PostingConflict
     prod = apply_org_filter(
         db.query(Product).filter(Product.id == product_id, Product.is_deleted == False),
         Product, org_context
-    ).first()
+    ).populate_existing().with_for_update(of=Product).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
+    try:
+        require_catalogue_update_compatible(db, org_context, prod, payload)
+    except PostingConflict as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from exc
 
     if payload.sku is not None:
         new_sku = payload.sku.strip().upper()

@@ -1,0 +1,32 @@
+T05 local demonstration - 2026-10-02
+
+Select DEMO ONLY - FreightLens T05 using the company selector in the top header.
+This is synthetic local preview data, not Noblecon stock or approved configuration.
+
+Inventory catalogue: ten DEMO products, including unset/saved/pending/approved/
+rejected policies, tile batches, serials, an approved unit extension, an activated
+extension, and an intentionally blocked tracking change.
+Open a product's quick view, then Units & tracking draft to inspect active/draft
+rules, unit conversion, before/after readiness and review request controls.
+DEMO-EXTENSION: BOX = 2 PCS addition, approved but not activated.
+DEMO-EXTENDED: the same addition activated, original stock retained.
+DEMO-BLOCKED: ordinary-to-batch change with stock; must remain blocked.
+
+Locations: open DEMO-STORE, its location, then View stock. Five balances show
+separate on-hand/reserved/available/damaged/quarantined quantities. View serials
+shows three synthetic identities with different conditions. Catalogue legacy stock
+totals remain zero; the authoritative demonstration quantities are in Locations.
+Replacing legacy stock writers is T08, not a reason to duplicate those quantities.
+
+Policy reviews: choose All cases to see requested, approved, rejected and consumed
+states. Approval alone does not activate a policy. Confirmed execution is separate.
+Barcode reviews: choose All cases for pending, approved and consumed retirements.
+DEMO-TILE -> Units & tracking draft -> Unit barcodes has four sample codes.
+DEMO-TILE-BOX resolves to BOX = 1.44000000 M2.
+DEMO-CODE-RETIRED fails lookup and cannot be reused.
+No review, activation, retirement or stock write is needed to inspect these screens.
+
+Seed entry point: Utils/seed_t05_demo.py --confirm-demo-only inside the local preview
+API container. It requires host db/database freightlens_pos_preview. Existing demo
+identity is reused, not reset. Do not run against staging/production or use real
+company data. No deletion/reset command is provided.

@@ -17,9 +17,27 @@ from .Orders import (
     LifecycleRouter
 )
 from .Inventory import InventoryRouter
+from .Inventory.LocationRouter import LocationRouter
+from .Inventory.CostPoolRouter import CostPoolRouter
+from .Inventory.PolicyDraftRouter import PolicyDraftRouter
+from .Inventory.BranchSettingsRouter import BranchSettingsRouter
+from .Inventory.BranchCounterRouter import BranchCounterRouter
+from .Inventory.ManagerCaseRouter import ManagerCaseRouter
+from .Inventory.ReclassificationProposalRouter import ReclassificationProposalRouter
+from .Inventory.UnitBarcodeRouter import UnitBarcodeRouter
+from .Inventory.BarcodeRetirementRouter import BarcodeRetirementRouter
 from .BlobRouter import BlobRouter
 
 __all__ = [
+    "LocationRouter",
+    "CostPoolRouter",
+    "PolicyDraftRouter",
+    "BranchSettingsRouter",
+    "BranchCounterRouter",
+    "ManagerCaseRouter",
+    "ReclassificationProposalRouter",
+    "UnitBarcodeRouter",
+    "BarcodeRetirementRouter",
     "ContainerRouter",
     "CreadentialsInfo",
     "Cinfo",

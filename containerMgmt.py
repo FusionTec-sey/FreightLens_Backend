@@ -114,6 +114,11 @@ async def startup_event():
     ensure_root_organisation()
 
     logger.info("Initializing database tables...")
+    from Utils.migrate_20261002_stock_ledger import prepare_product_stock_scope, ensure_stock_ledger_schema
+    with engine.begin() as conn:
+        prepare_product_stock_scope(conn)
+        from Utils.migrate_20261002_stock_serials import prepare_stock_serial_scope
+        prepare_stock_serial_scope(conn)
     from Utils.migrate_product_master import ensure_product_master_schema
     ensure_product_master_schema()
     from Utils.migrate_logistics_schema import ensure_logistics_tracking_schema
@@ -141,7 +146,6 @@ async def startup_event():
     from Utils.migrate_user_allowed_orgs import ensure_user_allowed_orgs_schema
     ensure_user_allowed_orgs_schema()
     from Utils.migrate_dashboard_and_inventory_permissions import ensure_dashboard_and_inventory_permissions
-    ensure_dashboard_and_inventory_permissions()
     from Utils.migrate_product_packaging_and_warehouse import ensure_packaging_and_warehouse_columns
     ensure_packaging_and_warehouse_columns()
     from Utils.migrate_report_templates import ensure_report_templates_schema
@@ -157,17 +161,59 @@ async def startup_event():
     from Utils.migrate_20260930_org_id_integrity import ensure_org_id_integrity
     ensure_org_id_integrity()
     logger.info("Database tables are ready.")
+    from Utils.migrate_20261002_receipt_posting import ensure_receipt_posting_schema
+    ensure_receipt_posting_schema()
+    from Utils.migrate_20261002_inventory_locations import ensure_inventory_locations_schema
+    ensure_inventory_locations_schema()
+    from Utils.migrate_20261002_inventory_cost_pools import ensure_inventory_cost_pools_schema
+    ensure_inventory_cost_pools_schema()
+    from Utils.migrate_20261002_inventory_posting import ensure_inventory_posting_schema
+    ensure_inventory_posting_schema()
+    from Utils.migrate_20261002_posting_authority import ensure_posting_authority_schema
+    ensure_posting_authority_schema()
+    from Utils.migrate_20261002_branch_settings import ensure_branch_settings_schema
+    ensure_branch_settings_schema()
+    from Utils.migrate_20261002_branch_counters import ensure_branch_counters_schema
+    ensure_branch_counters_schema()
+    from Utils.migrate_20261002_manager_cases import ensure_manager_cases_schema
+    ensure_manager_cases_schema()
+    ensure_stock_ledger_schema()
+    from Utils.migrate_20261002_stock_unit_policy import ensure_stock_unit_policy_schema
+    ensure_stock_unit_policy_schema()
+    from Utils.migrate_20261002_stock_batches import ensure_stock_batches_schema
+    ensure_stock_batches_schema()
+    from Utils.migrate_20261002_stock_serials import ensure_stock_serials_schema
+    ensure_stock_serials_schema()
+    from Utils.migrate_20261002_inventory_policy_drafts import ensure_inventory_policy_drafts_schema
+    ensure_inventory_policy_drafts_schema()
+    from Utils.migrate_20261002_policy_activation import ensure_policy_activation_schema
+    ensure_policy_activation_schema()
+    from Utils.migrate_20261002_unit_barcodes import ensure_unit_barcodes_schema
+    ensure_unit_barcodes_schema()
+    from Utils.migrate_20261002_barcode_retirements import ensure_barcode_retirements_schema
+    ensure_barcode_retirements_schema()
+    from Utils.migrate_20261002_stock_reclassification import ensure_stock_reclassification_schema
+    ensure_stock_reclassification_schema()
+    from Utils.migrate_20261003_inventory_valuation import ensure_inventory_valuation_schema
+    ensure_inventory_valuation_schema()
+    from Utils.migrate_20261003_cost_allocation import ensure_cost_allocation_schema
+    ensure_cost_allocation_schema()
+    from Utils.migrate_20261003_cost_charge_uses import ensure_cost_charge_uses_schema
+    ensure_cost_charge_uses_schema()
 
     logger.info("Checking database seeding...")
     db_session = SessionLocal()
     try:
         seed_db(db_session)
+        # Roles must exist before this migration grants their default permissions.
+        ensure_dashboard_and_inventory_permissions()
         from Utils.migrate_reporting_permissions import run_reporting_permissions_migration
         run_reporting_permissions_migration(db_session)
         from Utils.migrate_reporting_foundation import seed_reporting_foundation
         seed_reporting_foundation(db_session)
     except Exception as e:
         logger.error("Database seeding failed: %s", e)
+        raise
     finally:
         db_session.close()
 
@@ -262,6 +308,15 @@ app.include_router(ReceivingRouter, dependencies=[Depends(require_module("ORDERS
 app.include_router(DefectRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(LocationRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(CostPoolRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(PolicyDraftRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(BranchSettingsRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(BranchCounterRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(ManagerCaseRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(ReclassificationProposalRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(UnitBarcodeRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(BarcodeRetirementRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)

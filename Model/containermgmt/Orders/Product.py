@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Text, ForeignKey,
-    Numeric, Boolean, JSON
+    Numeric, Boolean, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from ...db import Base
@@ -31,7 +31,10 @@ class ProductCategory(OrgMixin, AuditMixin, Base):
 
 class Product(OrgMixin, AuditMixin, Base):
     __tablename__ = "products"
-    __table_args__ = {'schema': 'containermgmt'}
+    __table_args__ = (
+        UniqueConstraint('id', 'org_id', name='uq_product_id_org'),
+        {'schema': 'containermgmt'},
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 

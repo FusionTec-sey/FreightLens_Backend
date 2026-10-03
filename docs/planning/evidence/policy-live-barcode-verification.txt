@@ -1,0 +1,26 @@
+T05 correction-chain regression - 2026-10-02
+
+Reproduced two failures before implementation: retire an old code, activate a
+reviewed no-stock rule correction, register a current code, then add an alternate
+unit. The retired ancestor incorrectly blocked readiness/activation, both without
+stock and with stock opened under the current policy.
+
+Shared live_barcode_query now excludes only scoped committed retirements for both
+no-history and compatible-extension checks. Original policy lookup uses an outer
+join so unavailable source snapshots fail closed. Existing indexes and bounded
+distinct snapshot streaming retained; no per-row queries, new tables or services.
+Tests verify version3 activation, exact retry and continued retired-code rejection.
+
+Targeted transition/retirement/extension suites: 44 passed (9.34s).
+Full isolated backend: 700 passed, 2 known C12 xfails, 23 warnings (55.03s).
+Frontend: 109 tests in24 suites passed (9.062s).
+Frontend source unchanged; last production build passed with existing warnings,
+not rerun for this backend-only fix. No whole-task completion claimed.
+API /health and inventory HTML fallback returned HTTP200. An initial request
+without Accept:text/html returned404, as expected from SPA content negotiation;
+explicit HTML request succeeded. Preview remains running.
+git diff --check passed. No browser interaction, real data edit, demo reseed,
+deployment or schema migration. Previous browser evidence remains historical.
+
+T05 remains In progress: stock reclassification/rebinding not implemented. The
+fix improves the existing screen automatically through the shared readiness API.

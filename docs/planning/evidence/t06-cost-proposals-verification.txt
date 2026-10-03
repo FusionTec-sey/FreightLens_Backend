@@ -1,0 +1,44 @@
+T06 durable unposted cost proposals - 2026-10-03
+
+Implemented immutable company/pool-owned CostAllocationProposal records with
+declared charge reference/reason, canonical source IDs/total and exact server-loaded
+allocation snapshot. Existing operation receipt/event boundary reused. Same key and
+intent replays; different actor/intent conflicts; permission/source loader runs on
+every attempt. Shared transaction rollback removes proposal and receipt together.
+SQL triggers prohibit update/delete; deferred operation FK requires atomic receipt.
+Migration is additive/replayable, bounded lock wait, no backfill or business seed.
+
+Financial APIs: save requires View_Product, View_Financials, Manage_Financials;
+list/detail require both view permissions, all under INVENTORY. Exact company/pool
+lookup applies. Bounded list projects summary fields rather than full snapshots;
+UUID detail returns historical declared evidence, not current posting eligibility.
+
+UI: explicit save after preview, required reference/reason, existing operation-intent
+helper for uncertain retries, in-panel discard and unload warnings, no save while
+discard confirmation is active. Financial viewers reopen paginated historical
+proposals and exact source allocation lines. Request-context binding prevents a
+list payload being rendered as detail. No approve or post controls enabled.
+
+Verification
+- Full isolated backend814 passed,2 known legacy C12 xfailed,23 warnings,69.75s.
+- Follow-up7 proposal tests passed after extending the successful-save test to
+  exercise the public route adapter's shared-session commit.
+- Frontend133 passed/30 suites,11.306s. Initial list/detail transition test caught
+  a real rendering defect, repaired before final full suite.
+- Final production build passed with existing ESLint/Browserslist warnings;
+  main.e898f2e5.js. Both repos git diff --check passed.
+- Preview cost-pools HTML and API OpenAPI200; preview remains running.
+- Coverage: concurrent same-key retry, intent conflict, permission revocation,
+  rollback, foreign historical read, immutable SQL history, migration replay,
+  authenticated/module/financial/product denial for every new route, save-only
+  permission, precise historical read and failed-save key/input retention.
+- PostgreSQL skill informed scoped indexes and append-only transaction design.
+- No browser acceptance performed. No real business records or preview cost
+  proposals seeded, no financial posting and no external deployment.
+
+Limits and next work
+PROPOSED is not APPROVED. A reference is declared evidence, not a verified invoice.
+Distinct operation IDs may create separate proposals; authoritative supplier charge
+identity/deduplication, invoice/FX evidence, independent review and single-use
+consumption must precede capitalisation. Receipt integration and central
+reconciliation remain T06 work. No full T06 completion claimed.

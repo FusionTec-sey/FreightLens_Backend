@@ -1,0 +1,43 @@
+Reviewed no-history policy revisions - 2026-10-02
+
+Full isolated PostgreSQL suite: 651 passed, 2 known C12 expected failures,
+23 warnings in 82.38s. T08 still owns the two legacy stock-writer regressions.
+Frontend: 78 tests in 18 suites passed in 19.085s. Production build exited 0
+with existing ESLint/Browserslist warnings; strict warning-free CI is not claimed.
+Both repository diff checks passed. API health reports database/object storage
+connected; local /inventory returned HTTP 200. Browser checks remain skipped.
+
+New automated coverage: 9 API/readiness cases and 6 real database transaction/
+concurrency cases, plus frontend readiness, predecessor submission and pinned-client
+checks. Existing activation, case, barcode, stock and frontend tests still pass.
+
+Verified outcomes:
+- Reviewed no-history revisions append an immutable policy version; no in-place
+  edit of the predecessor, stock, catalogue units, prices or barcodes.
+- Cases bind the predecessor version and exact draft; stale or changed intent,
+  inactive products and wrong expected versions reject posting.
+- Unchanged rules cannot consume another approval unnecessarily.
+- Identical concurrent retries have one effect; distinct competing operations
+  cannot consume the same approval. Outer rollback restores the prior policy and
+  leaves the approval available for an exact retry.
+- Competing stock opening and revision cannot both apply different policies.
+  Competing barcode registration and revision likewise cannot leave a newly
+  registered code bound to a superseded policy.
+- Even a zero-quantity stock balance is history and blocks the no-history route.
+- Readiness requires authentication/module/action permission and exact company
+  scope; foreign/shared/deleted products are hidden. Missing drafts, legacy stock,
+  inactive products and registered barcodes are explained without changing data.
+- Frontend checks use saved rules, display changed fields/blockers, clear stale
+  results on failed refresh, prevent duplicate checks and abort on unmount. Editing
+  or saving a draft remounts the check. Approval remains separate from this read.
+
+Reuse: existing case/activation/receipt schemas and posting boundary, existing
+React activation component, shared intent hook and tenant-pinned API. No migration
+or parallel approval system needed. PostgreSQL best-practices guidance informed
+indexed existence probes and preserving the shared product-lock boundary.
+
+No preview business data, stock, barcode or operational thresholds seeded. No
+deployment, commit/push, real financial posting or customer messaging performed.
+T05 remains In progress: actual existing-stock conversion, reviewed barcode
+retirement/correction/rebinding and deferred browser acceptance are still pending.
+Readiness is a non-locking advisory read, not a manifest or posting entitlement.

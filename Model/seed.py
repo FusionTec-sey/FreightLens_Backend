@@ -396,7 +396,9 @@ def seed_db(db: Session):
             db.flush()
             logger.info("Seeded role: viewer")
 
-        view_perms = [p for p in all_perms if p.name.startswith("View_")]
+        # Personal-data permission was historically seeded after viewer creation.
+        # Catalog ordering must not silently broaden this role's access.
+        view_perms = [p for p in all_perms if p.name.startswith("View_") and p.name != "View_Personal_Data"]
         if viewer_role_created:
             viewer_role.permissions = view_perms
 

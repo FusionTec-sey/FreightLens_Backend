@@ -1,0 +1,33 @@
+Reviewed barcode retirement - 2026-10-02 (T05 partial)
+
+Full isolated backend suite: 679 passed, 2 known C12 xfails, 23 warnings (116.88s).
+Targeted retirement API tests: 16 passed. Concurrency/rollback tests: 4 passed.
+Runner: freightlens-pos-phase0-runner; isolated DB containermgmt_test at
+freightlens-pos-phase0-db. Synthetic fixture identities only.
+Frontend full suite: 103 passed in 23 suites (21.057s).
+Production build: passed with existing ESLint and Browserslist warnings.
+Repository diff checks passed. No browser acceptance attempted for this slice.
+
+Coverage: auth/module/permission denial on all four endpoints, selected-company
+root isolation, wrong case-kind rejection, self-review/unapproved/rejected denial,
+immutable history, migration replay and unapproved SQL insert rejection. Retired
+codes stay reserved; lookup and original registration retries reject. Concurrent
+same-operation requests produce one effect plus replay; distinct operations produce
+one effect plus conflict. Shared-transaction rollback restores approval eligibility.
+Historical retries recheck authorization and source binding.
+
+Frontend: retirement request reason/retry identity survives failed save, discard
+confirmation remains explicit, retired rows have no retirement action, final action
+requires confirmation and uses the retirement endpoint rather than activation.
+Case wording and API company pinning are covered. Existing policy tests still pass.
+
+Design reuses manager-case records, posting/outbox, pagination/filter helper and
+request/review/confirmation components. No duplicate catalogue, stock writer or
+approval system. PostgreSQL guidance informed append-only records, scoped keys and
+consistent operation/product/case lock order. Additive migration creates no business
+rows; no ordinary role permissions automatically granted.
+
+Limitations: browser/tablet acceptance pending. Barcode reassignment/correction,
+existing-stock policy conversion and durable manager notifications remain work.
+Retirement alone is not stock posting, valuation or evidence of T05 completion.
+No deployment, external messages, production data edits or live cutover performed.

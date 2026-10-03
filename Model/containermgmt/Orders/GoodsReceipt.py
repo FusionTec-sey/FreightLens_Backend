@@ -24,6 +24,8 @@ class GoodsReceipt(OrgMixin, AuditMixin, Base):
     
     notes = Column(Text, nullable=True)
     submitted_at = Column(DateTime(timezone=True), nullable=True)
+    # Zero means legacy/unreviewed: old drafts may already have affected totals.
+    posting_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Relationships
     purchase_order = relationship("PurchaseOrder", back_populates="receipts")
