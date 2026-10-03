@@ -100,7 +100,8 @@ class StockReservation(OrgMixin, AuditMixin, Base):
     __tablename__ = "inventory_stock_reservations"
     __table_args__ = (
         UniqueConstraint("org_id", "reservation_key", name="uq_stock_reservation_key"),
-        UniqueConstraint("org_id", "balance_id", "source_line_key", name="uq_stock_reservation_source"),
+        # A reviewed reallocation may append another segment; its deferred
+        # approval/paired-movement guard replaces the old one-hold uniqueness.
         UniqueConstraint("id", "balance_id", "org_id", name="uq_stock_reservation_scope"),
         ForeignKeyConstraint(["balance_id", "org_id"],
             ["containermgmt.inventory_stock_balances.id", "containermgmt.inventory_stock_balances.org_id"],
@@ -225,3 +226,7 @@ FOR EACH ROW EXECUTE FUNCTION containermgmt.reject_stock_batch_change()
 """
 event.listen(StockBatch.__table__, "after_create", DDL(BATCH_IMMUTABLE_FUNCTION))
 event.listen(StockBatch.__table__, "after_create", DDL(BATCH_IMMUTABLE_TRIGGER))
+
+from Model.containermgmt.Inventory.ReservationSegmentGuard import FUNCTION as SEGMENT_FUNCTION, TRIGGER as SEGMENT_TRIGGER, IDENTITY_FUNCTION as RESERVATION_IDENTITY_FUNCTION, IDENTITY_TRIGGER as RESERVATION_IDENTITY_TRIGGER
+for statement in (SEGMENT_FUNCTION, SEGMENT_TRIGGER, RESERVATION_IDENTITY_FUNCTION, RESERVATION_IDENTITY_TRIGGER):
+    event.listen(StockReservation.__table__, 'after_create', DDL(statement))

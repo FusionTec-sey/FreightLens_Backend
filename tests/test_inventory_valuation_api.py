@@ -141,7 +141,7 @@ def test_mixed_units_rejected_but_value_basis_conserves_exact_total(valued):
         db.add(product); db.flush(); product_id = product.id
     balance = f.open(product_id=product_id, base_unit='M2', policy=InventoryPolicyConfig(base_unit='M2', tracking='UNTRACKED', quantity_step='0.01')).result['balance_id']
     second = record_opening_value(f.factory, f.context, f.actor, uuid4(), balance_id=balance, expected_version=0,
-        goods_value_scr=Decimal('100'), additional_cost_scr=Decimal('0'), reason='Synthetic mixed unit', authorize=lambda db: None).result['valuation_id']
+        goods_value_scr=Decimal('100'), additional_cost_scr=Decimal('0'), reason='Synthetic mixed unit', authority_claim=f.central_claim, authorize=lambda db: None).result['valuation_id']
     payload = CostAllocationPreviewRequest(valuation_ids=[second, first], total_scr='0.000001', basis='BASE_QUANTITY')
     with f.factory() as db:
         with pytest.raises(HTTPException) as error:

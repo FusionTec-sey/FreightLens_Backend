@@ -13,13 +13,16 @@ from Model.containermgmt.Orders.Product import Product
 from Services.inventory_costing_service import CostPool, CostBalance, receive, COSTING_POLICY_VERSION
 from Services.inventory_posting_service import execute_once, PostingEffect, PostingConflict
 from Utils.org_filter import apply_org_filter
+from Services.posting_authority_service import CostPoolAuthorityClaim, require_cost_pool_authority
 
 
 def record_opening_value(factory, context, actor_id, operation_key, *, balance_id,
                          expected_version, goods_value_scr, additional_cost_scr,
-                         reason, authorize):
+                         reason, authority_claim, authorize):
     if not callable(authorize):
         raise ValueError("Valuation requires a cost evidence and authority guard")
+    if not isinstance(authority_claim, CostPoolAuthorityClaim) or authority_claim.org_id != context.org_id:
+        raise PermissionError('Trusted central cost-pool claim required')
     if type(expected_version) is not int or expected_version < 0:
         raise ValueError("Expected valuation version must be nonnegative")
     if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
@@ -28,11 +31,15 @@ def record_opening_value(factory, context, actor_id, operation_key, *, balance_i
     receive(CostBalance(CostPool(context.org_id, 1, 1), Decimal(0), Decimal(0)),
             Decimal(1), goods_value_scr, additional_cost_scr)
     request = dict(balance_id=balance_id, expected_version=expected_version,
-        goods_value_scr=format(goods_value_scr, '.6f'), additional_cost_scr=format(additional_cost_scr, '.6f'), reason=reason.strip())
+        goods_value_scr=format(goods_value_scr, '.6f'), additional_cost_scr=format(additional_cost_scr, '.6f'), reason=reason.strip(),
+        authority=dict(org_id=authority_claim.org_id, cost_pool_id=authority_claim.cost_pool_id,
+                       node_key=str(authority_claim.node_key), epoch=authority_claim.epoch))
     loaded = {}
 
     def guard(db):
         authorize(db)
+        # Same pool-before-product order as charge posting; authority stays locked.
+        require_cost_pool_authority(db, context, authority_claim, cost_pool_id=authority_claim.cost_pool_id)
         source = apply_org_filter(db.query(StockBalance).filter(StockBalance.id == balance_id,
             StockBalance.org_id == context.org_id, StockBalance.is_deleted.is_(False)), StockBalance, context).one_or_none()
         if source is None:
@@ -55,6 +62,8 @@ def record_opening_value(factory, context, actor_id, operation_key, *, balance_i
             InventoryCostPool, context).with_for_update(read=True).one_or_none()
         if pool is None:
             raise ValueError("An active explicit branch cost-pool mapping is required")
+        if pool.id != authority_claim.cost_pool_id:
+            raise PermissionError('Opening source outside central cost-pool authority')
         opening = db.query(StockMovement).filter_by(org_id=context.org_id, balance_id=balance_id,
             version=1, kind="OPENING", is_deleted=False).one_or_none()
         if opening is None or opening.on_hand_delta <= 0 or source.policy_config is None:

@@ -2,6 +2,13 @@
 
 > Before any change, read `docs/ARCHITECTURE.md` and the latest 10 entries in `docs/ARCHITECTURE_LOG.md`.
 
+> Owner-approved parallel-work protocol (2026-10-03): also read
+> `docs/planning/TASK-QUEUE.txt`, `docs/planning/BUSINESS-DECISIONS.txt` and
+> `docs/planning/COLLABORATION-HANDOFF.txt` before work. Recheck published decisions
+> before each task, PR and merge; record the decision revision in the PR. Respect
+> task ownership and coordinate shared interfaces before editing them. These files
+> do not waive the rule-approval, browser-approval or release gates below.
+
 > **This file is the single source of truth for all development standards.**
 > Before writing any code, read the relevant detailed rule file under .agents/rules/.
 

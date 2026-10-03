@@ -1,0 +1,17 @@
+T10A search privacy — 2026-10-03
+
+Read-only POST search replaces URL search. Strict body validation, same customer/
+personal-data authorization, same scoped query helper. GET search parameter rejected.
+Successful customer responses include Cache-Control: no-store.
+No migration, index change or business writes.
+
+Isolated runner: tests/test_customer_api.py tests/test_customer_search.py
+15 passed, 23 existing deprecation warnings, 4.47s (subsequent anonymous search
+assertion rerun recorded in turn output).
+Frontend: customersApi.test.js and CustomersPage.test.js
+12 passed / 2 suites, 2.299s. Search body and browse query contract verified.
+
+Full regression/build deferred for this focused contract slice. Browser/provider
+acceptance and durable index recovery remain pending. Deployment must keep request
+bodies out of logs; POST does not independently enforce proxy logging policy.
+No real seed, deployment, messaging or GitHub push. T10A remains in progress.

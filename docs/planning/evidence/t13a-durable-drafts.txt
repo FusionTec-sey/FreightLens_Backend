@@ -1,0 +1,27 @@
+2026-10-03 — local isolated development
+
+Backend source/persistence/API:
+docker exec -w /work freightlens-pos-phase0-runner python -m pytest -q
+  tests/test_sales_intent_api.py tests/test_sales_intent_persistence.py
+  tests/test_sales_intent_sources.py --tb=short
+32 passed, 23 existing deprecation warnings, 9.26s.
+
+Real concurrent PostgreSQL connections using synthetic reviewed policy/customer:
+tests/test_sales_intent_concurrency.py --tb=short
+3 passed, 21 existing deprecation warnings, 1.94s.
+Duplicate operation has one effect. Competing first saves and competing revisions
+have one winner and one stale-version conflict. No mocked source validation.
+
+Frontend targeted SalesDraftsPage and Menu tests:
+12 passed / 2 suites, 2.414s. Includes denied access, fresh detail request, stale
+data removal after failure and abort/ignore on company changes.
+Production build exit0, main.0743f085.js; existing ESLint/Browserslist warnings.
+HTTP GET frontend / and API /openapi.json both200. No browser DOM checks performed.
+
+Migration replay exercised against isolated test DB. Public API denies missing
+permissions/module/personal-field mapping, anonymous and foreign-company retries.
+No real business data or module subscriptions changed. No push/deployment.
+
+Remaining T13A: usable creation/editing and source selection, module-toggle console
+support, integration regression, browser acceptance. T15A durable local recovery is
+not implemented. Drafts never establish payment, stock or collection eligibility.

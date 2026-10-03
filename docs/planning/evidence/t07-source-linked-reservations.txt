@@ -1,0 +1,27 @@
+2026-10-03 — isolated PostgreSQL, synthetic customer/draft/stock data only
+
+Initial source-linked holds + draft guards/read projection:
+tests/test_sales_reservation_sources.py tests/test_sales_intent_api.py
+tests/test_sales_intent_concurrency.py tests/test_stock_ledger.py
+55 passed,23 warnings,10.71s.
+After generic-release bypass was blocked for linked holds:
+tests/test_sales_reservation_sources.py tests/test_stock_ledger.py
+43 passed,21 warnings,6.80s.
+
+Coverage: atomic source link and stock retry; exact PCS/BOX line caps; stale/unknown
+source denial; outer rollback; held-line removal/reduction blocking; compatible
+increase; old-version retry denial; immutable history; revoked permission; real
+hold-versus-edit race; selling-store reassignment denial; separate reserved-demand
+read totals; migration replay; generic release cannot substitute for reviewed case.
+
+Frontend SalesDraftsPage/SalesDraftEditor:10 passed/2 suites,1.986s after adding
+assertion for separate Reserved:20 PCS display. Production build exit0 with existing
+warnings,main.2ba8d046.js. HTTP frontend / and API /openapi.json both200.
+No DOM acceptance, real reservations, financial posting, deployment or GitHub push.
+Full-suite baseline remains prior1118 backend/2 known legacy xfails and179 frontend;
+focused counts are not added to full-suite totals.
+
+T07 remaining: reviewed release/reallocation/deadline workflow and public trusted
+runtime adapters, paid/credit-source extensions when those records exist, explicit
+multi-location approval. No automatic expiry cancellation. Source-less internal
+stock functions remain compatibility only and must not be exposed as public writes.

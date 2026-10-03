@@ -1,0 +1,20 @@
+T10A search task confirmation — 2026-10-03
+
+Installed SDK inspected directly: TaskInfo.task_uid; Client.wait_for_task returning
+Task.uid/index_uid/status. Queue acceptance is no longer success. Exact successful
+task/index required; polling budget1500ms, interval100ms; shared client request
+timeout5s. An in-flight request can outlast the polling budget.
+
+Isolated runner: tests/test_customer_api.py tests/test_customer_search.py
+22 passed, 23 existing deprecation warnings, 4.80s.
+Checks include queued/processing/failed/canceled, wrong index/missing ID, timeout
+privacy, durable creation despite index failure and exact replay repair without
+another customer. No real customer or provider records written by these tests.
+
+Frontend CustomerCreateForm.test.js and CustomersPage.test.js:
+16 passed / 2 suites, 2.599s. Unconfirmed indexing warning does not turn a saved
+identity into a failed save or suggest duplicate creation.
+
+Full regression/build, live provider and browser checks deferred. Durable background
+repair remains pending; startup and exact creation retries still provide resubmission.
+No migration, deployment, real seed or push. T10A remains in progress.

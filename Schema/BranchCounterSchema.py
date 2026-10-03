@@ -9,6 +9,7 @@ class CounterConfig(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     purpose: Literal["CHECKOUT", "COLLECTION", "BOTH"]
     is_enabled: bool = Field(default=False, strict=True)
+    default_stock_location_id: int | None = Field(default=None, gt=0, strict=True)
 
 
 class CounterSave(BranchSettingsSave):

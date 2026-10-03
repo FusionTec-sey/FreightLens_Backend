@@ -1,0 +1,72 @@
+FREIGHTLENS BUSINESS DECISIONS
+Revision: BD-20261003-05
+Canonical companion: TASK-QUEUE.txt. Recorded 2026-10-03 from owner instructions.
+These decisions preserve actionable requirements, not the full private chat.
+Do not publish customer records, legal PDFs, credentials or personal chat exports.
+
+BD-20261003-01 | Operating scope and commercial rules | T03,T06,T11,T12,T20,T28,T30
+One operating company; separate branch accounts/licences do not imply separate
+legal operating companies. Locations remain configurable, not hard-coded tenants.
+Use explicit valuation pools and independent selling-store price lists. Island
+distribution costs may differ; no automatic price change from a cost posting.
+SCR selling prices are tax-inclusive; VAT15% is the owner's starting requirement,
+not a hard-coded universal rate. Model exemptions/additional taxes configurably.
+Imported currencies include USD, ZAR and GBP with recorded conversion evidence.
+Actual tax/accounting configuration still needs Seychelles-specific validation.
+Best eligible customer price must respect agreed exclusive terms and approval
+floors. Customer credit never expires. Missing receiving-account mappings block
+posting; never select another store's account. Credit-limit exceptions need exact
+approval. No guessed bank mappings, operational thresholds or opening balances.
+Trading calendars support Saturday and explicit public-holiday exceptions.
+
+BD-20261003-02 | Reservations and fulfilment | T07,T13,T16,T27,T29
+Planning, reservation and physical handover are distinct. Sales staff agree
+reservation/follow-up dates with the customer; expiry starts review, never silent
+cancellation, refund, credit conversion or reassignment of paid holds.
+Confirmed orders need a qualifying deposit or agreed credit terms. Payment and
+fulfilment statuses remain separate. Tiles retain required matching batch/shade/
+calibre rules. Explicit special requests/approvals govern other-store fulfilment.
+Returns must be verified against original invoice lines and actual handovers,
+including previous/pending returns; no unsupported return or automatic balance merge.
+Manager exceptions bind exact action, source versions and quantity and are audited.
+
+BD-20261003-03 | Default salesperson work area | T03,T07,T14
+Ordinary eligible allocation is automatic within the salesperson's configured
+working area. Insufficient local stock shows a shortfall, not automatic spillover.
+Other areas may be selected explicitly when needed; applicable multi-location,
+reservation and management approval rules remain mandatory.
+Supersedes any interpretation that every ordinary local allocation needs a manual
+location choice or that a shortfall permits automatic other-store allocation.
+Implemented so far: optional counter default_stock_location_id, active scoped
+validation, versioned resolver and settings picker. Staff assignment, area-descendant
+planning and automatic posting are NOT implemented by that configuration alone.
+
+BD-20261003-04 | Safety and delivery boundaries | All tasks
+React/FastAPI; reuse scoped services, catalogue, manager cases and atomic receipts.
+Exact Decimal money/quantities, immutable history and explicit expected versions.
+Disconnected costs provisional until central reconciliation. Offline eligibility,
+local-server sync and paper-outage recovery remain mandatory pre-pilot gates.
+Continue authorised local development with targeted checks while editing and full
+integration checks at checkpoints. Browser/hardware/provider/accounting acceptance
+is separate from automated tests. No live deployment, cutover, external customer
+messages, purchases or real financial posting without separate owner approval.
+T05 stays in owner-restored policy/barcode scope; physical conversion is T06/T09.
+
+BD-20261003-05 | Parallel ownership revised | T10,T33,T33A
+Owner asked for new, non-overlapping work instead of extending existing T10.
+Supersedes the proposed assignment of T10 Customer workspace to the collaborator.
+Collaborator owns T33A cycle-count planning, assignments, blind count entry,
+recounts, discrepancy presentation and manager review, including frontend/tests.
+Integrator retains inventory/allocation, valuation, reservations, sales foundations
+and shared-contract integration. T10 remains unassigned; do not rebuild T10A.
+T33A creates count/audit records only, not inventory adjustments. Price labels,
+movement-aware reconciliation and stock posting remain deferred to T33/T09/T11.
+Do not freeze inventory or pretend a raw discrepancy is a posting-ready adjustment.
+
+CHANGE PROTOCOL
+Append dated stable IDs with affected tasks and superseded decisions. Only record
+agreed requirements; mark unresolved proposals explicitly. Publish to integration
+through a reviewed change and notify affected work on its shared task/PR. Both
+developers fetch/check decisions before tasks and PR/merge; invalidated work must
+be revised before merging. A chat message alone does not update another developer.
+PRs state decision revision, companion PR, tests and outstanding release gates.

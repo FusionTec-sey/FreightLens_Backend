@@ -43,8 +43,12 @@ def test_foreign_or_stale_claim_denied(central, field):
         require_cost_pool_authority(db, f.context, replace(f.central_claim, **{field: change[field]}), cost_pool_id=f.pool)
 
 
-def test_branch_authority_does_not_grant_central_authority(valued):
-    f = valued
+def test_branch_authority_does_not_grant_central_authority(stock):
+    from Model.containermgmt.Inventory.CostPool import InventoryCostPool
+    f = stock
+    with f.factory.begin() as db:
+        pool = InventoryCostPool(org_id=f.orgs[0], code='NOAUTH', name='Synthetic unconfigured', created_by=f.actor)
+        db.add(pool); db.flush(); f.pool = pool.id
     with f.factory.begin() as db, pytest.raises(PermissionError):
         require_cost_pool_authority(db, f.context,
             CostPoolAuthorityClaim(f.orgs[0], f.pool, f.node_key, 1), cost_pool_id=f.pool)

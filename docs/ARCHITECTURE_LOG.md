@@ -1,5 +1,306 @@
 # FreightLens Architecture Log
 
+## 2026-10-03 - Shared GitHub checkpoint and revised collaborator assignment
+
+- Added owner-approved AGENTS reading protocol, canonical business decisions and
+  handoff; frontend points to backend records rather than duplicating the plan.
+- Corrected stale T10/no-customer and no-sales-consumer statements. Collaborator
+  owns new T33A count planning/blind entry/recounts/review, not T10. Stock posting,
+  movement reconciliation and price labels remain gated by later dependencies.
+- Documented protected interfaces, paired PRs, independent services/ports and
+  contributor setup confirmation. Another machine's environment is not verified.
+- Integration run exposed legacy blob-test auth module leakage at collection;
+  restore original modules after isolated router loading. No production auth change.
+- Checkpoint results and push/CI evidence: planning/evidence/20261003-parallel-checkpoint.txt.
+  No browser checks, real business mutations, deployment or pilot activation.
+
+## 2026-10-03 - Default local work-area allocation rule and counter setting
+
+- Owner clarified automatic allocation within the salesperson's current area;
+  alternative areas are chosen explicitly, not silently substituted on shortfall.
+- Added optional location root to immutable counter JSON configuration; scoped
+  server validation and missing/stale-default resolver. No data backfill/migration.
+- Reused paginated picker in counter settings; no manual location ID entry needed.
+- Fixed SalesIntent's missing referenced-customer model registration discovered by
+  isolated counter tests. Backend20 and frontend13 focused tests pass.
+- Actual work-context assignment and default-area planning/posting remain next;
+  counter configuration does not activate stock posting. Browser checks pending.
+
+## 2026-10-03 - Reviewed supplements preserve original hold segments
+
+- Same-bucket destination demand may already have holds. Reviewed reallocation
+  appends a separately attributed hold; original quantities/deadlines stay intact.
+- Indexed streamed target history binds exact quantities, attribution and schedule
+  versions. Combined demand cap and shared locks reject competing/stale approvals.
+- Reused reserve effects with exact consumed-parent/paired-release proof, not a
+  boolean exception. Replayable migration replaces obsolete uniqueness with a
+  deferred paired-reallocation guard and protects historical reservation identity.
+- Frontend requests explain segments; reviews show pre-request destination totals.
+- Affected backend110/frontend38 tests and build pass with existing warnings;
+  evidence: planning/evidence/t07-reservation-segments.txt. Browser checks pending.
+- Continue explicit multi-location approval and trusted runtime integration; paid
+  source adapters depend on later sales posting. T07 is not complete.
+
+## 2026-10-03 - Atomic reviewed reallocation and review workspace
+
+- Reused stock effects, manager cases and receipts for a same-bucket draft-demand
+  reallocation. Paired immutable history requires exact destination and approval.
+- Added scoped request/review API and permission-gated frontend review navigation;
+  no public stock execution, real records or entitlement changes.
+- PostgreSQL guidance informed indexed linkage guards and transaction boundaries.
+- Focused backend73 shared-boundary tests and19 API tests pass. Request-entry UI
+  reuses the paginated picker with fresh destination reads, exact uncertain retries
+  and no manual document IDs. Frontend46/5 suites pass; browser checks pending.
+- Evidence: planning/evidence/t07-approved-reallocation.txt. Continue remaining
+  lifecycle/runtime work; T07 is not complete.
+
+## 2026-10-03 - Company-wide overdue reservation inbox
+
+- Consolidated per-draft and overdue queries into one scoped read projection.
+  Added public stock labels, manager-only paginated due endpoint and branch filter.
+- PostgreSQL guidance informed safe indexed original-date prefilter and latest
+  history probes. Due checks never mutate holdings or infer approval application.
+- Reused reservation UI for the inbox, with fresh access-checked draft drill-down.
+  No new catalogue, manager-case store, KPI cards or automatic notifications.
+- Backend19/frontend16 focused tests and build pass; evidence:
+  planning/evidence/t07-due-followup-inbox.txt. Browser checks pending.
+- Continue reviewed reallocation and trusted runtime integration. T07 incomplete.
+
+## 2026-10-03 - Reviewed reservation follow-up schedules
+
+- Added immutable deadline history and replayable migration with scope/version and
+  exact approval-use guards. Reused source locking, manager cases and receipts.
+- Request/review/schedule API plus frontend now keep deadline approval separate
+  from application. Due flags do not release or cancel; quantities remain unchanged.
+- Competing releases/deadlines invalidate stale bindings; exact replay, rollback,
+  concurrency and security tests pass. PostgreSQL guidance informed indexed reads
+  and short transactions. No public physical stock writer is enabled.
+- Backend45/frontend33 focused checks and production build pass; evidence:
+  planning/evidence/t07-reservation-deadlines.txt. Browser acceptance pending.
+- Next: company-wide due inbox, approved reallocation and trusted runtime adapters.
+
+## 2026-10-03 - Durable local sales intent and retry recovery
+
+- Implemented whitelisted browser-local intent store scoped to company/user with
+  explicit branch attribution. Browser locks and expected revisions prevent silent
+  competing-tab overwrite; quota/unsupported locking fail visibly.
+- Editor persists exact operation before network, restores pending retries and
+  clears only after confirmed save. Local drafts and Keep locally and close reuse
+  existing editor and permissions. No autonomous posting or sensitive profile copy.
+- Full frontend196/40, affected backend22 and build pass with existing warnings.
+  Evidence: planning/evidence/t15a-local-draft-recovery.txt. Native browser acceptance
+  remains pending; T15A implemented—verification pending. Resume independent T07.
+
+## 2026-10-03 - Linked reservation request workspace
+
+- Added scoped paginated linked holds and release-request form from draft details,
+  reusing existing stock/source indexes, cases and operation intents. PostgreSQL
+  guidance informed bounded indexed reads; no migration or stock mutation.
+- Exact quantity validation, unconfirmed retry locks, stale-source refresh and
+  dirty-discard protection tested. Durable navigation recovery remains T15A.
+- Backend17/frontend11 focused tests and production build pass (existing warnings).
+  Evidence: planning/evidence/t07-release-request-ui.txt. Preview HTTP200 both services.
+- No browser acceptance, real records/entitlements, deployment, messaging or push.
+  Continue T07 deadline/reallocation and trusted runtime integration.
+
+## 2026-10-03 - Reviewed reservation release checkpoint
+
+- Reused manager cases and stock posting for exact-source release approval and
+  atomic consumption. Source/permission checks also precede retry; later changes
+  cannot reuse approval. No automatic release on approval or expiry.
+- Added module/permission-scoped request/review APIs and reused ManagerCases in
+  Sales drafts. No public stock writer or entitlement changes.
+- Verified backend58, frontend23/3 suites and production build (existing warnings).
+  Evidence: planning/evidence/t07-reviewed-release.txt. No browser acceptance.
+- Next: linked-hold listing/request UI, deadline/reallocation, paid-order adapters
+  and trusted runtime integration. T07 remains in progress.
+
+## 2026-10-03 - Tie holds to saved sales demand
+
+- Extended existing reserve boundary with typed source identity/version, immutable
+  same-company link and locked quantity/product/store validation. Exact retries
+  remain authority/permission checked and source identity is in the fingerprint.
+- Draft changes share the document lock and protect remaining holds. Compatible
+  increases are allowed; held ownership/removal/reclassification changes are denied.
+- Added read-only reserved-demand totals to draft detail/editor. Generic release
+  cannot bypass the unfinished reviewed release workflow for these linked holds.
+- Focused backend55 passed, then43 passed after the release-bypass guard; frontend10
+  passed and build passed with existing warnings. Real hold/edit race has one winner.
+  Migration replay, rollback and immutable attribution checks pass. Evidence:
+  planning/evidence/t07-source-linked-reservations.txt.
+- T07 remains in progress: reviewed release/reallocation/deadline cases, protected
+  paid holds, approved exceptions and trusted public runtime adapters remain.
+  No real holds created, deployment/push, browser checks or auto-cancellation.
+
+
+## 2026-10-03 - Sales draft editor and source selection
+
+- Added scoped paginated source selectors over existing stores/products/policies.
+  Product search reuses existing Meilisearch service with public matching fields,
+  bounded IDs and DB rehydration; provider/stale/foreign hits fail closed.
+- Editor reuses customer selection, operation intents and pagination. Creates or
+  revises demand only; retains uncertain requests, blocks conflicts, confirms dirty
+  discard, clears on identity/company changes. No durable local recovery claim.
+- Existing platform configuration can enable SALES explicitly; no actual company
+  subscriptions or business data changed. Current product labels are display-only.
+- Focused backend41 checks and full frontend179/37 pass. Subsequent read-label/unit
+  changes have affected frontend10 pass and production build pass with existing
+  warnings. Full backend checkpoint is being recorded in t13a-editor-integration.txt.
+- Browser/provider acceptance remains pending. T15A recovery and T07 source-linked
+  reservations are next dependent work, not reasons to expand the T13A editor.
+
+
+## 2026-10-03 - Durable sales drafts and read workspace
+
+- Added stable document parent and immutable header/line revisions, scoped FKs,
+  empty replayable migration and atomic versioned saves using existing receipts.
+- Same-operation and competing-operation PostgreSQL tests prove one effect/one
+  version winner. Rollback, history immutability and revoked retry checks pass.
+- Added separately SALES-gated API and personal-data/product/draft permissions.
+  Paginated frontend register can inspect latest saved lines and clears stale data.
+- 32 source/persistence/API tests plus 3 concurrency tests pass; 12 frontend
+  register/navigation tests and production build pass with existing warnings.
+  Evidence: planning/evidence/t13a-durable-drafts.txt. Preview HTTP checks pass.
+- T13A remains in progress: editor, source selectors and module configuration
+  control still required. Browser acceptance pending; no real entitlements enabled,
+  stock holds, financial posting, deployment, customer messaging or GitHub push.
+
+
+## 2026-10-03 - Customer checkpoint and sales-intent source foundation
+
+- Full isolated backend checkpoint: 1077 passed, 2 known legacy xfailed. Prior
+  frontend integration checkpoint remains 169 tests/35 suites and build passing.
+- T10A implementation is acceptance-pending, not an ever-expanding dependency on
+  later durable sync. T13A starts against its tested identity/policy contracts.
+- Added bounded typed draft lines and locked scoped source validation, reusing
+  customer reads and reviewed unit conversions. No new catalogue or posting engine.
+- Thirteen focused PostgreSQL/schema checks pass. Initial run caught inherited
+  eager supplier joins conflicting with row locks; disabled unused eager loading
+  and restricted product locks, then reran successfully.
+- Draft persistence, API/editor and retry/rollback tests remain next. No migration,
+  real data, financial effect, deployment, browser action or GitHub push this slice.
+
+
+## 2026-10-03 - Frontend integration checkpoint
+
+- Owner requested frontend implementation. Inspected current queue/screen coverage;
+  inventory setup/review/cost and customer public workflows have existing screens.
+- Closed customer result gap: persistent save/indexing status, direct saved-record
+  opening and fresh permission-checked details above the table. No duplicate screen.
+- Removed sidebar API-client dependency by extracting route constant. Full frontend
+  run exposed and then verified the navigation import regression fix.
+- 169 tests / 35 suites and production build passed with existing warnings. Evidence:
+  planning/evidence/frontend-customer-integration.txt. Backend unchanged this slice.
+- Browser acceptance remains pending. Future sales/returns/offline foundations still
+  need backend implementation; no fake actions or operational activation added.
+
+## 2026-10-03 - Confirm customer search task results
+
+- Settings and document sync now verify matching provider task/index and succeeded
+  status instead of treating queue acceptance as completion. Missing IDs, pending,
+  failed, canceled and timed-out tasks remain unconfirmed without logging PII.
+- Shared search client has a five-second request timeout; task polling budget is
+  1500ms, not a strict wall-clock cap on in-flight requests.
+- Customer creation exposes search_indexed separately from the durable receipt.
+  Frontend distinguishes saved identity from unconfirmed search indexing and warns
+  against creating a duplicate. Exact creation retries can repair the projection.
+- 22 targeted backend tests and 16 frontend tests pass; evidence:
+  planning/evidence/t10a-search-task-confirmation.txt.
+- Live provider/browser acceptance and durable background repair remain open.
+  No schema migration, real data, deployment or push. Full regression/build deferred.
+
+## 2026-10-03 - Keep customer search terms out of URLs
+
+- Replaced GET search argument with read-only POST /customers/search and strict
+  bounded request schema. Browse remains GET; the former query argument is rejected.
+- Reused one page implementation and the same authentication/personal-data guards.
+  Added no-store to successful customer responses. No write permission/receipt is
+  needed for search, because it does not create records.
+- Frontend sends search only in the body. Deployment must still avoid body logging.
+- Focused verification: 15 backend tests and 12 frontend tests passed. Evidence:
+  planning/evidence/t10a-search-privacy.txt. No full build/regression or browser run.
+- T10A provider task/recovery acceptance remains open. No real business writes.
+
+## 2026-10-03 - Company-scoped customer search
+
+- Extended existing search service with customer projection/settings, after-commit
+  sync and streamed startup repair. No second search client or catalogue.
+- Paginated search requires existing personal-data permissions, exact company
+  filtering and DB rehydration. PostgreSQL guidance informed bounded indexed IDs.
+- Provider outages/foreign/stale hits fail closed. Async indexing may lag; committed
+  customer creation is not rolled back by projection failure. No SQL LIKE fallback.
+- Customer register submits/clears search and resets pagination; selection is reused.
+- 31 focused backend tests and 17 frontend tests pass; production build passes with
+  existing warnings. Evidence: planning/evidence/t10a-customer-search.txt.
+- Pending: real provider/browser acceptance, durable projection repair and query
+  access-log redaction review before release. T10A not declared complete.
+
+## 2026-10-03 - Reuse customer register for selection
+
+- Added optional selection mode to CustomersPage rather than a second register.
+- Detail API rechecks permission/identity/version before returning scoped selection.
+  Refresh/company changes abort in-flight selections; late completions are ignored.
+- No sales entitlement or document writer is introduced. Consuming documents must
+  revalidate the returned customer reference at their own posting boundary.
+- Focused frontend tests: 16 passed / 3 suites. Evidence:
+  planning/evidence/t10a-customer-selection.txt. Full suite/build deferred for this
+  component-only slice; browser gate remains pending. T10A still needs search.
+
+## 2026-10-03 - Customer creation workspace
+
+- Added Manage_Customer-gated creation with multiple contacts and one primary,
+  explicit dirty-discard confirmation and field-level server validation feedback.
+- Reused useOperationIntent and company-pinned customer API. Uncertain outcomes
+  retain exact payload/key and disable editing/cancel; matching receipt confirms save.
+- Aborted/unmounted requests cannot update a new company screen. No PII browser
+  storage. In-memory retention and unload warning are not durable draft recovery.
+- Verification: 16 focused frontend tests, 25 backend contract tests and production
+  build passed (existing warnings). Evidence: planning/evidence/t10a-customer-create-ui.txt.
+- T10A remains in progress: search/reusable selection and browser acceptance pending.
+  No real records seeded, deployment, push or customer financial functionality.
+
+## 2026-10-03 - Protected customer API and read workspace
+
+- Added scoped paginated GET/detail and receipt-backed POST with customer and
+  personal-data permissions. Missing PERSONAL field mapping fails closed.
+- Customer permissions are cross-module master-data rights, not sales entitlements.
+- Frontend Customers entry supports list/contact inspection, customer-only menu
+  visibility, company-pinned requests and stale-response cancellation.
+- PostgreSQL guidance retained indexed organisation filtering and bounded reads.
+- Verified 29 focused backend tests, 4 frontend tests and production build.
+  Evidence: planning/evidence/t10a-customer-api-verification.txt.
+- T10A remains in progress: creation/select UI, search and browser acceptance pending.
+  No real seed, balances, auto-merges, deployment or GitHub push.
+
+## 2026-10-03 - Start T10A retail customer identity
+
+- **Why:** T10A is dependency-ready on T03/T04 while T06 runtime gates remain open.
+  Freight consignee records are not retail customers; no existing retail entity found.
+- **Change:** Scoped UUID identity/original profile, bounded typed contacts, empty
+  additive migration, creation/read service using existing atomic receipts.
+- **Safety:** Explicit personal-data permission callback, exact company scope,
+  stable retries, original snapshot immutability, no automatic contact/balance merge.
+  PostgreSQL guidance informed same-company keys and receipt ownership.
+- **Verification:** 17 focused tests passed; evidence in
+  planning/evidence/t10a-customer-identity-verification.txt.
+- **Limits:** Internal foundation only; protected API, paginated frontend/select,
+  search and revision work remain. No real seed, credit, public customer access or
+  financial posting. T10A In progress; T06 remains open.
+
+## 2026-10-03 - Opening valuation authority parity
+
+- **Change:** Opening valuations now require persisted central pool authority,
+  exact source-pool match and authority-bound retry intent. Shared pool-before-
+  product lock order aligns opening and additional-cost writers.
+- **Safety:** No-op extra guards cannot bypass authority; suspended/stale/foreign
+  claims and newer-epoch reuse are denied. Existing source, evidence and permission
+  callbacks remain mandatory. No schema, API or frontend changes.
+- **Verification:** planning/evidence/t06-opening-authority-verification.txt.
+- **Tracking:** Corrected stale top-of-queue baseline to the completed GitHub
+  checkpoint; no whole-task completion or new full-suite claim.
+- **Limits:** Runtime authentication, receipt costs and reconciliation still open;
+  public financial posting remains disabled. Changes local, not automatically pushed.
+
 ## 2026-10-03 - Central writer status in cost-pool workspace
 
 - **Change:** Typed state/epoch fields on existing pool page; one scoped bounded

@@ -12,12 +12,6 @@ from tests.test_cost_charge_reviews import charge_review, charge, allocation, va
 @pytest.fixture
 def posting(content_review):
     f = content_review
-    from Model.containermgmt.Inventory.PostingAuthority import CostPoolAuthorityEpoch
-    from Services.posting_authority_service import CostPoolAuthorityClaim
-    with f.factory.begin() as db:
-        db.add(CostPoolAuthorityEpoch(org_id=f.orgs[0], cost_pool_id=f.pool, node_id=f.node_id,
-            epoch=1, state='ACTIVE', reason='Synthetic coordinator authority', created_by=f.actor))
-    f.central_claim = CostPoolAuthorityClaim(f.orgs[0], f.pool, f.node_key, 1)
     f.key = uuid4()
     f.prepared = PreparedChargeContent(f.content_binding, tuple(f.content.items()))
     def post(**changes):

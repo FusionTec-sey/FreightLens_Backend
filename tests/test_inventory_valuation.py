@@ -13,6 +13,8 @@ from Services.inventory_valuation_service import record_opening_value
 from Services.inventory_posting_service import PostingConflict
 from Utils.org_filter import OrgContext
 from tests.test_stock_ledger import stock  # noqa: F401
+from Model.containermgmt.Inventory.PostingAuthority import CostPoolAuthorityEpoch
+from Services.posting_authority_service import CostPoolAuthorityClaim
 
 
 @pytest.fixture
@@ -23,12 +25,16 @@ def valued(stock):
         pool = InventoryCostPool(org_id=f.orgs[0], code='TEST', name='Test pool', created_by=f.actor)
         db.add(pool); db.flush(); f.pool = pool.id
         db.add(BranchCostPool(org_id=f.orgs[0], branch_id=f.branches[0], cost_pool_id=pool.id, created_by=f.actor))
+        db.add(CostPoolAuthorityEpoch(org_id=f.orgs[0], cost_pool_id=pool.id, node_id=f.node_id,
+            epoch=1, state='ACTIVE', reason='Synthetic opening authority', created_by=f.actor))
+    f.central_claim = CostPoolAuthorityClaim(f.orgs[0], f.pool, f.node_key, 1)
     f.key = uuid4()
     def post(**kw):
         return record_opening_value(kw.pop('factory', f.factory), kw.pop('context', f.context), f.actor,
             kw.pop('key', f.key), balance_id=f.balance, expected_version=kw.pop('expected_version', 0),
             goods_value_scr=kw.pop('goods_value_scr', D('100')), additional_cost_scr=D('20'),
-            reason='Synthetic approved opening cost', authorize=kw.pop('authorize', lambda db: None), **kw)
+            reason='Synthetic approved opening cost', authority_claim=kw.pop('authority_claim', f.central_claim),
+            authorize=kw.pop('authorize', lambda db: None), **kw)
     f.value = post
     return f
 
@@ -59,7 +65,7 @@ def test_multiple_location_openings_share_one_weighted_pool(valued):
         db.add(location); db.flush(); location_id = location.id
     second = f.open(location_id=location_id).result['balance_id']
     result = record_opening_value(f.factory, f.context, f.actor, uuid4(), balance_id=second,
-        expected_version=1, goods_value_scr=D('80'), additional_cost_scr=D('0'), reason='Second source', authorize=lambda db: None)
+        expected_version=1, goods_value_scr=D('80'), additional_cost_scr=D('0'), reason='Second source', authority_claim=f.central_claim, authorize=lambda db: None)
     assert result.result['pool_quantity'] == '20.000000'
     assert result.result['pool_value_scr'] == '200.000000'
     assert result.result['average_cost_scr'] == '10.000000'
@@ -74,9 +80,15 @@ def test_changed_intent_and_stale_version_rejected(valued):
 
 def test_missing_pool_never_guesses_mapping(stock):
     f = stock; balance = f.open().result['balance_id']
+    with f.factory.begin() as db:
+        pool = InventoryCostPool(org_id=f.orgs[0], code='UNBOUND', name='Synthetic unmapped pool', created_by=f.actor)
+        db.add(pool); db.flush(); pool_id = pool.id
+        db.add(CostPoolAuthorityEpoch(org_id=f.orgs[0], cost_pool_id=pool_id, node_id=f.node_id,
+            epoch=1, state='ACTIVE', reason='Synthetic authority', created_by=f.actor))
     with pytest.raises(ValueError, match='mapping'):
         record_opening_value(f.factory, f.context, f.actor, uuid4(), balance_id=balance,
-            expected_version=0, goods_value_scr=D('10'), additional_cost_scr=D('0'), reason='Test', authorize=lambda db: None)
+            expected_version=0, goods_value_scr=D('10'), additional_cost_scr=D('0'), reason='Test',
+            authority_claim=CostPoolAuthorityClaim(f.orgs[0], pool_id, f.node_key, 1), authorize=lambda db: None)
 
 
 def test_permission_is_checked_on_replay_and_foreign_scope_denied(valued):
@@ -85,7 +97,7 @@ def test_permission_is_checked_on_replay_and_foreign_scope_denied(valued):
     with pytest.raises(PermissionError): f.value(authorize=deny)
     with pytest.raises(ValueError): f.value(authorize=None)
     foreign = OrgContext(current_org_id=f.orgs[1], allowed_org_ids=f.orgs, is_root=True)
-    with pytest.raises(LookupError): f.value(context=foreign)
+    with pytest.raises(PermissionError): f.value(context=foreign)
 
 
 def test_outer_rollback_removes_value_and_receipt(valued):
@@ -95,6 +107,37 @@ def test_outer_rollback_removes_value_and_receipt(valued):
             f.value(factory=db)
             raise RuntimeError('downstream failure')
     assert not f.value().replayed
+
+
+def test_opening_cannot_bypass_authority_with_noop_callback(valued):
+    f = valued
+    with pytest.raises(PermissionError): f.value(authority_claim=None)
+    with f.factory.begin() as db:
+        db.add(CostPoolAuthorityEpoch(org_id=f.orgs[0], cost_pool_id=f.pool, node_id=f.node_id,
+            epoch=2, state='SUSPENDED', reason='Synthetic suspended opening', created_by=f.actor))
+    with pytest.raises(PermissionError): f.value(authorize=lambda db: None)
+
+
+def test_opening_retry_is_bound_to_original_authority_epoch(valued):
+    from dataclasses import replace
+    f = valued; f.value()
+    with f.factory.begin() as db:
+        db.add(CostPoolAuthorityEpoch(org_id=f.orgs[0], cost_pool_id=f.pool, node_id=f.node_id,
+            epoch=2, state='ACTIVE', reason='Synthetic newer authority', created_by=f.actor))
+    with pytest.raises(PermissionError): f.value()
+    with pytest.raises(PostingConflict): f.value(authority_claim=replace(f.central_claim, epoch=2))
+
+
+def test_opening_authority_must_match_source_mapping(valued):
+    from dataclasses import replace
+    f = valued
+    with f.factory.begin() as db:
+        other = InventoryCostPool(org_id=f.orgs[0], code='OTHER', name='Synthetic other', created_by=f.actor)
+        db.add(other); db.flush(); pool_id = other.id
+        db.add(CostPoolAuthorityEpoch(org_id=f.orgs[0], cost_pool_id=pool_id, node_id=f.node_id,
+            epoch=1, state='ACTIVE', reason='Synthetic other authority', created_by=f.actor))
+    with pytest.raises(PermissionError, match='outside central'):
+        f.value(authority_claim=replace(f.central_claim, cost_pool_id=pool_id))
 
 
 @pytest.mark.parametrize('same_key', [True, False])
