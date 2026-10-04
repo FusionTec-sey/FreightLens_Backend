@@ -315,4 +315,11 @@ def require_receiving_account(db, context, branch_id, method_key, *,
         raise PostingConflict("Receiving-account mapping is disabled")
     if revision.version != expected_mapping_version:
         raise PostingConflict("Receiving-account mapping changed; refresh before posting")
-    return _mapping_read(mapping, revision)
+    # Return the exact locked method identity as part of the posting snapshot.
+    # Callers must not perform a second, unlocked method lookup when freezing a
+    # financial record.
+    return dict(_mapping_read(mapping, revision),
+                method_code=method.code,
+                method_version=method_revision.version,
+                method_label=method_revision.label,
+                method_kind=method_revision.kind)

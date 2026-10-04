@@ -2057,3 +2057,37 @@ projection and outbox atomically. Never expose these snapshots as trusted client
 input. Late costs and original-cost returns require linked adjustment design.
 
 The paired `baseline-2026-10` tag identifies the v2 mainline in both repositories before stabilization. Future deploys must use matching tags in both repositories. Application-version exposure through `/health` and the frontend footer remains to be implemented.
+
+### Atomic retail posting (T13 pilot contract)
+
+Retail confirmation is a recoverable two-stage boundary. An immutable
+`SalesPostingAttempt` owns one exact saved draft revision, prepared pricing
+snapshot, checkout context, staff assignment and configured tender plan. Card
+provider observations are appended separately so an unknown external outcome can
+be recovered without repeating a charge. Only CASH and externally CONFIRMED CARD
+are eligible in this pilot slice. Recording an external terminal result requires
+the dedicated `Record_ExternalCardConfirmation` permission in addition to posting
+access and a current assignment to the selling store. The confirmer may be distinct
+from the salesperson; this is an audited manual terminal observation, not provider
+authentication, and should not be granted to ordinary cashiers by default.
+A declined card may be retried on the same exact card tender. Changing the tender
+plan (for example, card to cash) requires a new saved draft revision and attempt.
+
+Finalization rechecks the current branch/counter/business date, staff assignment,
+customer version, pricing/tax fingerprint, receiving-account versions and active
+reservation provenance. One existing `PostingOperation` transaction then commits
+the invoice number, immutable line and tax snapshots, confirmed payment
+allocations, reservation commitments and the redacted `sales.invoice.posted`
+outbox event. A stable operation retry returns the same invoice; changed intent
+conflicts. Committed write retries re-authorize the current actor, exact attempt
+owner and unchanged working-store assignment before returning immutable history;
+historical invoices remain readable through their read endpoint. Account references are retained internally for
+accounting but excluded from ordinary sales responses; customer contacts and card
+evidence are excluded from the generic event envelope.
+
+Posting does not issue physical stock. The reservation remains active and is
+protected from release; T16 alone records partial collection, collector identity,
+location/serial assignment and the T09 HANDOVER movement. An invoice therefore
+reports PAID separately from AWAITING_COLLECTION. Real account setup, external
+terminal/provider behavior, accounting acceptance and supervised pilot approval
+remain release gates.

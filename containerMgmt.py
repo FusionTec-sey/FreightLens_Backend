@@ -242,6 +242,8 @@ async def startup_event():
     ensure_receipt_valuation_schema()
     from Utils.migrate_20261005_stock_movements import ensure_inventory_handover_schema
     ensure_inventory_handover_schema()
+    from Utils.migrate_20261005_sales_posting import ensure_sales_posting_schema
+    ensure_sales_posting_schema()
     from Utils.migrate_20261003_cost_allocation import ensure_cost_allocation_schema
     ensure_cost_allocation_schema()
     from Utils.migrate_20261003_cost_charge_uses import ensure_cost_charge_uses_schema
@@ -387,6 +389,8 @@ from Routes.Orders.SalesPricingRouter import SalesPricingRouter
 app.include_router(SalesPricingRouter)
 from Routes.Orders.PaymentConfigurationRouter import PaymentConfigurationRouter
 app.include_router(PaymentConfigurationRouter)
+from Routes.Orders.SalesPostingRouter import SalesPostingRouter
+app.include_router(SalesPostingRouter)
 from Routes.Orders.SalesSourceRouter import SalesSourceRouter
 app.include_router(SalesSourceRouter)
 from Routes.Inventory.ReservationReleaseCaseRouter import ReservationReleaseCaseRouter

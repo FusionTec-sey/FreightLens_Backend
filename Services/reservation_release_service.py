@@ -5,6 +5,7 @@ from Model.containermgmt.Inventory.SalesReservationSource import SalesReservatio
 from Model.containermgmt.Inventory.ReservationDeadline import ReservationDeadline
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase, ManagerCaseUse
 from Model.containermgmt.Orders.SalesIntent import SalesIntent, SalesIntentRevision
+from Model.containermgmt.Orders.SalesPosting import SalesInvoiceReservation
 from Schema.InventoryPolicySchema import InventoryPolicyConfig
 from Services.sales_reservation_source_service import owned
 from Services.manager_case_service import CaseBinding
@@ -26,6 +27,10 @@ def locked_reservation_source(db, context, reservation_key):
     if scope is None: raise LookupError('Reservation not found')
     balance = owned(db, StockBalance, context).filter_by(id=scope.balance_id).with_for_update().populate_existing().one()
     hold = owned(db, StockReservation, context).filter_by(reservation_key=reservation_key).with_for_update().populate_existing().one()
+    if owned(db, SalesInvoiceReservation, context).filter_by(
+            reservation_key=reservation_key).first() is not None:
+        raise PostingConflict(
+            'Posted-sale stock cannot be released; use collection or an approved return workflow')
     return source, revision, balance, hold
 
 

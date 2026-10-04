@@ -150,6 +150,10 @@ def test_locked_posting_lookup_requires_exact_current_versions(configured):
             expected_mapping_key=f.mapping_key, expected_mapping_version=1,
             authorize=f.authorize)
     assert ready["account_ref"] == "BANK-CLEARING.SCR"
+    assert ready["method_code"] == "SYNTH_CASH"
+    assert ready["method_version"] == 1
+    assert ready["method_label"] == "Synthetic cash"
+    assert ready["method_kind"] == "CASH"
     with f.factory.begin() as db, pytest.raises(PostingConflict):
         require_receiving_account(db, f.context, f.branches[0], f.method_key,
             expected_method_version=2, expected_mapping_key=f.mapping_key,

@@ -46,6 +46,11 @@ from .Orders.PaymentConfiguration import (
     PaymentMethod, PaymentMethodRevision, BranchReceivingAccount,
     BranchReceivingAccountRevision,
 )
+from .Orders.SalesPosting import (
+    SalesPostingAttempt, SalesPostingTender, SalesCardConfirmation,
+    SalesInvoice, SalesInvoiceLine, SalesInvoicePayment,
+    SalesInvoiceReservation,
+)
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
@@ -95,6 +100,9 @@ __all__ = [
     "CustomerPriceAgreementRevision", "SalesTransactionPricing",
     "PaymentMethod", "PaymentMethodRevision", "BranchReceivingAccount",
     "BranchReceivingAccountRevision",
+    "SalesPostingAttempt", "SalesPostingTender", "SalesCardConfirmation",
+    "SalesInvoice", "SalesInvoiceLine", "SalesInvoicePayment",
+    "SalesInvoiceReservation",
     "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
     "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
     "MasterDocumentType"
