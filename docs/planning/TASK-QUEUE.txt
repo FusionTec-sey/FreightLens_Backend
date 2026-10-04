@@ -455,7 +455,10 @@ into retry intent, using the same pool-before-product lock order as charge posti
 Evidence: evidence/t06-opening-authority-verification.txt. No UI/API activation.
 Next: connect authenticated central-runtime identity. Existing branch authority
 must not stand in for central shared-pool
-authority; runtime enrollment/fencing remains a T21-T23 integration gate. Continue
+authority. Runtime enrollment/fencing is no longer a T21-T23 integration gate under
+BD-20261004-09: one cloud runtime owns authority, its node key is configured and
+verified, and enrollment is a one-time administrative action per company. Fencing
+stays as a guard against two processes posting at once. Continue
 receipt costs and central reconciliation. Public financial posting remains off;
 validate actual RustFS version retention/configuration before enabling capture.
 Preserve source/permission guards and atomic own-operation retries. Do not expose private metadata
@@ -523,8 +526,9 @@ evidence/t07-local-runtime-allocation-api.txt. No preview configuration enabled.
 Tablet allocation control and runtime-aware context read implemented locally;
 backend31/frontend15/build pass, evidence/t07-store-allocation-ui.txt. Browser
 acceptance pending; preview runtime remains disabled.
-Next action: Connect other-store/release execution through the same server-derived runtime. Continue
-trusted runtime adapters. Protect paid holds; no automatic expiry or other-store
+Next action: Connect other-store/release execution through the same server-derived
+runtime. Trusted runtime adapters are satisfied for a single cloud deployment under
+BD-20261004-09; a distributed adapter returns only if T21 resumes. Protect paid holds; no automatic expiry or other-store
 allocation. Source-less internal compatibility is not a public sales capability.
 T13A automated contract is ready; external browser/provider acceptance stays pending.
 
@@ -717,43 +721,56 @@ Acceptance / evidence: Till reconciliation/discrepancy approval/deposit match; r
 Next action: Build configuration-driven export and review UI.
 
 T21 | Package store/cloud runtimes
-Status: Ready
+Status: Deferred (BD-20261004-09; single cloud deployment chosen)
 Dependencies: T02,T03
 Acceptance / evidence: Isolated development nodes, secure enrollment/local assets/search/node-owned jobs; preserve preview.
 Owner: Other programmer, bounded T21 packaging slice; see PROGRAMMER-T21-HANDOFF.txt.
-Next action: Inventory existing Compose/runtime setup and build isolated synthetic
-packaging only. Secure enrollment/full T21 remain separate integration gates.
+Deferred 2026-10-04 by BD-20261004-09: the system runs as one cloud deployment used
+by every store, so isolated multi-node packaging is not required now. Not cancelled;
+the handoff, analysis and delivery standards in PROGRAMMER-T21-HANDOFF.txt are kept
+for a later reversal, and the data model (StoreNode, authority epochs, execute_once
+operation keys) needs no rewrite to resume. The assignment is SUSPENDED: notify the
+assigned programmer before any packaging work begins.
+Next action when resumed: Inventory existing Compose/runtime setup and build isolated
+synthetic packaging only. Secure enrollment/full T21 remain separate integration gates.
 T02/T03 foundations are available; deferred browser acceptance does not block
 isolated packaging. No real-node enrollment or preview replacement authorised.
 
 T22 | Implement durable synchronization
-Status: Blocked
+Status: Deferred (BD-20261004-09; no multi-node sync for now)
 Dependencies: T21
 Acceptance / evidence: Transactional inbox/outbox, ordered delivery/ack/restart recovery/visible failures; duplicate has one effect.
 Next action: Extend persisted posting outbox; no in-memory acceptance substitute.
 
 T23 | Enforce offline eligibility
-Status: Blocked
+Status: Deferred (BD-20261004-09; stores use the cloud instance directly)
 Dependencies: T12,T22
 Acceptance / evidence: Cached policy/node fencing/shared-money limits; unsafe credit and ambiguous recovery blocked with cases.
 Next action: Add explicit offline eligibility and recovery tests.
 
 T24 | Implement paper-outage recovery
-Status: Blocked
+Status: Deferred (BD-20261004-09; manual paper fallback is the interim mitigation)
 Dependencies: T16,T23
 Acceptance / evidence: Controlled paper references/dates/duplicate detection/stock reconciliation before unrestricted checkout.
 Next action: Build recovery workflow with synthetic paper records.
 
 T25 | Add digital invoice delivery
 Status: Blocked
-Dependencies: T17,T22
+Dependencies: T17 (T22 dependency removed by BD-20261004-09)
 Acceptance / evidence: Consent and queued email/WhatsApp sent/failed/uncertain states; sandbox adapters only.
+Rescoped by BD-20261004-09: delivery goes directly from the single cloud instance,
+so it no longer waits on T22 synchronisation. Queue, retry and sent/failed/uncertain
+states are still required, because a provider call can still fail or be uncertain.
 Next action: Keep actual provider/recipient setup as external gate.
 
 T26 | Build import and recovery rehearsals
 Status: Blocked
-Dependencies: T08,T20,T24
+Dependencies: T08,T20 (T24 dependency removed by BD-20261004-09)
 Acceptance / evidence: Repeatable inFlow mapping/exceptions/opening reconciliation/backup restore; synthetic or approved sanitized data.
+Rescoped by BD-20261004-09: import mapping, opening reconciliation and backup
+restore rehearsals remain in scope; store-node recovery rehearsal is out of scope
+while T21-T24 are deferred. A cloud-outage rehearsal using the manual paper fallback
+replaces it and should be exercised with staff.
 Next action: Develop adapters and isolated rehearsal tests.
 
 T27 | Extend deposits and cheque handling
@@ -849,8 +866,12 @@ Movement-aware adjustment interface remains T09/T33, not guessed in this slice.
 
 T34 | Complete readiness and supervised pilot gates
 Status: Blocked
-Dependencies: T14E,T15,T19,T24,T25,T26,T27,T28,T29,T31,T32,T33
+Dependencies: T14E,T15,T19,T25,T26,T27,T28,T29,T31,T32,T33 (T24 removed by BD-20261004-09)
 Acceptance / evidence: Hardware/configuration/import/accounting/outage/staff acceptance; explicit owner pilot approval.
+Rescoped by BD-20261004-09: offline, synchronisation and multi-node readiness items
+drop out of the pilot gates. Connectivity dependency becomes an explicit operational
+risk instead: the agreed mitigation is the manual paper fallback, and staff
+acceptance must cover using it during a cloud or link outage.
 Next action: Track real acceptance separately; never infer pilot authority.
 
 CONSOLIDATION AND DEPENDENCY CORRECTIONS (2026-10-02)

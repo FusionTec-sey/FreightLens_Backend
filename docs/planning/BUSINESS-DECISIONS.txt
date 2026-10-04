@@ -1,5 +1,5 @@
 FREIGHTLENS BUSINESS DECISIONS
-Revision: BD-20261004-03
+Revision: BD-20261004-09
 Canonical companion: TASK-QUEUE.txt. Recorded 2026-10-03 from owner instructions.
 These decisions preserve actionable requirements, not the full private chat.
 Do not publish customer records, legal PDFs, credentials or personal chat exports.
@@ -149,6 +149,38 @@ revision pairing, scoped permissions/resources, partial-success/retry recovery,
 negative isolation tests, minimal diffs and a reproducible PR manifest. T21 scope
 is unchanged; no new business APIs, enrollment or sync authorised. This tightens
 BD-20261004-07 delivery gates rather than reopening completed T33A implementation.
+
+BD-20261004-09 | Single cloud deployment; store-local nodes deferred | T21,T22,T23,T24,T06,T07,T25,T26,T34
+Owner decided the system runs as ONE cloud deployment used by every store. No
+store-local hosting, no multi-node topology and no synchronisation for now.
+Stores reach the single cloud instance over the network; a counter cannot sell
+while that link is down, and the agreed interim mitigation is a manual paper
+fallback entered once the link returns.
+
+T21, T22, T23 and T24 are DEFERRED, not cancelled or deleted. Their analysis,
+assignment and handoff documents are retained. The data model already supports a
+later reversal: StoreNode identities, branch authority epochs and execute_once
+operation keys stay in place and need no rewrite if multi-node work resumes.
+
+Consequences recorded now:
+- The T21-T23 "runtime enrollment and fencing" integration gate no longer applies
+  to T06 and T07 under a single deployment. One cloud runtime owns authority; its
+  node key is configured and verified (evidence/t06-t07-runtime-and-retention-
+  gates.txt). Enrollment becomes a one-time administrative action per company
+  rather than a distributed protocol. Fencing is retained as a safety guard
+  against two processes posting at once, not as a distributed concern.
+- Offline eligibility, cached policy, node fencing and shared-money limits are out
+  of scope while deferred. Customer credit and deposit redemption therefore remain
+  centrally checked, which removes the double-redemption risk T23 existed to cover.
+- T25 digital invoice delivery must be rescoped to deliver directly from the cloud
+  instead of depending on T22 synchronisation.
+- T26 recovery rehearsals keep import and restore scope but drop node recovery.
+- T34 pilot gates drop the offline, sync and multi-node readiness items.
+
+The PROGRAMMER-T21-HANDOFF.txt assignment is suspended. Notify that programmer
+before any packaging work begins; BD-20261004-07 and BD-20261004-08 are superseded
+only on the question of whether T21 proceeds now, not on their delivery standards,
+which continue to apply to any future package.
 
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
