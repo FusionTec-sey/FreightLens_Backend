@@ -29,6 +29,19 @@ from tests.test_inventory_policy_drafts import draft  # noqa: F401
 from tests.test_inventory_locations import locations  # noqa: F401
 
 
+@pytest.fixture
+def invoice_printing(posting, test_engine, monkeypatch):
+    """Install T17 against the isolated fixture database before each case."""
+    from Utils import migrate_20261005_invoice_print_queue as migration
+
+    f = posting
+    f.db.commit()
+    monkeypatch.setattr(migration, "engine", test_engine)
+    migration.ensure_sales_invoice_printing_schema()
+    migration.ensure_sales_invoice_printing_schema()
+    return f
+
+
 class ExactStorage:
     def __init__(self):
         self.bucket_name = "synthetic-invoice-test"
@@ -91,8 +104,8 @@ def _request(f, template):
         expected_template_version_id=template.active_version_id)
 
 
-def test_original_replay_exact_version_and_print_state(posting):
-    f = posting; template = _configure(f); storage = ExactStorage()
+def test_original_replay_exact_version_and_print_state(invoice_printing):
+    f = invoice_printing; template = _configure(f); storage = ExactStorage()
     factory = sessionmaker(bind=f.db.get_bind())
     payload = _request(f, template)
     rendered = []
@@ -126,8 +139,8 @@ def test_original_replay_exact_version_and_print_state(posting):
     assert resolved.result["status"] == "PRINTED" and resolved.result["version"] == 3
 
 
-def test_copy_uses_frozen_original_and_server_owned_visible_mark(posting):
-    f = posting; template = _configure(f); storage = ExactStorage()
+def test_copy_uses_frozen_original_and_server_owned_visible_mark(invoice_printing):
+    f = invoice_printing; template = _configure(f); storage = ExactStorage()
     factory = sessionmaker(bind=f.db.get_bind())
     original = _request(f, template)
     create_invoice_print_job(factory, f.context, f.user.id, original,
@@ -163,8 +176,8 @@ def test_copy_uses_frozen_original_and_server_owned_visible_mark(posting):
         assert copy_row.data_snapshot["data"]["company"]["legal_name"] == "Synthetic Retail Ltd"
 
 
-def test_unresolved_job_blocks_another_invoice_artifact(posting):
-    f = posting; template = _configure(f); storage = ExactStorage()
+def test_unresolved_job_blocks_another_invoice_artifact(invoice_printing):
+    f = invoice_printing; template = _configure(f); storage = ExactStorage()
     factory = sessionmaker(bind=f.db.get_bind())
     original = _request(f, template)
     create_invoice_print_job(factory, f.context, f.user.id, original,
@@ -182,8 +195,8 @@ def test_unresolved_job_blocks_another_invoice_artifact(posting):
             artifact_key=copy.artifact_key).count() == 0
 
 
-def test_missing_exact_blob_version_fails_without_artifact(posting):
-    f = posting; template = _configure(f); storage = ExactStorage()
+def test_missing_exact_blob_version_fails_without_artifact(invoice_printing):
+    f = invoice_printing; template = _configure(f); storage = ExactStorage()
     storage.fingerprint_file_version = lambda *args, **kwargs: (_ for _ in ()).throw(
         ValueError("object version unavailable"))
     payload = _request(f, template)
@@ -197,10 +210,10 @@ def test_missing_exact_blob_version_fails_without_artifact(posting):
             artifact_key=payload.artifact_key).count() == 0
 
 
-def test_print_options_endpoint_permission_tenant_and_anonymous_guards(posting):
+def test_print_options_endpoint_permission_tenant_and_anonymous_guards(invoice_printing):
     from Routes.Orders.SalesInvoicePrintRouter import SalesInvoicePrintRouter
     from auth.policy import get_request_policy
-    f = posting; template = _configure(f)
+    f = invoice_printing; template = _configure(f)
     f.app.include_router(SalesInvoicePrintRouter)
     f.permissions |= {"View_Sale", "Print_SaleInvoice", "Resolve_SalePrint"}
     f.user.access_policy = AccessPolicy(user=f.user, org_ids=(f.org_a,),
