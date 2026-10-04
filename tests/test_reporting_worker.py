@@ -84,6 +84,9 @@ def test_render_job_model_contains_retry_and_snapshot_contract():
         "max_attempts",
         "is_issued",
         "retain_until",
+        "worker_id",
+        "lease_expires_at",
+        "retry_at",
     }.issubset(columns.keys())
 
 
@@ -93,4 +96,4 @@ def test_issued_copy_detection_uses_document_type_and_lifecycle():
     assert render_is_issued("RFQ", {"lifecycle_stage": "RFQ_SENT"}) is True
     assert render_is_issued("RFQ", {"lifecycle_stage": "DRAFT"}) is False
     assert render_is_issued("DefectReport", {"status": "COMPLETED"}) is False
-    assert {"worker_id", "lease_expires_at", "retry_at"}.issubset(columns.keys())
+

@@ -120,7 +120,7 @@ Remaining gate: browser/layout acceptance deferred by owner. No actual threshold
 or counters seeded. Verified backend contracts permit T04 development to proceed.
 
 T04 | Build reusable manager cases
-Status: In progress
+Status: Implemented—verification pending
 Dependencies: T03
 Acceptance / evidence: Request/review/approve/reject audit; exact scope/version binding; reject self approval and changed/reused approvals.
 Implemented foundation: immutable request/decision/single-use history, transactional
@@ -138,8 +138,9 @@ written inside the case transaction, so a committed request/decision always has
 its recipients. No customer, quantity, amount or reason text is carried. Verified
 on synthetic data: request notified both eligible reviewers, decision notified the
 requester, all unread and case-linked. Evidence:
-evidence/t04-case-notification-delivery.txt. Remaining: email/push channels and
-browser acceptance. No task signoff.
+evidence/t04-case-notification-delivery.txt. Focused access tests
+(tests/test_case_notification_access.py) and full PostgreSQL suites pass.
+Remaining: browser acceptance and optional external email/push channels.
 Verified request/review/consume contracts permit dependent T05 work.
 
 T05 | Activate reviewed inventory policies

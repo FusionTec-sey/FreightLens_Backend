@@ -18,7 +18,7 @@ from Model.containermgmt.Orders.Product import Product
 from Model.containermgmt.Inventory.Location import InventoryBranch, StockLocation
 from Model.containermgmt.Inventory.CostPool import InventoryCostPool, BranchCostPool
 from Model.containermgmt.Inventory.ProductPolicyDraft import ProductPolicyDraft
-from Model.containermgmt.Inventory.PostingAuthority import StoreNode, BranchAuthorityEpoch
+from Model.containermgmt.Inventory.PostingAuthority import StoreNode, BranchAuthorityEpoch, CostPoolAuthorityEpoch
 from Schema.InventoryPolicySchema import InventoryPolicyConfig
 from Schema.UnitBarcodeSchema import UnitBarcodeCreate
 from Schema.InventoryBatchSchema import StockBatchIdentity
@@ -31,7 +31,7 @@ from Services.barcode_retirement_service import load_retirement_binding, retire_
 from Services.stock_ledger_service import open_untracked_stock, open_batch_stock, open_serial_stock, reserve_stock
 from Services.inventory_valuation_service import record_opening_value
 from Services.inventory_quantity_service import QuantityBreakdown
-from Services.posting_authority_service import AuthorityClaim
+from Services.posting_authority_service import AuthorityClaim, CostPoolAuthorityClaim
 from Utils.org_filter import OrgContext
 from auth.security import hash_password
 
@@ -78,7 +78,9 @@ def seed_demo(db, viewer_ids, *, allow_shared_dev=False):
     db.add(node); db.flush()
     db.add(BranchAuthorityEpoch(org_id=demo.id, branch_id=branch.id, node_id=node.id, epoch=1,
         state="ACTIVE", reason="DEMO ONLY - synthetic local fixture", created_by=actor)); db.flush()
+    db.add(CostPoolAuthorityEpoch(org_id=demo.id, cost_pool_id=pool.id, node_id=node.id, epoch=1, state="ACTIVE", reason="DEMO ONLY - synthetic local fixture", created_by=actor)); db.flush()
     claim = AuthorityClaim(demo.id, branch.id, node.node_key, 1)
+    central_claim = CostPoolAuthorityClaim(demo.id, pool.id, node.node_key, 1)
     ordinary = InventoryPolicyConfig(base_unit="PCS", quantity_step="1", tracking="UNTRACKED")
     products = []
     def product(sku, label, policy=ordinary):
@@ -114,7 +116,7 @@ def seed_demo(db, viewer_ids, *, allow_shared_dev=False):
     def value(balance_id, goods_value, additional_cost):
         return record_opening_value(db, context, actor, uuid4(), balance_id=balance_id,
             expected_version=0, goods_value_scr=Decimal(goods_value), additional_cost_scr=Decimal(additional_cost),
-            reason="DEMO ONLY - synthetic opening valuation", authorize=authorize).result["valuation_id"]
+            reason="DEMO ONLY - synthetic opening valuation", authority_claim=central_claim, authorize=authorize).result["valuation_id"]
     product("SETUP", "Not configured")
     row = product("DRAFT", "Saved policy draft"); draft(row, ordinary)
     for state in ("PENDING", "APPROVED", "REJECTED"):
