@@ -11,11 +11,12 @@
 From `Backend`:
 
 ```powershell
-docker compose up -d postgres rustfs meilisearch
+docker compose up -d postgres rustfs meilisearch report-worker
 docker compose ps
 ```
 
 Local ports are PostgreSQL `5433`, RustFS `9005`, RustFS console `9006`, and Meilisearch `7700`.
+The `report-worker` service processes queued PDF jobs and should run as a single replica on a developer laptop.
 
 ## Backend
 

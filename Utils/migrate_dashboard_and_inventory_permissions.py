@@ -178,6 +178,21 @@ def ensure_dashboard_and_inventory_permissions():
                 conn.commit()
                 logger.info("containermgmt.dashboard_templates table created.")
 
+            conn.execute(text(f"""
+                ALTER TABLE {biz_schema}dashboard_templates
+                    ADD COLUMN IF NOT EXISTS role_id INTEGER
+                        REFERENCES {user_schema}roles(id);
+                UPDATE {biz_schema}dashboard_templates AS template
+                SET role_id = role.id
+                FROM {user_schema}roles AS role
+                WHERE template.role_id IS NULL
+                  AND lower(role.name) = lower(template.role_name)
+                  AND (role.org_id IS NULL OR role.org_id = template.org_id);
+                CREATE INDEX IF NOT EXISTS ix_dashboard_templates_role_id
+                    ON {biz_schema}dashboard_templates(role_id);
+            """))
+            conn.commit()
+
             # 4. Create user_dashboard_configs table
             udc_table_check = conn.execute(text(f"""
                 SELECT 1 FROM information_schema.tables 

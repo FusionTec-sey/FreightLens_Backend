@@ -18,6 +18,7 @@ from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
 from Model.db import SessionLocal
 from Services.report_data_resolvers import resolve_report_data
+from Services.report_audit_service import render_is_issued
 from Utils.blob_storage import blob_storage
 from Utils.org_filter import OrgContext
 from auth.policy import get_access_policy
@@ -176,6 +177,7 @@ class ReportRenderWorker:
             job.file_size = len(pdf_bytes)
             job.output_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
             job.data_snapshot = snapshot
+            job.is_issued = render_is_issued(template.entity_type, snapshot)
             job.completed_at = _utcnow()
             job.lease_expires_at = None
             job.retry_at = None

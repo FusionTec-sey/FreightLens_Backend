@@ -270,5 +270,10 @@ class ReportRenderJobOut(BaseModel):
     status: str
     error_message: Optional[str] = None
     download_url: Optional[str] = None
+    output_sha256: Optional[str] = None
+    file_size: Optional[int] = None
+    is_issued: bool = False
+    retain_until: Optional[datetime] = None
+    version_id: Optional[int] = None
     requested_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

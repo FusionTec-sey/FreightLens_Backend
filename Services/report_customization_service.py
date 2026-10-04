@@ -17,6 +17,40 @@ PRINT_ASSET_FIELDS = {
 }
 
 
+def initialize_org_reporting(db: Session, org_id: int, user_id: int | None = None) -> None:
+    """Create the print profile and activate marked system defaults atomically."""
+    profile = db.query(OrgPrintProfile).filter(OrgPrintProfile.org_id == org_id).first()
+    if profile is None:
+        db.add(OrgPrintProfile(org_id=org_id, created_by=user_id))
+
+    templates = db.query(ReportTemplate).filter(
+        ReportTemplate.is_system.is_(True),
+        ReportTemplate.is_active.is_(True),
+        ReportTemplate.is_default_for_new_orgs.is_(True),
+        ReportTemplate.active_version_id.is_not(None),
+        ReportTemplate.is_deleted.is_(False),
+    ).order_by(ReportTemplate.entity_type, ReportTemplate.id).all()
+    default_entity_types = set()
+    for template in templates:
+        exists = db.query(ReportTemplateAssignment.id).filter(
+            ReportTemplateAssignment.org_id == org_id,
+            ReportTemplateAssignment.template_id == template.id,
+        ).first()
+        if exists:
+            continue
+        is_default = template.entity_type not in default_entity_types
+        default_entity_types.add(template.entity_type)
+        db.add(ReportTemplateAssignment(
+            org_id=org_id,
+            template_id=template.id,
+            entity_type=template.entity_type,
+            is_active=True,
+            is_default=is_default,
+            default_options=dict(template.default_params or {}),
+            created_by=user_id,
+        ))
+
+
 def get_print_profile(db: Session, org_context: OrgContext) -> OrgPrintProfile:
     profile = db.query(OrgPrintProfile).filter(
         OrgPrintProfile.org_id == org_context.org_id,

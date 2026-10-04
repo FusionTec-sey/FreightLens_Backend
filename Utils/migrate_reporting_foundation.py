@@ -195,6 +195,11 @@ def ensure_reporting_foundation_schema() -> None:
             ALTER TABLE containermgmt.report_template_versions
                 ADD COLUMN IF NOT EXISTS paper_settings JSONB,
                 ADD COLUMN IF NOT EXISTS options_schema JSONB;
+            ALTER TABLE containermgmt.report_templates
+                ADD COLUMN IF NOT EXISTS is_default_for_new_orgs BOOLEAN NOT NULL DEFAULT FALSE;
+            UPDATE containermgmt.report_templates
+            SET is_default_for_new_orgs = TRUE
+            WHERE is_system IS TRUE;
 
             ALTER TABLE containermgmt.purchase_orders
                 ADD COLUMN IF NOT EXISTS base_currency VARCHAR(10),
@@ -244,6 +249,16 @@ def ensure_reporting_foundation_schema() -> None:
             JOIN usercredentials.organisations AS organisation
                 ON organisation.id = allowed_org_id
             ON CONFLICT DO NOTHING;
+        """))
+
+        conn.execute(text("""
+            ALTER TABLE containermgmt.report_render_jobs
+                ADD COLUMN IF NOT EXISTS is_issued BOOLEAN NOT NULL DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS retain_until TIMESTAMPTZ;
+            CREATE INDEX IF NOT EXISTS ix_report_render_jobs_is_issued
+                ON containermgmt.report_render_jobs(is_issued);
+            CREATE INDEX IF NOT EXISTS ix_report_render_jobs_retain_until
+                ON containermgmt.report_render_jobs(retain_until);
         """))
 
     logger.info("Reporting foundation schema is ready")

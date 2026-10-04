@@ -10,6 +10,7 @@ from Model.containermgmt import ContainerDetails, BillOfLanding
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import require_admin, require_root_admin
 from Utils.org_filter import OrgContext
+from Services.report_customization_service import initialize_org_reporting
 
 OrganisationRouter = APIRouter(prefix="/organisations", tags=["Organisation Management"])
 
@@ -134,6 +135,8 @@ async def create_organisation(
         is_active=True
     )
     db.add(new_org)
+    db.flush()
+    initialize_org_reporting(db, new_org.id, current_user.id)
     db.commit()
     db.refresh(new_org)
     

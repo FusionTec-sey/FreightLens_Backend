@@ -45,6 +45,8 @@ from .Report.ReportRenderJob import ReportRenderJob
 from .Report.OrgPrintProfile import OrgPrintProfile
 from .Report.ReportFieldClass import ReportFieldClass
 from .Report.ReportTemplateAssignment import ReportTemplateAssignment
+from .Dashboard.DashboardTemplate import DashboardTemplate
+from .Dashboard.UserDashboardConfig import UserDashboardConfig
 
 from .Inventory.Location import InventoryBranch, StockLocation
 from .Inventory.CostPool import InventoryCostPool, BranchCostPool
@@ -77,6 +79,7 @@ __all__ = [
     "VendorQuote", "VendorQuoteItem", "POItemHistory", "POStageTransition",
     "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
     "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
+    "DashboardTemplate", "UserDashboardConfig",
     "MasterDocumentType"
 ]
 

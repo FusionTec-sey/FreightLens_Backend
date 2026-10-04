@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
+from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import relationship
 from Model.db import Base
 
@@ -20,6 +20,8 @@ class ReportRenderJob(Base):
     error_message = Column(Text, nullable=True)
     data_snapshot = Column(JSON, nullable=True)
     output_sha256 = Column(String(64), nullable=True)
+    is_issued = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
+    retain_until = Column(DateTime(timezone=True), nullable=True, index=True)
     attempt_count = Column(Integer, nullable=False, default=0)
     max_attempts = Column(Integer, nullable=False, default=3)
     worker_id = Column(String(100), nullable=True, index=True)

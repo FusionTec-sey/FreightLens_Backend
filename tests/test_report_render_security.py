@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 from openpyxl import Workbook
 from pydantic import ValidationError
 
@@ -99,7 +100,8 @@ def test_preview_rejects_unsafe_html_before_resolving_data(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         report_router_module.render_report_preview(
-            request,
+            request=Request({"type": "http", "method": "POST", "path": "/reports/render/preview", "headers": []}),
+            req=request,
             db=SimpleNamespace(),
             current_user=SimpleNamespace(),
             org_context=SimpleNamespace(),

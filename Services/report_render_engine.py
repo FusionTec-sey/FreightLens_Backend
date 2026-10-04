@@ -4,6 +4,9 @@ Sandboxed Jinja2 rendering engine and WeasyPrint PDF compilation pipeline.
 Executes templates within an ImmutableSandboxedEnvironment with strict helper functions.
 """
 import logging
+import multiprocessing
+from queue import Empty
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Dict, Any, Callable, Optional
 from datetime import datetime, date
 from decimal import Decimal
@@ -73,14 +76,18 @@ def default_na_filter(val: Any, placeholder: str = "-") -> str:
     return str(val)
 
 
-def get_sandboxed_env() -> SandboxedEnvironment:
+def get_sandboxed_env(timezone_name: str = "Indian/Mahe") -> SandboxedEnvironment:
     """Configures a sandboxed Jinja2 environment with safe helpers and strict attribute access."""
     env = SandboxedEnvironment(autoescape=True)
     env.filters["format_date"] = format_date_filter
     env.filters["format_number"] = format_number_filter
     env.filters["format_currency"] = format_currency_filter
     env.filters["default_na"] = default_na_filter
-    env.globals["now"] = datetime.utcnow
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        timezone = ZoneInfo("Indian/Mahe")
+    env.globals["now"] = lambda: datetime.now(timezone)
     return env
 
 
@@ -247,7 +254,9 @@ def render_html_document(
     orientation: str = "portrait",
 ) -> str:
     """Renders Jinja2 templates into a complete HTML string using sandboxed environment."""
-    env = get_sandboxed_env()
+    company = context.get("company") if isinstance(context, dict) else None
+    timezone_name = company.get("timezone") if isinstance(company, dict) else None
+    env = get_sandboxed_env(timezone_name or "Indian/Mahe")
 
     body_tmpl = env.from_string(html_template)
     rendered_body = sanitize_html_fragment(body_tmpl.render(context))
@@ -287,3 +296,33 @@ def compile_pdf_from_html(
     except Exception as e:
         logger.error("WeasyPrint PDF compilation failed: %s", e)
         raise RuntimeError(f"PDF compilation error: {str(e)}")
+
+
+def _compile_pdf_child(full_html: str, result_queue) -> None:
+    try:
+        result_queue.put((True, compile_pdf_from_html(full_html)))
+    except Exception as exc:
+        result_queue.put((False, f"{type(exc).__name__}: {exc}"))
+
+
+def compile_pdf_with_timeout(full_html: str, timeout_seconds: int = 45) -> bytes:
+    """Compile in a disposable process so a pathological document can be stopped."""
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue(maxsize=1)
+    process = context.Process(target=_compile_pdf_child, args=(full_html, result_queue))
+    process.start()
+    process.join(timeout_seconds)
+    if process.is_alive():
+        process.terminate()
+        process.join(5)
+        result_queue.close()
+        raise TimeoutError(f"Report rendering exceeded {timeout_seconds} seconds")
+    try:
+        succeeded, result = result_queue.get(timeout=1)
+    except Empty as exc:
+        raise RuntimeError(f"Render process exited without a result (code {process.exitcode})") from exc
+    finally:
+        result_queue.close()
+    if not succeeded:
+        raise RuntimeError(result)
+    return result

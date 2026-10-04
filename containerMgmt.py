@@ -349,6 +349,8 @@ from Routes.Inventory.ReservationReallocationRouter import ReservationReallocati
 app.include_router(ReservationReallocationRouter)
 from Routes.Inventory.ReservationDeadlineRouter import ReservationDeadlineRouter
 app.include_router(ReservationDeadlineRouter)
+from Routes.Inventory.OtherAreaReservationRouter import OtherAreaReservationRouter
+app.include_router(OtherAreaReservationRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
 

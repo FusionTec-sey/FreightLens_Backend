@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from Model.containermgmt.Report.ReportRenderJob import ReportRenderJob
+from Services.report_audit_service import render_is_issued
 from reporting.worker import ReportRenderWorker
 
 
@@ -76,5 +77,20 @@ def test_empty_claim_releases_transaction():
 
 def test_render_job_model_contains_retry_and_snapshot_contract():
     columns = ReportRenderJob.__table__.c
-    assert {"data_snapshot", "output_sha256", "attempt_count", "max_attempts"}.issubset(columns.keys())
+    assert {
+        "data_snapshot",
+        "output_sha256",
+        "attempt_count",
+        "max_attempts",
+        "is_issued",
+        "retain_until",
+    }.issubset(columns.keys())
+
+
+def test_issued_copy_detection_uses_document_type_and_lifecycle():
+    assert render_is_issued("PurchaseOrder", {"lifecycle_stage": "PO_ISSUED"}) is True
+    assert render_is_issued("PurchaseOrder", {"lifecycle_stage": "COMPLETED"}) is True
+    assert render_is_issued("RFQ", {"lifecycle_stage": "RFQ_SENT"}) is True
+    assert render_is_issued("RFQ", {"lifecycle_stage": "DRAFT"}) is False
+    assert render_is_issued("DefectReport", {"status": "COMPLETED"}) is False
     assert {"worker_id", "lease_expires_at", "retry_at"}.issubset(columns.keys())

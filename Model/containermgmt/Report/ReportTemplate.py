@@ -19,6 +19,9 @@ class ReportTemplate(OrgMixin, AuditMixin, Base):
     entity_type = Column(String(100), nullable=False)  # PurchaseOrder, ContainerDetails, etc.
     is_system = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_default_for_new_orgs = Column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     active_org_ids = Column(ARRAY(Integer), default=list, nullable=True)
     template_type = Column(
         String(30), default="DOCUMENT", server_default="DOCUMENT", nullable=False

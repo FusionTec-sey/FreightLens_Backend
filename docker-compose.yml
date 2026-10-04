@@ -47,13 +47,14 @@ services:
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
       - HOST_IP=0.0.0.0
       - HOST_PORT=9000
+      - STOCK_RUNTIME_NODE_KEY=${STOCK_RUNTIME_NODE_KEY:-}
       - RUSTFS_ENDPOINT_URL=http://rustfs:9000
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
       - RUSTFS_BUCKET_NAME=containermgmt-blobs
       - RUSTFS_REGION=us-east-1
       - MEILISEARCH_URL=http://meilisearch:7700
-      - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      - MEILISEARCH_API_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
     ports:
       - "9000:9000"
     volumes:
@@ -66,6 +67,29 @@ services:
       meilisearch:
         condition: service_started
     command: ["uvicorn", "containerMgmt:app", "--host", "0.0.0.0", "--port", "9000", "--reload"]
+
+  report-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sahaj_report_worker_local
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - ENVIRONMENT=development
+      - RUSTFS_ENDPOINT_URL=http://rustfs:9000
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
+      - RUSTFS_BUCKET_NAME=containermgmt-blobs
+      - RUSTFS_REGION=us-east-1
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    command: ["python", "-m", "reporting.worker"]
 
   meilisearch:
     image: getmeili/meilisearch:v1.6

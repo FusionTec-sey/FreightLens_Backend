@@ -67,7 +67,7 @@ services:
       - RUSTFS_BUCKET_NAME=containermgmt-blobs
       - RUSTFS_REGION=us-east-1
       - MEILISEARCH_URL=http://meilisearch-staging:7700
-      - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      - MEILISEARCH_API_KEY=${MEILISEARCH_API_KEY:?MEILISEARCH_API_KEY is required}
     depends_on:
       postgres-staging:
         condition: service_healthy
@@ -75,6 +75,28 @@ services:
         condition: service_started
       meilisearch-staging:
         condition: service_started
+    labels:
+      - "coolify.managed=true"
+
+  report-worker-staging:
+    build:
+      context: https://github.com/FusionTec-sey/FreightLens_Backend.git#standalone-main
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - ENVIRONMENT=production
+      - RUSTFS_ENDPOINT_URL=http://rustfs-staging:9000
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY is required}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY is required}
+      - RUSTFS_BUCKET_NAME=containermgmt-blobs
+      - RUSTFS_REGION=us-east-1
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      rustfs-staging:
+        condition: service_started
+    command: ["python", "-m", "reporting.worker"]
     labels:
       - "coolify.managed=true"
 

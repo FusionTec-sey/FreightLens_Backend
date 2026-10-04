@@ -46,6 +46,7 @@ class Settings:
     CMA_CGM_SHIPEMENTS_URL = os.getenv("CMA_CGM_SHIPEMENTS_URL", "")
     CMA_CGM_TOKEN_URL = os.getenv("CMA_CGM_OAUTH", "")
     CMA_CGM_WEBHOOK_SECRET = os.getenv("CMA_CGM_WEBHOOK_SECRET", "")
+    MEILISEARCH_API_KEY = os.getenv("MEILISEARCH_API_KEY", "")
 
     MEARSK_CLIENT_ID = os.getenv("MEARSK_CLIENT_ID", "")
     MEARSK_SECRET = os.getenv("MEARSK_SECRET", "")
@@ -67,6 +68,7 @@ class Settings:
             "JWT_SECRET_KEY": JWT_SECRET_KEY,
             "MEDIA_SIGNING_KEY": MEDIA_SIGNING_KEY,
             "CMA_CGM_WEBHOOK_SECRET": CMA_CGM_WEBHOOK_SECRET,
+            "MEILISEARCH_API_KEY": MEILISEARCH_API_KEY,
         },
     )
     if ENVIRONMENT.strip().lower() not in DEPLOYED_ENVIRONMENTS and not JWT_SECRET_KEY:

@@ -9,7 +9,7 @@ import math
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from Model.db import get_db
 from Model.containermgmt.Report.ReportTemplate import ReportTemplate
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
 from Model.containermgmt.Report.ReportRenderJob import ReportRenderJob
+from Model.Credentials.Organisation import Organisation
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import require_permission, has_permission
@@ -77,7 +78,9 @@ from Services.report_data_resolvers import (
     resolve_report_data,
 )
 from Services.report_template_validator import validate_template
-from Services.report_render_engine import render_html_document, compile_pdf_from_html
+from Services.report_render_engine import render_html_document, compile_pdf_with_timeout
+from Services.report_audit_service import record_completed_render
+from limiter import limiter
 from Services.report_context_generator import generate_context_file
 from Services.report_customization_service import (
     get_print_profile,
@@ -525,6 +528,11 @@ def _render_job_payload(job: ReportRenderJob) -> dict:
             if job.status == "COMPLETED" and job.output_key
             else None
         ),
+        "output_sha256": job.output_sha256,
+        "file_size": job.file_size,
+        "is_issued": job.is_issued,
+        "retain_until": job.retain_until,
+        "version_id": job.version_id,
         "requested_at": job.requested_at,
         "completed_at": job.completed_at,
     }
@@ -581,6 +589,39 @@ def enqueue_report_render(
     return _render_job_payload(job)
 
 
+@ReportRouter.get("/render/jobs", response_model=List[ReportRenderJobOut])
+def list_report_render_jobs(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[int] = None,
+    issued_only: bool = False,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+):
+    query = db.query(ReportRenderJob).filter(
+        ReportRenderJob.org_id.in_(org_context.allowed_org_ids),
+        ReportRenderJob.status == "COMPLETED",
+    )
+    if entity_type:
+        query = query.filter(ReportRenderJob.entity_type == entity_type)
+    if entity_id is not None:
+        query = query.filter(ReportRenderJob.entity_id == entity_id)
+    if issued_only:
+        query = query.filter(ReportRenderJob.is_issued.is_(True))
+
+    jobs = query.order_by(ReportRenderJob.completed_at.desc()).limit(limit).all()
+    visible = []
+    for job in jobs:
+        try:
+            _authorize_document_render(job.template, access_policy.scoped_user, org_context)
+        except HTTPException:
+            continue
+        visible.append(_render_job_payload(job))
+    return visible
+
+
 @ReportRouter.get("/render/jobs/{job_id}", response_model=ReportRenderJobOut)
 def get_report_render_job(
     job_id: str,
@@ -609,7 +650,9 @@ def get_report_render_job(
     return _render_job_payload(job)
 
 @ReportRouter.post("/render")
+@limiter.limit("10/minute")
 def render_report_pdf(
+    request: Request,
     req: ReportRenderRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -680,7 +723,21 @@ def render_report_pdf(
         return Response(content=full_html, media_type="text/html; charset=utf-8")
 
     # Compile PDF via WeasyPrint
-    pdf_bytes = compile_pdf_from_html(full_html)
+    try:
+        pdf_bytes = compile_pdf_with_timeout(full_html, 45)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    record_completed_render(
+        db,
+        template=template,
+        version=version,
+        org_id=org_context.org_id,
+        entity_id=req.entity_id,
+        params=req.params,
+        requested_by=current_user.id,
+        pdf_bytes=pdf_bytes,
+        context=context,
+    )
     filename = f"{template.slug}_{req.entity_id}.pdf"
 
     return Response(
@@ -691,7 +748,9 @@ def render_report_pdf(
 
 
 @ReportRouter.post("/render/preview")
+@limiter.limit("10/minute")
 def render_report_preview(
+    request: Request,
     req: ReportPreviewRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -811,6 +870,27 @@ def download_ai_context_file(
 
 # ── Dataset & Tabular Operational Registers ──────────────────────────────────
 
+def _enforce_dataset_org_scope(spec, db, org_context, access_policy) -> None:
+    scope_ids = (
+        [org_context.selected_org_id]
+        if org_context.selected_org_id is not None
+        else list(access_policy.org_ids)
+    )
+    if len(scope_ids) > 1:
+        access_policy.require_any("Cross_Org_Report")
+    if (spec.custom_filters or {}).get("all_organisations"):
+        active_ids = {
+            row[0]
+            for row in db.query(Organisation.id)
+            .filter(Organisation.is_active.is_(True))
+            .all()
+        }
+        if set(scope_ids) != active_ids:
+            raise HTTPException(
+                status_code=403,
+                detail="All-organisations reports require access to every active organisation",
+            )
+
 @ReportRouter.get("/datasets", response_model=List[DatasetCatalogItem])
 def get_dataset_reports_catalog(
     db: Session = Depends(get_db),
@@ -876,12 +956,15 @@ def run_dataset_report_query(
     resolver = get_dataset_resolver(report_key)
     if resolver.category not in access_policy.module_names:
         raise HTTPException(status_code=403, detail="Dataset module is not enabled")
+    _enforce_dataset_org_scope(spec, db, org_context, access_policy)
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     return run_dataset_query(report_key, spec, db, org_context, access_policy.scoped_user)
 
 
 @ReportRouter.post("/datasets/{report_key}/render")
+@limiter.limit("10/minute")
 def render_dataset_report_pdf(
+    request: Request,
     report_key: str,
     spec: DatasetQuerySpec,
     db: Session = Depends(get_db),
@@ -894,9 +977,13 @@ def render_dataset_report_pdf(
     resolver = get_dataset_resolver(report_key)
     if resolver.category not in access_policy.module_names:
         raise HTTPException(status_code=403, detail="Dataset module is not enabled")
+    _enforce_dataset_org_scope(spec, db, org_context, access_policy)
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "pdf"})
-    pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, access_policy.scoped_user)
+    try:
+        pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, access_policy.scoped_user)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
     filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -906,7 +993,9 @@ def render_dataset_report_pdf(
 
 
 @ReportRouter.post("/datasets/{report_key}/export")
+@limiter.limit("10/minute")
 def export_dataset_report_excel(
+    request: Request,
     report_key: str,
     spec: DatasetQuerySpec,
     db: Session = Depends(get_db),
@@ -919,6 +1008,7 @@ def export_dataset_report_excel(
     resolver = get_dataset_resolver(report_key)
     if resolver.category not in access_policy.module_names:
         raise HTTPException(status_code=403, detail="Dataset module is not enabled")
+    _enforce_dataset_org_scope(spec, db, org_context, access_policy)
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "xlsx"})
     excel_bytes = export_dataset_excel(report_key, spec, db, org_context, access_policy.scoped_user)

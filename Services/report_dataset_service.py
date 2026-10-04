@@ -35,7 +35,8 @@ from Schema.ReportDatasetSchema import (
     ColumnDefinition,
 )
 from Utils.excel_exporter import build_excel_workbook
-from Services.report_render_engine import render_html_document, compile_pdf_from_html
+from Services.report_render_engine import render_html_document, compile_pdf_with_timeout
+from Services.report_time_service import report_now
 from reporting.catalog.builtin import PURCHASE_ORDER_DATASET
 from reporting.policy import AccessPolicy
 from reporting.query import QueryCompiler, QueryExecutor, QueryFilter, QueryRequest
@@ -443,7 +444,7 @@ def resolve_containers_by_vendor(
         report_key="containers_by_vendor",
         report_title="Container Activity by Vendor Register",
         category="LOGISTICS",
-        generated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=report_now(db, org_context.org_id).strftime("%Y-%m-%d %H:%M %Z"),
         generated_by=getattr(user, "username", "Admin"),
         org_name=org_name,
         filters_applied=filters_applied,
@@ -646,7 +647,7 @@ def resolve_demurrage_aging_risk(
         report_key="demurrage_aging_risk",
         report_title="Port Demurrage & Detention Aging Risk Report",
         category="LOGISTICS",
-        generated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=report_now(db, org_context.org_id).strftime("%Y-%m-%d %H:%M %Z"),
         generated_by=getattr(user, "username", "Admin"),
         org_name=org_name,
         filters_applied={"min_days_threshold": f"> {min_days} Days"},
@@ -858,7 +859,7 @@ def resolve_po_procurement_register(
         report_key="po_procurement_register",
         report_title="Purchase Order Procurement Register",
         category="ORDERS",
-        generated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=report_now(db, org_context.org_id).strftime("%Y-%m-%d %H:%M %Z"),
         generated_by=getattr(user, "username", "Admin"),
         org_name=org_name,
         filters_applied=filters_applied,
@@ -1195,4 +1196,4 @@ def render_dataset_pdf(
         orientation=spec.orientation or "landscape",
     )
 
-    return compile_pdf_from_html(full_html)
+    return compile_pdf_with_timeout(full_html, 45)

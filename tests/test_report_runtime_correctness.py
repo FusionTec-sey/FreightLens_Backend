@@ -1,11 +1,13 @@
 import importlib
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from Schema.ReportDatasetSchema import DatasetQuerySpec
+from auth.policy import AccessPolicy
 from Services.report_data_resolvers import get_resolver
 from Services.report_dataset_service import (
     DEFAULT_FREE_DAYS,
@@ -155,3 +157,44 @@ def test_document_header_and_footer_are_running_page_elements():
 
 def test_default_free_days_matches_document_resolver():
     assert DEFAULT_FREE_DAYS == 14
+
+
+def test_multi_org_dataset_requires_cross_org_permission():
+    context = OrgContext(current_org_id=1, allowed_org_ids=[1, 2], is_root=False)
+    policy = AccessPolicy(
+        user=SimpleNamespace(id=7),
+        org_ids=(1, 2),
+        permission_names=frozenset(),
+        module_names=frozenset({"ORDERS"}),
+        field_permissions={},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        report_router_module._enforce_dataset_org_scope(
+            DatasetQuerySpec(), MagicMock(), context, policy
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_all_org_dataset_requires_every_active_org():
+    context = OrgContext(current_org_id=1, allowed_org_ids=[1, 2], is_root=False)
+    policy = AccessPolicy(
+        user=SimpleNamespace(id=7),
+        org_ids=(1, 2),
+        permission_names=frozenset({"Cross_Org_Report"}),
+        module_names=frozenset({"ORDERS"}),
+        field_permissions={},
+    )
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [(1,), (2,), (3,)]
+
+    with pytest.raises(HTTPException) as exc_info:
+        report_router_module._enforce_dataset_org_scope(
+            DatasetQuerySpec(custom_filters={"all_organisations": True}),
+            db,
+            context,
+            policy,
+        )
+
+    assert exc_info.value.status_code == 403

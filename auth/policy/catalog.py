@@ -26,6 +26,10 @@ PERMISSION_CATALOG = [
     *_specs('SALES', [
         ('View_SalesDraft', 'View company-owned retail sales drafts'),
         ('Manage_SalesDraft', 'Create and revise retail sales drafts, without confirming sales'),
+        ('Reserve_SalesDraft', 'Reserve eligible local stock for saved sales draft demand'),
+        ('Request_OtherAreaReservation', 'Request stock outside the selected sales work area'),
+        ('Review_OtherAreaReservation', 'Review exact other-area sales stock request'),
+        ('Execute_OtherAreaReservation', 'Reserve approved other-area sales stock'),
     ]),
     *_specs(None, [
         ("View_Dashboard", "View dashboard and summary statistics"),
