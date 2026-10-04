@@ -366,6 +366,7 @@ app.include_router(ManagerCaseRouter, dependencies=[Depends(require_module("INVE
 app.include_router(ReclassificationProposalRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(ReceiptManifestRouter)
 app.include_router(StockAdjustmentRouter)
+app.include_router(OpeningRouter)
 from Routes.Inventory.CostReconciliationRouter import CostReconciliationRouter
 app.include_router(CostReconciliationRouter)
 app.include_router(UnitBarcodeRouter, dependencies=[Depends(require_module("INVENTORY"))])

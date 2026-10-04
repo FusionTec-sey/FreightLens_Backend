@@ -690,6 +690,17 @@ Fifty focused backend tests pass; evidence:
 evidence/20261005-receipt-posting-boundary.txt. External object-retention and real
 runtime acceptance remain release gates rather than code blockers. T08 stays In
 progress for controlled opening/import composition.
+Reviewed opening/import composition is now implemented over the existing manager
+case, stock and valuation ledgers. One exact source row binds active policy, tracking
+identity, condition quantities, branch/location, cost pool, valuation version and
+reviewed SCR values; execution consumes the approval and posts physical/value effects
+in one transaction under server-owned authority. Same-key races replay once; changed
+intent, foreign scope, stale versions, missing mappings and direct client authority
+fail closed. Fourteen opening/API tests and 72 affected ledger/posting/valuation
+tests pass; 134 combined T08/startup checks pass after receipt-boundary integration.
+Evidence: evidence/20261005-reviewed-opening-import.txt. T08 remains In
+progress for receipt storage-retention/runtime acceptance and real import rehearsal;
+no real opening balances or inFlow data were loaded.
 
 T09 | Complete transfers and stock movements
 Status: Blocked

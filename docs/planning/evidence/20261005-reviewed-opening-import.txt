@@ -1,0 +1,41 @@
+FreightLens T08 reviewed opening/import composition evidence
+Date: 2026-10-05
+Decision baseline: BD-20261005-01
+
+Outcome
+- One exact opening or staged import row uses the existing reviewed manager case,
+  authoritative stock ledger and immutable cost-pool valuation.
+- Request, independent review and execution have separate permissions. Financial
+  field access plus explicit stock/cost permissions are required.
+- Execution obtains branch and cost-pool claims from server configuration. Clients
+  cannot submit authority identities, pools, epochs or cumulative balances.
+- Approval use, OPENING movement, UNRECONCILED opening value and operation/outbox
+  records share one database transaction. Product.current_stock is untouched.
+- A shared operation-key lock now serializes composite retries before source reads.
+
+Verification
+- 14 passed:
+  tests/test_inventory_opening_api.py
+  tests/test_inventory_opening_cases.py
+- 72 passed:
+  tests/test_inventory_opening_cases.py
+  tests/test_inventory_posting.py
+  tests/test_stock_ledger.py
+  tests/test_inventory_valuation.py
+- 134 passed after rebasing onto the reviewed receipt-posting boundary, covering
+  both public T08 adapters, shared posting locks, receipt movement/value paths,
+  permission catalogue, startup import and fresh-install registration contracts.
+- Isolated PostgreSQL only; synthetic companies, products, locations and values.
+
+Explicit failure coverage
+- Same operation retry and concurrent same-key execution have one business effect.
+- Changed intent, a second operation using the approval, stale policy/value, foreign
+  company, missing/incorrect authority and incompatible condition/tracking data fail.
+- Outer rollback removes stock, value and opening-case use together.
+- Missing runtime configuration returns unavailable; client authority is rejected.
+
+Remaining gates
+- No real inFlow parser/mapping, opening balance, serial or bank data was imported.
+- Receipt evidence retention and real runtime enrollment remain external acceptance
+  gates. Central reconciliation, accounting export and live financial activation are
+  not claimed. Browser acceptance was not required for this backend-only slice.
