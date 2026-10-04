@@ -31,3 +31,19 @@ def require_module(module_name: str):
             )
         return True
     return _check
+
+
+def require_any_module(*module_names: str):
+    """Guard shared endpoints used by several subscribed business modules."""
+    if not module_names:
+        raise ValueError("At least one module is required")
+
+    async def _check(policy: AccessPolicy = Depends(get_request_policy)):
+        if policy.is_platform_admin or any(name in policy.module_names for name in module_names):
+            return True
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The selected organisation needs access to a notification module.",
+        )
+
+    return _check

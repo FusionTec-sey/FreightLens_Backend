@@ -16,9 +16,11 @@ from sqlalchemy import select
 from Model.containermgmt.Orders.Notification import Notification
 from Model.Credentials.users import User
 from Model.Credentials.roles import Role
-from Model.Credentials.user_roles import user_roles
+from Model.Credentials.user_org_roles import user_org_roles
+from Model.Credentials.Organisation import Organisation
 from Model.Credentials.role_permissions import role_permissions
 from Model.Credentials.permissions import Permission
+from auth.policy.catalog import PERMISSION_BY_NAME
 
 # Each case action is reviewed under exactly one permission, so recipients are
 # the users holding it. Keep in step with the routers that guard each review.
@@ -74,14 +76,23 @@ def eligible_reviewer_ids(db, org_id, action, *, exclude_user_id=None):
         # Log loudly rather than failing the case write that already committed.
         logger.warning('No review permission mapped for case action %s; no recipients notified', action)
         return []
+    specification = PERMISSION_BY_NAME.get(permission)
+    organisation = db.query(Organisation).filter_by(id=org_id, is_active=True).one_or_none()
+    modules = set(organisation.modules or []) if organisation is not None else set()
+    if specification is None or organisation is None or (
+            specification.module and specification.module not in modules) or (
+            action == 'inventory.reservation.other-area' and 'INVENTORY' not in modules):
+        return []
     allowed = User.allowed_org_ids.isnot(None) & User.allowed_org_ids.any(org_id)
     query = (select(User.id).distinct()
-             .join(user_roles, user_roles.c.user_id == User.id)
-             .join(Role, Role.id == user_roles.c.role_id)
+             .join(user_org_roles, (user_org_roles.c.user_id == User.id)
+                   & (user_org_roles.c.org_id == org_id))
+             .join(Role, Role.id == user_org_roles.c.role_id)
              .join(role_permissions, role_permissions.c.role_id == Role.id)
              .join(Permission, Permission.id == role_permissions.c.permission_id)
              .where(Permission.name == permission,
                     User.is_deleted.is_(False),
+                    Role.is_deleted.is_(False),
                     (User.org_id == org_id) | allowed))
     if exclude_user_id is not None:
         query = query.where(User.id != exclude_user_id)

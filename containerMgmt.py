@@ -301,7 +301,7 @@ async def health_check(db: Session = Depends(get_db)):
 
 
 # ── Route registration ────────────────────────────────────────────────────────
-from auth.module_guard import require_module
+from auth.module_guard import require_module, require_any_module
 from auth.policy import get_request_policy
 from auth.security_guards import require_root_admin
 
@@ -342,7 +342,10 @@ app.include_router(ManagerCaseRouter, dependencies=[Depends(require_module("INVE
 app.include_router(ReclassificationProposalRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(UnitBarcodeRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(BarcodeRetirementRouter, dependencies=[Depends(require_module("INVENTORY"))])
-app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
+# Shared notifications serve several subscribed modules. Endpoint reads and
+# acknowledgements are limited to the authenticated recipient and company.
+app.include_router(NotificationRouter, dependencies=[Depends(require_any_module(
+    "ORDERS", "INVENTORY", "LOGISTICS", "SALES"))])
 app.include_router(MasterDataRouter)
 from Routes.MasterData.CustomerRouter import CustomerRouter
 app.include_router(CustomerRouter)
