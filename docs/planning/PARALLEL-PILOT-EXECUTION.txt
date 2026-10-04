@@ -1,8 +1,8 @@
 FREIGHTLENS ACCELERATED CLOUD SALES PILOT
 Decision: BD-20261005-01
-Status: Wave0 baseline verification in progress
+Status: Wave0 baseline verified and merged; Wave1 ready
 Integration branches: codex/pos-development in both repositories
-Open baseline PRs: backend #6 and frontend #7 from codex/local-area-scope
+Merged baseline PRs: backend #6 and frontend #7 from codex/local-area-scope
 
 DELIVERY TARGET
 Build a supervised cloud sales pilot with customer selection, configured pricing
@@ -61,5 +61,13 @@ replay run at Wave0, after T13 and at pilot acceptance. Browser automation requi
 the separate approval named by AGENTS.md. Use isolated synthetic data only.
 
 BASELINE MANIFEST
-Pending Wave0 merge. Record exact backend SHA, frontend SHA, CI runs, known warnings
-and outstanding browser/provider/hardware gates here before feature worktrees start.
+Verified backend application baseline SHA: b3a8c492933be379990a7c178d2ea142c710ed43
+Verified frontend application baseline SHA: 33c94b53b63f1ad1655a8a7c7c781c16f7c0d797
+Backend CI: GitHub Actions run 37231543595 passed full pytest and fresh-install.
+Frontend CI: GitHub Actions run 37231062525 passed tests and production build.
+Local affected checks: backend 386 passed, permission/pricing repair 11 passed;
+frontend 68 suites and 338 tests passed, and production build completed.
+Known frontend compiler warnings and the bundle-size warning remain non-blocking.
+Browser/tablet acceptance, payment-provider setup, real branch/account mappings,
+Epson hardware validation, imports, accounting acceptance and owner pilot approval
+remain explicit gates. No external deployment or live financial posting occurred.
