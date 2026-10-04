@@ -28,6 +28,7 @@ PERMISSION_CATALOG = [
         ('Manage_SalesDraft', 'Create and revise retail sales drafts, without confirming sales'),
         ('View_Sale', 'View company-owned posted retail sales and recovery status'),
         ('Post_Sale', 'Finalize an exact authorised retail sale and its confirmed payments'),
+        ('Collect_Sale', 'Hand over eligible paid sale quantities through an audited collection'),
         ('Record_ExternalCardConfirmation',
          'Record an audited result observed from an approved external card terminal'),
         ('Request_PriceFloorException', 'Request review of an exact sales price-floor exception'),

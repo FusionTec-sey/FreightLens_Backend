@@ -1,5 +1,10 @@
 FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-05
 Decision revision: BD-20261005-01
+Wave 2 checkpoint: T13 backend PR #12 merged as d0d4f44 and its existing-checkout
+frontend consumer PR #10 merged as c903117; both GitHub checks passed. T16 is now
+in progress with the first same-store partial/final collection backend slice.
+Serial assignment and reviewed other-store collection remain fail closed. Read
+TASK-QUEUE.txt and evidence/20261005-sales-collection.txt before extending it.
 Current execution map: PARALLEL-PILOT-EXECUTION.txt. The integration owner must
 publish the paired baseline SHAs before either feature worktree begins.
 Completed collaborator assignment: PROGRAMMER-T12A-HANDOFF.txt (cloud payment and

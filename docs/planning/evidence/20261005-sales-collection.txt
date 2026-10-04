@@ -1,0 +1,27 @@
+T16 PHYSICAL COLLECTION — FIRST SAFE BACKEND SLICE
+Date: 2026-10-05
+Branch: codex/t16-sales-collection
+
+IMPLEMENTED
+- Immutable collection headers and line allocations with stable operation IDs.
+- Required collector name/contact and current assigned-store authorization.
+- Line-level partial/final collection against exact posted reservations.
+- Server-resolved balance, location, batch, stock version and valuation version.
+- Existing T09 HANDOVER gateway reused; no second stock ledger or direct stock edit.
+- Deferred database lineage guards and a direct-HANDOVER bypass guard.
+- Payment and fulfilment status remain separate on invoice and collection reads.
+- Ordinary reads redact receiving accounts, cost pools and valuation values.
+- Same-store collection only in this slice; serial and other-store paths fail closed.
+
+VERIFICATION
+- tests/test_sales_collection.py: 6 passed.
+- Affected collection/posting/handover set: 22 passed.
+- Migration replay is included in the focused suite and ran twice on an isolated synthetic PostgreSQL database.
+- Covered partial then final collection, replay and changed intent, excess/stale rejection, direct HANDOVER bypass, API permission and response redaction.
+
+OPEN GATES
+- Publish the backend PR and pass GitHub pytest/fresh-install checks.
+- Connect the existing sales detail/checkout to collection options and history.
+- Implement exact serial assignment and reviewed other-store collection before enabling those paths.
+- Approved desktop/tablet browser acceptance, real configuration and supervised pilot approval.
+- No live stock, money or customer record was changed.

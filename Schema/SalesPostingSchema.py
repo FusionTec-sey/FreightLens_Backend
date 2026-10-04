@@ -292,7 +292,9 @@ class SalesInvoiceRead(BaseModel):
     net_total_scr: str
     tax_total_scr: str
     payment_status: Literal["PAID"] = "PAID"
-    fulfilment_status: Literal["AWAITING_COLLECTION"] = "AWAITING_COLLECTION"
+    fulfilment_status: Literal[
+        "AWAITING_COLLECTION", "PARTIALLY_COLLECTED", "COLLECTED"
+    ] = "AWAITING_COLLECTION"
     lines: list[SalesInvoiceLineRead]
     payments: list[SalesInvoicePaymentRead]
     reservations: list[SalesInvoiceReservationRead]

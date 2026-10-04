@@ -2095,3 +2095,26 @@ location/serial assignment and the T09 HANDOVER movement. An invoice therefore
 reports PAID separately from AWAITING_COLLECTION. Real account setup, external
 terminal/provider behavior, accounting acceptance and supervised pilot approval
 remain release gates.
+
+### Physical collection (T16 pilot slice)
+
+Collection is a separate immutable operation after posting, never an update to the
+invoice or a direct decrement of a sales total. A `SalesCollection` identifies the
+invoice, branch, collector and stable operation. Each
+`SalesCollectionAllocation` binds an invoice line and its exact posted reservation
+to one authoritative stock balance/location/batch version and one T09 `HANDOVER`
+movement. Deferred database guards validate the complete lineage at commit and a
+separate stock-movement guard rejects direct HANDOVER of posted-sale reservations
+unless the matching allocation is created in the same transaction.
+
+The public first slice supports partial and final collection from the invoice's
+configured branch. It resolves current stock and valuation versions on the server,
+uses exact decimal quantities, rejects stale/excess requests and treats a stable
+retry as one operation. Payment remains PAID while fulfilment progresses through
+AWAITING_COLLECTION, PARTIALLY_COLLECTED and COLLECTED. Ordinary collection reads
+exclude account references, cost-pool identifiers and valuation amounts.
+
+Exact serial assignment and reviewed other-store collection remain fail closed
+until their explicit contracts are implemented. The invoice store restriction is
+therefore a deliberate pilot boundary, not a permanent interpretation of the
+approved multi-location business rule.
