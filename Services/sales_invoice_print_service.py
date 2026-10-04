@@ -98,6 +98,15 @@ def _job_dict(db, context, row):
     }
 
 
+def _open_job_for_invoice(db, context, invoice_key):
+    return _owned(db, SalesInvoicePrintJob, context).join(
+        SalesInvoiceArtifact,
+        (SalesInvoiceArtifact.org_id == SalesInvoicePrintJob.org_id) &
+        (SalesInvoiceArtifact.artifact_key == SalesInvoicePrintJob.artifact_key)).filter(
+        SalesInvoiceArtifact.invoice_key == invoice_key,
+        SalesInvoicePrintJob.status.in_(("READY", "UNCERTAIN"))).first()
+
+
 def read_print_options(db, context, invoice_key, *, authorize):
     _guard(context, authorize, db)
     invoice = _owned(db, SalesInvoice, context).filter_by(
@@ -198,6 +207,8 @@ def create_invoice_print_job(session_factory, context, actor_id, payload, *,
                 invoice_key=payload.invoice_key).one_or_none()
             if invoice is None:
                 raise LookupError("Sales invoice not found")
+            if _open_job_for_invoice(prepare, context, invoice.invoice_key) is not None:
+                raise PostingConflict("Resolve the current invoice print job before creating another")
             if payload.kind == "ORIGINAL":
                 _, template, version = _template_choice(prepare, context)
                 if (payload.expected_template_id != template.id or
@@ -263,6 +274,8 @@ def create_invoice_print_job(session_factory, context, actor_id, payload, *,
             invoice_key=payload.invoice_key).with_for_update().one_or_none()
         if invoice is None:
             raise LookupError("Sales invoice not found")
+        if _open_job_for_invoice(db, context, invoice.invoice_key) is not None:
+            raise PostingConflict("Resolve the current invoice print job before creating another")
         if payload.kind == "ORIGINAL":
             if _owned(db, SalesInvoiceArtifact, context).filter_by(
                     invoice_key=invoice.invoice_key, artifact_kind="ORIGINAL").one_or_none():

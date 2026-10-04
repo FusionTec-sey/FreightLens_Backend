@@ -133,6 +133,13 @@ def test_copy_uses_frozen_original_and_server_owned_visible_mark(posting):
     create_invoice_print_job(factory, f.context, f.user.id, original,
         authorize=lambda db: None, storage=storage,
         pdf_renderer=lambda html: b"%PDF original")
+    handoff_print_job(factory, f.context, f.user.id, original.job_key,
+        SalesInvoicePrintHandoff(operation_key=uuid4(), expected_version=1),
+        authorize=lambda db: None)
+    resolve_print_job(factory, f.context, f.user.id, original.job_key,
+        SalesInvoicePrintTransition(operation_key=uuid4(), expected_version=2,
+            outcome="PRINTED", note="Synthetic original print confirmed"),
+        authorize=lambda db: None)
     f.db.query(OrgPrintProfile).filter_by(org_id=f.org_a).update(
         {"legal_name": "Changed after original"}, synchronize_session=False)
     f.db.commit()
