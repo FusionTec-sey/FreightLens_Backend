@@ -1,5 +1,16 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T12A payment and branch-account configuration
+
+- Added versioned payment methods and exact selling-branch receiving-account
+  mappings with immutable history, stable retries and scoped paginated APIs.
+- Missing/disabled exact mappings block explicitly; no fallback account is chosen.
+  A locked internal resolver revalidates exact versions for future T13 posting.
+- Added a permission-aware Sales configuration screen with retained uncertain saves,
+  server pagination and explicit readiness inspection. No money is posted.
+- Synthetic tests introduce no real bank data. Browser, integrated CI, accounting
+  setup and pilot gates remain pending until the paired PRs are verified.
+
 ## 2026-10-05 - Public reviewed receipt posting boundary
 
 - Added server-derived posting context plus an authenticated execution route that

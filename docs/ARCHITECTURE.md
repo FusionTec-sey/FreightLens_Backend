@@ -20,6 +20,20 @@ missing mappings, invalid tracking identities and reused approvals fail closed.
 This is a row-level controlled opening boundary, not an inFlow parser, real opening
 balance import, reconciliation close or permission to activate financial posting.
 
+### Versioned payment and receiving-account configuration (2026-10-05)
+
+T12A separates payment-method identity from exact selling-branch receiving-account
+configuration. Both use stable UUID identities, consecutive immutable revisions and
+the shared posting-operation retry boundary. Methods currently classify configured
+cash and externally confirmed card flows; configuration does not confirm a payment.
+
+Lookups never select another branch or fallback account. Disabled branches, methods,
+mappings and missing mappings return explicit blocked results. The future T13 posting
+boundary can lock and revalidate exact method/mapping versions before recording money.
+Account references are bounded opaque accounting identifiers, not bank credentials.
+No real account seed, customer credit, balance, provider call or financial post is
+created by this slice.
+
 ### Cloud-derived central valuation authority (2026-10-04)
 
 Central cost execution now follows the cloud-authoritative stock pattern while

@@ -198,8 +198,10 @@ def save_mapping(db, context, actor_id, mapping_key, payload: MappingSave, *, au
 
     def guard(session):
         _auth(authorize, session, context)
-        branch = _branch(session, context, payload.branch_id)
-        method = _method(session, context, payload.method_key)
+        # Lock configuration parents before the mapping target so a method or
+        # branch cannot be disabled between validation and revision append.
+        branch = _branch(session, context, payload.branch_id, lock=True)
+        method = _method(session, context, payload.method_key, lock=True)
         if method is None:
             raise LookupError("Payment method not found")
         current = _latest(session, context, PaymentMethodRevision,
@@ -278,3 +280,39 @@ def lookup_receiving_account(db, context, branch_id, method_key, *, authorize):
     return dict(status="READY", reason=None, mapping_key=mapping.mapping_key,
                 mapping_version=revision.version, account_ref=revision.account_ref,
                 label=revision.label, **base)
+
+
+def require_receiving_account(db, context, branch_id, method_key, *,
+        expected_method_version, expected_mapping_key,
+        expected_mapping_version, authorize):
+    """Lock and revalidate the exact READY mapping for a future money post."""
+    _identity(method_key)
+    _identity(expected_mapping_key)
+    if (type(expected_method_version) is not int or expected_method_version <= 0
+            or type(expected_mapping_version) is not int
+            or expected_mapping_version <= 0):
+        raise ValueError("Positive payment configuration versions required")
+    _auth(authorize, db, context)
+    branch = _branch(db, context, branch_id, lock=True)
+    method = _method(db, context, method_key, lock=True)
+    if method is None:
+        raise LookupError("Payment method not found")
+    method_revision = _latest(db, context, PaymentMethodRevision,
+        PaymentMethodRevision.method_key, method_key)
+    if (not branch.is_active or method_revision is None
+            or not method_revision.is_enabled):
+        raise PostingConflict("Branch or payment method is disabled")
+    if method_revision.version != expected_method_version:
+        raise PostingConflict("Payment method changed; refresh before posting")
+    mapping = apply_org_filter(db.query(BranchReceivingAccount).filter_by(
+        org_id=context.org_id, branch_id=branch_id, method_key=method_key,
+        is_deleted=False), BranchReceivingAccount, context).with_for_update().one_or_none()
+    if mapping is None or mapping.mapping_key != expected_mapping_key:
+        raise PostingConflict("Exact receiving-account mapping is unavailable")
+    revision = _latest(db, context, BranchReceivingAccountRevision,
+        BranchReceivingAccountRevision.mapping_key, mapping.mapping_key)
+    if revision is None or not revision.is_enabled:
+        raise PostingConflict("Receiving-account mapping is disabled")
+    if revision.version != expected_mapping_version:
+        raise PostingConflict("Receiving-account mapping changed; refresh before posting")
+    return _mapping_read(mapping, revision)

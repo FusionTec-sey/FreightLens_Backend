@@ -42,8 +42,8 @@ class MethodRead(BaseModel):
 
 class MappingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    account_ref: str = Field(min_length=7, max_length=64,
-                             pattern=r"^SYNTH_[A-Z0-9][A-Z0-9_.:-]*$")
+    account_ref: str = Field(min_length=1, max_length=64,
+                             pattern=r"^[A-Z0-9][A-Z0-9_.:-]{0,63}$")
     label: str = Field(min_length=1, max_length=120)
     is_enabled: bool = Field(strict=True)
 

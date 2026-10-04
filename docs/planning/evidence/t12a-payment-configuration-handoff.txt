@@ -2,7 +2,8 @@ T12A WAVE 1 INTEGRATION MANIFEST — BD-20261005-01
 
 Scope: synthetic, cloud-only payment-method and exact selling-branch receiving-
 account configuration. No monetary state, posting path, provider call or real bank
-detail is introduced. Account references must begin SYNTH_. Method kinds are CASH
+detail is introduced. Tests use SYNTH_ references, while the production contract
+accepts a bounded opaque accounting identifier. Method kinds are CASH
 and externally confirmed CARD; this configuration does not confirm a card payment.
 
 Backend new files:
@@ -64,17 +65,21 @@ Integrator-owned frontend registration:
    No other route or menu behavior needs to change.
 3. Keep the frontend API client in its new feature file; no shared client edit.
 
-Verification in isolated synthetic PostgreSQL freightlens_t12a_test:
-python -m pytest -q tests/test_payment_configuration.py
-  tests/test_payment_configuration_api.py: 4 passed. Covers migration replay,
+Verification in the isolated synthetic phase-zero PostgreSQL database:
+the combined payment-configuration, permission-catalogue, startup and fresh-install
+selection passed 15 tests. Covers migration replay,
 versioning, exact replay, changed-intent conflict, concurrent expected-version
 conflict, immutable SQL history, permissions, tenant/branch isolation, missing and
 disabled lookup, HTTP cache policy and anonymous denial.
-Frontend focused PaymentConfigurationPage.test.js: 2 passed (failed save retains
-the same operation identity for retry; exact blocked lookup is visible). Production build passed with the existing
-compiler and bundle-size warnings. Browser acceptance requires separate approval.
+Frontend focused PaymentConfigurationPage.test.js and Menu.test.js: 18 tests in
+2 suites passed (failed save retains the same operation identity for retry; exact
+blocked lookup is visible; route visibility is permission guarded). Production
+build passed with the existing compiler and bundle-size warnings. Browser
+acceptance requires separate approval.
 
-Remaining gates: integrator registration and review, combined CI, paired merge,
+Integrator registration is included on this branch. A locked
+`require_receiving_account` boundary revalidates the exact method/mapping versions
+for T13 without choosing a fallback. Remaining gates: combined CI, paired merge,
 browser/layout acceptance, real financial/accounting setup and explicit owner pilot
 approval. No real mapping, payment, customer balance, cheque, deposit, refund,
 invoice, journal or stock effect has been created.

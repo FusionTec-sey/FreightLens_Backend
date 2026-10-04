@@ -93,8 +93,8 @@ class BranchReceivingAccountRevision(OrgMixin, AuditMixin, Base):
         CheckConstraint("version > 0", name="ck_receiving_revision_version"),
         CheckConstraint("length(trim(account_ref)) > 0 AND length(trim(label)) > 0 "
                         "AND length(trim(reason)) > 0", name="ck_receiving_revision_text"),
-        CheckConstraint("account_ref ~ '^SYNTH_[A-Z0-9][A-Z0-9_.:-]*$'",
-                        name="ck_receiving_account_ref_synthetic"),
+        CheckConstraint("account_ref ~ '^[A-Z0-9][A-Z0-9_.:-]{0,63}$'",
+                        name="ck_receiving_account_ref"),
         {"schema": "containermgmt"},
     )
     id = Column(Integer, primary_key=True)

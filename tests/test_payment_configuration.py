@@ -12,7 +12,8 @@ from Schema.PaymentConfigurationSchema import (
     MethodConfig, MethodSave, MappingConfig, MappingSave)
 from Services.inventory_posting_service import PostingConflict
 from Services.payment_configuration_service import (
-    list_methods, lookup_receiving_account, save_mapping, save_method)
+    list_methods, lookup_receiving_account, require_receiving_account,
+    save_mapping, save_method)
 from Utils.migrate_20261005_payment_methods import ensure_payment_methods_schema
 from Utils.migrate_20261005_branch_receiving_accounts import ensure_branch_receiving_accounts_schema
 from Utils.org_filter import OrgContext
@@ -134,3 +135,22 @@ def test_disabled_method_and_concurrent_revision(configured):
         method_payload(expected=2, enabled=False, label="Synthetic disabled"),
         authorize=f.authorize))
     assert lookup(f)["reason"] == "METHOD_DISABLED"
+
+
+def test_locked_posting_lookup_requires_exact_current_versions(configured):
+    f = configured
+    write(f, lambda db: save_method(db, f.context, f.actor, f.method_key,
+        method_payload(), authorize=f.authorize))
+    write(f, lambda db: save_mapping(db, f.context, f.actor, f.mapping_key,
+        mapping_payload(f, f.method_key, account="BANK-CLEARING.SCR"),
+        authorize=f.authorize))
+    with f.factory.begin() as db:
+        ready = require_receiving_account(db, f.context, f.branches[0],
+            f.method_key, expected_method_version=1,
+            expected_mapping_key=f.mapping_key, expected_mapping_version=1,
+            authorize=f.authorize)
+    assert ready["account_ref"] == "BANK-CLEARING.SCR"
+    with f.factory.begin() as db, pytest.raises(PostingConflict):
+        require_receiving_account(db, f.context, f.branches[0], f.method_key,
+            expected_method_version=2, expected_mapping_key=f.mapping_key,
+            expected_mapping_version=1, authorize=f.authorize)
