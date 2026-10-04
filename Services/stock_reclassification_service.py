@@ -44,8 +44,29 @@ def validate_reclassification(source_policy, target_policy, source, *, batches=(
     # inconsistent source data merely because a target would accommodate it.
     for value in (source.on_hand, source.damaged, source.quarantined):
         convert_quantity(old, value, old.base_unit, allow_zero=True)
+    return validate_stock_manifest(new, source, batches=batches, serials=serials)
+
+
+def validate_stock_manifest(policy, source, *, batches=(), serials=None):
+    """Shared exact identity/condition conservation for receiving and conversion.
+
+    Pure validation only. Global identity uniqueness and source consumption still
+    belong to the scoped, locked posting transaction, not this local manifest.
+    """
+    new = InventoryPolicyConfig.model_validate(policy)
+    if not isinstance(source, QuantityBreakdown) or source.on_hand <= 0 or source.reserved:
+        raise ValueError('A positive unreserved physical quantity snapshot is required')
+    for value in (source.on_hand, source.damaged, source.quarantined):
+        try:
+            convert_quantity(new, value, new.base_unit, allow_zero=True)
+        except ValueError as error:
+            raise ValueError(f'Manifest cannot conserve quantities under the target unit policy: {error}') from error
     if not isinstance(batches, tuple) or len(batches) > 1000:
         raise ValueError("Use an explicit tuple of at most 1000 batch allocations")
+    if new.tracking == 'UNTRACKED':
+        if batches or serials is not None:
+            raise ValueError('Untracked stock cannot carry batch or serial identities')
+        return source
     if new.tracking == "BATCH":
         if not batches or serials is not None:
             raise ValueError("Batch tracking requires only an explicit batch manifest")

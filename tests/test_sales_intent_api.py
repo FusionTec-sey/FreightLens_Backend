@@ -11,7 +11,8 @@ from tests.test_inventory_locations import locations  # noqa: F401
 
 
 @pytest.fixture
-def api(source):
+def api(source, monkeypatch):
+    monkeypatch.setattr('Services.sales_draft_search_projection.sync_sales_draft_document', lambda document: True)
     from Routes.Orders.SalesIntentRouter import SalesIntentRouter
     f = source; f.app.include_router(SalesIntentRouter)
     f.permissions = {'View_SalesDraft', 'Manage_SalesDraft', 'View_Product', 'View_Customer', 'View_Personal_Data'}
@@ -40,6 +41,57 @@ def test_save_reopen_revision_and_paginated_register(api):
     assert f.client.get('/sales/drafts?limit=101').status_code == 422
 
 
+def test_detail_revision_metadata_and_current_branch_label_are_scoped(api):
+    from Model.containermgmt.Inventory.Location import InventoryBranch
+    from Services.sales_intent_service import sales_branch_labels
+    f = api
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    branch_id = f.payload['draft']['branch_id']
+    branch = f.db.query(InventoryBranch).filter_by(id=branch_id).one()
+    branch.name = 'Renamed synthetic store'
+    f.db.commit()
+    data = f.client.get(f.url).json()
+    assert data['branch_name'] == 'Renamed synthetic store'
+    assert data['created_by'] == f.user.id and data['created_at']
+    history = f.client.get(f'{f.url}/history/1').json()
+    assert history['created_at'] == data['created_at']
+    assert history['branch_name'] == 'Renamed synthetic store'
+    foreign = f.db.query(InventoryBranch).filter_by(org_id=f.org_b).first()
+    assert sales_branch_labels(f.db, f.context, [foreign.id]) == {}
+    branch.is_deleted = True
+    f.db.commit()
+    assert f.client.get(f.url).json()['branch_name'] is None
+    assert f.client.get(f.url).json()['branch_id'] == branch_id
+    with pytest.raises(ValueError):
+        sales_branch_labels(f.db, f.context, range(101))
+
+
+def test_historical_lines_retain_saved_units_without_current_reservations(api, monkeypatch):
+    f = api
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    original = f.client.get(f.url).json()
+    f.payload.update(operation_key=str(uuid4()), expected_version=1)
+    f.payload['draft']['lines'][0]['quantity'] = '4'
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    def forbidden(*args):
+        raise AssertionError('Historical reads must not query current holds')
+    monkeypatch.setattr('Services.sales_intent_service.active_demand_holds', forbidden)
+    old = f.client.get(f'{f.url}/history/1')
+    assert old.status_code == 200, old.text
+    data = old.json()
+    assert data['lines'][0]['quantity'] == original['lines'][0]['quantity']
+    assert data['lines'][0]['base_quantity'] == '24.000000'
+    assert data['lines'][0]['unit'] == original['lines'][0]['unit']
+    assert 'reserved_quantity' not in data['lines'][0]
+    assert 'expected_customer_version' not in data
+    assert data['read_only'] and data['catalogue_labels_current']
+    assert old.headers['cache-control'] == 'no-store'
+    assert f.client.get(f'{f.url}/history/2').json()['lines'][0]['quantity'] == '4.000000'
+    assert f.client.get(f'{f.url}/history/3').status_code == 404
+    assert f.client.get(f'{f.url}/history/0').status_code == 422
+    assert f.client.put(f'{f.url}/history/1', json=f.payload).status_code == 405
+
+
 @pytest.mark.parametrize('missing', ['View_SalesDraft', 'Manage_SalesDraft', 'View_Product', 'View_Customer', 'View_Personal_Data'])
 def test_permissions_enforced_on_all_requests(api, missing):
     f = api
@@ -50,6 +102,7 @@ def test_permissions_enforced_on_all_requests(api, missing):
     assert f.client.get(f.url).status_code == expected
     assert f.client.get('/sales/drafts').status_code == expected
     assert f.client.get(f'{f.url}/history').status_code == expected
+    assert f.client.get(f'{f.url}/history/1').status_code == expected
 
 
 def test_module_and_personal_field_guards(api):
@@ -59,6 +112,7 @@ def test_module_and_personal_field_guards(api):
         assert f.client.put(f.url, json=f.payload).status_code == 403
         assert f.client.get('/sales/drafts').status_code == 403
         assert f.client.get(f'{f.url}/history').status_code == 403
+        assert f.client.get(f'{f.url}/history/1').status_code == 403
 
 
 def test_anonymous_denied(api):
@@ -69,6 +123,7 @@ def test_anonymous_denied(api):
     assert f.client.get('/sales/drafts').status_code == 401
     assert f.client.get(f.url).status_code == 401
     assert f.client.get(f'{f.url}/history').status_code == 401
+    assert f.client.get(f'{f.url}/history/1').status_code == 401
     assert f.client.put(f.url, json=f.payload).status_code == 401
 
 
@@ -77,6 +132,7 @@ def test_foreign_company_denied_including_replay(api):
     f.context.current_org_id = f.org_b; f.context.allowed_org_ids = [f.org_a, f.org_b]; f.context.is_root = True
     assert f.client.get(f.url).status_code == 404
     assert f.client.get(f'{f.url}/history').status_code == 404
+    assert f.client.get(f'{f.url}/history/1').status_code == 404
     assert f.client.get('/sales/drafts').json()['items'] == []
     assert f.client.put(f.url, json=f.payload).status_code == 404
 

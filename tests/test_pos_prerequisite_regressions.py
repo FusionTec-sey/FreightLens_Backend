@@ -1,8 +1,7 @@
 """Phase 0 reproductions against real routers, with an isolated session double.
 
-Known gaps are strict xfails (AssertionError only). Run with --runxfail to see
-the actual failures. They are NOT passing acceptance checks. PostgreSQL lock,
-constraint and rollback verification is a separate mandatory gate.
+The original direct-stock regression expectations now pass. PostgreSQL lock,
+constraint and rollback verification remains a separate mandatory gate.
 """
 
 import importlib
@@ -20,6 +19,22 @@ from Utils.org_filter import OrgContext
 
 receiving = importlib.import_module("Routes.Orders.ReceivingRouter")
 inventory = importlib.import_module("Routes.Inventory.InventoryRouter")
+
+
+def test_receipt_format_exposes_linked_product_without_commercial_fields():
+    item = SimpleNamespace(id=2, po_item_id=3, po_item=SimpleNamespace(product_id=7), packing_item_id=None,
+        description="Synthetic", expected_quantity=Decimal("2"), received_quantity=Decimal("2"),
+        missing_quantity=Decimal("0"), excess_quantity=Decimal("0"), damaged_quantity=Decimal("0"),
+        incorrect_quantity=Decimal("0"), unit="BOX", condition_ok=True, notes=None, photo_url=None,
+        is_deleted=False)
+    receipt = SimpleNamespace(id=1, receipt_number="GRN-1", po_id=4,
+        purchase_order=SimpleNamespace(po_number="PO-1"), packing_list_id=None, container_id=None,
+        container=None, warehouse_location="Receiving", received_date=None, status="SUBMITTED",
+        posting_version=1, has_discrepancies=False, notes=None, submitted_at=None,
+        receiver=None, items=[item])
+    result = receiving.format_receipt(receipt)
+    assert result["items"][0]["product_id"] == 7
+    assert "unit_price" not in result["items"][0] and "supplier_id" not in result["items"][0]
 
 
 def _matches(row, expression):
@@ -163,6 +178,11 @@ def harness(monkeypatch):
     # Rendering/search are unrelated external side effects, not access checks.
     monkeypatch.setattr(receiving, "format_receipt", lambda row: {"id": row.id, "status": row.status})
     monkeypatch.setattr(inventory, "product_to_dict", lambda row, **kwargs: {"id": row.id, "current_stock": float(row.current_stock)})
+    monkeypatch.setattr(inventory, "product_quantity_totals", lambda db, context, ids: {
+        product_id: {"status": "NO_BALANCE", "base_unit": None,
+            "on_hand": "0.000000", "reserved": "0.000000",
+            "available": "0.000000", "damaged": "0.000000",
+            "quarantined": "0.000000"} for product_id in ids})
     monkeypatch.setattr(inventory, "sync_product_document", lambda *args: None)
     with TestClient(app) as client:
         yield SimpleNamespace(client=client, app=app, db=db, user=user, item=own_item, product=product, user_dependencies=user_dependencies)
@@ -328,7 +348,6 @@ def test_authorized_create_submitted_posts_once(harness):
     assert harness.db.commits == 1
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="C12: stock adjustment clamps excessive negative delta to zero")
 def test_stock_adjustment_rejects_insufficient_stock(harness):
     response = harness.client.post("/inventory/products/1/adjust-stock", json={"quantity_delta": -6, "reason": "test"})
     assert response.status_code == 400
@@ -336,9 +355,39 @@ def test_stock_adjustment_rejects_insufficient_stock(harness):
     assert harness.db.commits == 0
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="C12: product metadata update permits direct stock replacement")
-def test_product_edit_cannot_replace_stock(harness):
-    response = harness.client.put("/inventory/products/1", json={"current_stock": 999})
+@pytest.mark.parametrize('replacement', [999, 5, 0, -1])
+def test_product_edit_cannot_replace_stock(harness, replacement):
+    response = harness.client.put("/inventory/products/1", json={"current_stock": replacement})
     assert response.status_code in {400, 422}
     assert harness.product.current_stock == Decimal("5")
     assert harness.db.commits == 0
+
+
+@pytest.mark.parametrize('opening', [1, -1, '0.000001', 'NaN', 'Infinity'])
+def test_catalogue_creation_cannot_open_stock(harness, opening):
+    from dataclasses import replace
+    harness.user.access_policy = replace(harness.user.access_policy,
+        permission_names=frozenset({'Add_Product'}))
+    response = harness.client.post('/inventory/products', json={
+        'name': 'Synthetic catalogue only', 'sku': 'NEW-CATALOGUE', 'current_stock': opening})
+    assert response.status_code in {400, 422}
+    assert not harness.db.added and harness.db.commits == 0
+
+
+@pytest.mark.parametrize('fields', [{}, {'current_stock': 0}, {'current_stock': None}])
+def test_catalogue_creation_retains_zero_stock_compatibility(harness, fields):
+    from dataclasses import replace
+    harness.user.access_policy = replace(harness.user.access_policy,
+        permission_names=frozenset({'Add_Product'}))
+    response = harness.client.post('/inventory/products', json={
+        'name': 'Synthetic catalogue only', 'sku': 'NEW-CATALOGUE', **fields})
+    assert response.status_code == 200, response.text
+    assert response.json()['current_stock'] == 0
+    assert harness.db.added[0].current_stock == 0
+
+
+def test_catalogue_stock_rejection_does_not_bypass_permission(harness):
+    response = harness.client.post('/inventory/products', json={
+        'name': 'Synthetic catalogue only', 'current_stock': 10})
+    assert response.status_code == 403
+    assert not harness.db.added and harness.db.commits == 0

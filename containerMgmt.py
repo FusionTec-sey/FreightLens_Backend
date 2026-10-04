@@ -198,6 +198,8 @@ async def startup_event():
     ensure_sales_intents_schema()
     from Utils.migrate_20261004_customer_profiles import ensure_customer_profiles_schema
     ensure_customer_profiles_schema()
+    from Utils.migrate_20261004_sales_pricing import ensure_sales_pricing_schema
+    ensure_sales_pricing_schema()
     from Utils.migrate_20261003_sales_reservation_sources import ensure_sales_reservation_sources_schema
     ensure_sales_reservation_sources_schema()
     from Utils.migrate_20261003_reservation_deadlines import ensure_reservation_deadlines_schema
@@ -216,14 +218,32 @@ async def startup_event():
     ensure_barcode_retirements_schema()
     from Utils.migrate_20261002_stock_reclassification import ensure_stock_reclassification_schema
     ensure_stock_reclassification_schema()
+    from Utils.migrate_20261004_receipt_manifests import ensure_receipt_manifest_schema
+    ensure_receipt_manifest_schema()
+    from Utils.migrate_20261004_receipt_source_uses import ensure_receipt_source_uses_schema
+    ensure_receipt_source_uses_schema()
+    from Utils.migrate_20261004_receipt_movements import ensure_receipt_movement_schema
+    ensure_receipt_movement_schema()
+    from Utils.migrate_20261004_stock_adjustments import ensure_stock_adjustment_schema
+    ensure_stock_adjustment_schema()
+    from Utils.migrate_20261004_stock_adjustment_permissions import ensure_stock_adjustment_permissions
+    ensure_stock_adjustment_permissions()
+    from Utils.migrate_20261004_receipt_cost_permissions import ensure_receipt_cost_permissions
+    ensure_receipt_cost_permissions()
     from Utils.migrate_20261003_inventory_valuation import ensure_inventory_valuation_schema
     ensure_inventory_valuation_schema()
     from Utils.migrate_20261003_valuation_charges import ensure_valuation_charges_schema
     ensure_valuation_charges_schema()
+    from Utils.migrate_20261004_receipt_valuation import ensure_receipt_valuation_schema
+    ensure_receipt_valuation_schema()
     from Utils.migrate_20261003_cost_allocation import ensure_cost_allocation_schema
     ensure_cost_allocation_schema()
     from Utils.migrate_20261003_cost_charge_uses import ensure_cost_charge_uses_schema
     ensure_cost_charge_uses_schema()
+    from Utils.migrate_20261004_cost_reconciliations import ensure_cost_reconciliations_schema
+    ensure_cost_reconciliations_schema()
+    from Utils.migrate_20261004_cost_reconciliation_permissions import ensure_cost_reconciliation_permissions
+    ensure_cost_reconciliation_permissions()
 
     logger.info("Checking database seeding...")
     db_session = SessionLocal()
@@ -263,6 +283,8 @@ async def startup_event():
         bulk_index_all_products(meili_db)
         bulk_index_all_orders(meili_db)
         bulk_index_all_customers(meili_db)
+        from Services.sales_draft_search_projection import bulk_index_sales_drafts
+        bulk_index_sales_drafts(meili_db)
         meili_db.close()
     except Exception as e:
         logger.error("Failed to initialize Meilisearch: %s", e)
@@ -342,6 +364,10 @@ app.include_router(BranchCounterRouter, dependencies=[Depends(require_module("IN
 app.include_router(StaffStoreAssignmentRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(ManagerCaseRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(ReclassificationProposalRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(ReceiptManifestRouter)
+app.include_router(StockAdjustmentRouter)
+from Routes.Inventory.CostReconciliationRouter import CostReconciliationRouter
+app.include_router(CostReconciliationRouter)
 app.include_router(UnitBarcodeRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(BarcodeRetirementRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
@@ -350,6 +376,8 @@ from Routes.MasterData.CustomerRouter import CustomerRouter
 app.include_router(CustomerRouter)
 from Routes.Orders.SalesIntentRouter import SalesIntentRouter
 app.include_router(SalesIntentRouter)
+from Routes.Orders.SalesPricingRouter import SalesPricingRouter
+app.include_router(SalesPricingRouter)
 from Routes.Orders.SalesSourceRouter import SalesSourceRouter
 app.include_router(SalesSourceRouter)
 from Routes.Inventory.ReservationReleaseCaseRouter import ReservationReleaseCaseRouter

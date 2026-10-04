@@ -10,6 +10,89 @@ MEILI_KEY = os.getenv("MEILISEARCH_MASTER_KEY") or os.getenv("MEILI_MASTER_KEY")
 _client = None
 
 
+class SalesSearchUnavailable(RuntimeError):
+    pass
+
+
+def _sales_task_succeeded(client, task):
+    uid = getattr(task, 'task_uid', None)
+    if type(uid) is not int or uid < 0:
+        return False
+    completed = client.wait_for_task(uid, timeout_in_ms=1500, interval_in_ms=100)
+    return (getattr(completed, 'uid', None) == uid
+            and getattr(completed, 'index_uid', None) == 'sales_drafts'
+            and getattr(completed, 'status', None) == 'succeeded')
+
+
+def init_sales_drafts_index():
+    try:
+        client = get_meili_client()
+        if not client:
+            return False
+        task = client.index('sales_drafts').update_settings({
+            'searchableAttributes': ['id', 'customer_name'],
+            'filterableAttributes': ['org_id', 'branch_id', 'is_deleted'],
+            'displayedAttributes': ['id', 'org_id', 'branch_id', 'version'],
+        })
+        return _sales_task_succeeded(client, task)
+    except Exception:
+        logger.warning('Sales search configuration unavailable')
+        return False
+
+
+def sync_sales_draft_document(document):
+    """Post-commit projection only; no contact, stock, price or payment fields."""
+    try:
+        client = get_meili_client()
+        if not client:
+            return False
+        safe = {field: document[field] for field in
+                ('id', 'org_id', 'branch_id', 'version', 'customer_name')}
+        task = client.index('sales_drafts').add_documents([
+            dict(safe, is_deleted=False)], primary_key='id')
+        return _sales_task_succeeded(client, task)
+    except Exception:
+        logger.warning('Sales search projection unavailable; committed draft retained')
+        return False
+
+
+def search_sales_drafts(query, org_id, page, limit, branch_id=None):
+    from uuid import UUID
+    try:
+        if type(org_id) is not int or org_id <= 0 or type(page) is not int or page < 1:
+            raise ValueError('Invalid scope/page')
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError('Invalid limit')
+        if branch_id is not None and (type(branch_id) is not int or branch_id <= 0):
+            raise ValueError('Invalid branch')
+        client = get_meili_client()
+        if not client:
+            raise SalesSearchUnavailable()
+        scope = f'org_id = {org_id} AND is_deleted = false'
+        if branch_id is not None:
+            scope += f' AND branch_id = {branch_id}'
+        result = client.index('sales_drafts').search(query, {
+            'filter': scope, 'page': page, 'hitsPerPage': limit,
+            'attributesToRetrieve': ['id', 'org_id', 'branch_id', 'version'],
+        })
+        hits, total = result['hits'], result['totalHits']
+        if type(total) is not int or total < 0 or len(hits) > limit or total < len(hits):
+            raise ValueError('Invalid page')
+        checked = []
+        for hit in hits:
+            if (type(hit.get('org_id')) is not int or hit['org_id'] != org_id
+                    or type(hit.get('branch_id')) is not int or hit['branch_id'] <= 0
+                    or (branch_id is not None and hit['branch_id'] != branch_id)
+                    or type(hit.get('version')) is not int or hit['version'] <= 0):
+                raise ValueError('Invalid hit scope/version')
+            checked.append((UUID(hit['id']), hit['version'], hit['branch_id']))
+        if len({key for key, _, _ in checked}) != len(checked):
+            raise ValueError('Repeated search identity')
+        return checked, total
+    except Exception as error:
+        raise SalesSearchUnavailable('Sales search unavailable; retry or clear search') from error
+
+
 class CustomerSearchUnavailable(RuntimeError):
     pass
 
@@ -181,7 +264,6 @@ def format_product_doc(p) -> Dict[str, Any]:
             "image_url": img_url,
             "images": images,
             "suppliers": suppliers,
-            "current_stock": float(p.get("current_stock") or 0.0),
             "min_stock_quantity": float(p.get("min_stock_quantity") or 0.0),
             "unit_cost": float(p["unit_cost"]) if p.get("unit_cost") is not None else None,
             "currency": p.get("currency") or "USD",
@@ -240,7 +322,6 @@ def format_product_doc(p) -> Dict[str, Any]:
         "image_url": img_url,
         "images": images,
         "suppliers": suppliers_data,
-        "current_stock": float(p.current_stock or 0.0),
         "min_stock_quantity": float(p.min_stock_quantity or 0.0),
         "unit_cost": float(p.unit_cost) if p.unit_cost is not None else None,
         "currency": p.currency or "USD",

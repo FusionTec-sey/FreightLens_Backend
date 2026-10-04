@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import json
 import logging
 from typing import Dict, List, Optional, Any
-from sqlalchemy import Date, cast, extract, func, text
+from sqlalchemy import Date, and_, cast, extract, func, text
 from sqlalchemy.orm import Session
 
 from Model.containermgmt.Container.ContainerDetails import ContainerDetails
@@ -17,7 +17,9 @@ from Model.containermgmt.Cinfo.Venue import UnloadVenue
 from Model.containermgmt.Orders.Product import Product, ProductCategory
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.containermgmt.Orders.VendorQuote import VendorQuote
+from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from auth.security_guards import has_permission, is_financial_user
+from Services.inventory_product_quantity_service import stock_quantity_summary_subquery
 from Utils.org_filter import apply_org_filter, OrgContext
 
 logger = logging.getLogger(__name__)
@@ -68,7 +70,7 @@ WIDGET_CATALOG = [
         "id": "inv_total_valuation",
         "module": "INVENTORY",
         "title": "Total Stock Valuation",
-        "description": "Estimated on-hand stock financial value based on primary unit cost.",
+        "description": "Latest immutable SCR cost-pool value; provisional until reconciliation.",
         "type": "kpi_stat",
         "field_class": "FINANCIAL",
         "default_col_span": 1,
@@ -517,9 +519,13 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
             p_query = apply_org_filter(p_query, Product, org_context)
 
             total_skus = p_query.count()
-            low_stock_count = p_query.filter(
-                Product.current_stock <= Product.min_stock_quantity,
-                Product.min_stock_quantity > 0
+            stock_summary = stock_quantity_summary_subquery(db, org_context)
+            low_stock_count = p_query.outerjoin(
+                stock_summary, stock_summary.c.product_id == Product.id
+            ).filter(
+                Product.min_stock_quantity > 0,
+                func.coalesce(stock_summary.c.unit_count, 0) <= 1,
+                func.coalesce(stock_summary.c.on_hand, 0) <= Product.min_stock_quantity,
             ).count()
 
             data["inv_total_products"] = {"value": total_skus, "unit": "SKUs"}
@@ -527,15 +533,42 @@ def calculate_dashboard_data(db: Session, current_user, org_context: OrgContext,
 
             if is_financial_user(current_user, org_context):
                 try:
-                    val_result = db.query(
-                        func.sum(Product.current_stock * func.coalesce(Product.unit_cost, 0))
-                    ).filter(Product.is_deleted == False)
-                    val_result = apply_org_filter(val_result, Product, org_context).scalar()
+                    heads = db.query(
+                        InventoryValuation.cost_pool_id.label("cost_pool_id"),
+                        InventoryValuation.product_id.label("product_id"),
+                        func.max(InventoryValuation.version).label("version"),
+                    ).filter(InventoryValuation.is_deleted.is_(False))
+                    heads = apply_org_filter(heads, InventoryValuation, org_context)
+                    heads = heads.group_by(
+                        InventoryValuation.cost_pool_id,
+                        InventoryValuation.product_id,
+                    ).subquery()
+                    val_query = db.query(
+                        func.coalesce(func.sum(InventoryValuation.pool_value_scr), 0),
+                        func.count(func.distinct(InventoryValuation.product_id)),
+                    ).join(heads, and_(
+                        heads.c.cost_pool_id == InventoryValuation.cost_pool_id,
+                        heads.c.product_id == InventoryValuation.product_id,
+                        heads.c.version == InventoryValuation.version,
+                    )).filter(InventoryValuation.is_deleted.is_(False))
+                    val_query = apply_org_filter(val_query, InventoryValuation, org_context)
+                    val_result, valued_products = val_query.one()
+                    exact_value = format(val_result, ".2f")
+                    missing_values = max(total_skus - int(valued_products or 0), 0)
 
                     data["inv_total_valuation"] = {
-                        "value": round(float(val_result or 0), 2),
-                        "formatted": f"${(val_result or 0):,.2f}",
-                        "unit": "USD"
+                        "value": exact_value,
+                        "formatted": f"SCR {val_result:,.2f}",
+                        "unit": "provisional",
+                        "provisional": True,
+                        "alert": missing_values > 0,
+                        "valued_products": int(valued_products or 0),
+                        "total_products": total_skus,
+                        "note": (
+                            f"{missing_values} product(s) still require valuation/reconciliation."
+                            if missing_values else
+                            "Immutable cost-pool heads; final accounting reconciliation remains required."
+                        ),
                     }
                 except Exception as e:
                     logger.warning(f"Failed to calculate inventory valuation: {e}")

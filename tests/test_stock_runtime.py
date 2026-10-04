@@ -2,7 +2,10 @@ import json
 from dataclasses import asdict
 from uuid import uuid4
 import pytest
-from Services.stock_runtime_service import parse_local_stock_runtime, StockRuntimeUnavailable, local_stock_runtime
+from Services.stock_runtime_service import (
+    StockRuntimeUnavailable, local_stock_runtime, parse_cloud_stock_runtime,
+    parse_local_stock_runtime, server_stock_runtime,
+)
 from tests.test_posting_authority import append_epoch
 from tests.test_stock_ledger import stock  # noqa: F401
 
@@ -49,3 +52,32 @@ def test_no_environment_default_and_explicit_operator_configuration(stock, monke
     with pytest.raises(StockRuntimeUnavailable): local_stock_runtime()
     monkeypatch.setenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON', config(stock))
     assert local_stock_runtime().claims == (stock.claim,)
+
+
+def test_cloud_runtime_derives_only_epochs_owned_by_configured_node(stock):
+    f = stock
+    runtime = parse_cloud_stock_runtime(str(f.node_key))
+    with f.factory.begin() as db:
+        assert runtime.claim_for(db, f.context, f.branches[0]) == f.claim
+    append_epoch(f, 2, 'ACTIVE')
+    with f.factory.begin() as db:
+        claim = runtime.claim_for(db, f.context, f.branches[0])
+        assert claim.node_key == f.node_key and claim.epoch == 2
+        with pytest.raises(PermissionError):
+            runtime.claim_for(db, f.context, f.branches[1])
+
+
+def test_server_runtime_prefers_cloud_and_never_falls_back_when_invalid(stock, monkeypatch):
+    f = stock
+    monkeypatch.setenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON', config(f))
+    monkeypatch.setenv('FREIGHTLENS_CLOUD_STOCK_RUNTIME_NODE_KEY', str(f.node_key))
+    assert server_stock_runtime().node_key == f.node_key
+    monkeypatch.setenv('FREIGHTLENS_CLOUD_STOCK_RUNTIME_NODE_KEY', 'invalid')
+    with pytest.raises(StockRuntimeUnavailable):
+        server_stock_runtime()
+
+
+@pytest.mark.parametrize('raw', ['', 'invalid', UUID_ZERO])
+def test_invalid_cloud_identity_is_rejected(raw):
+    with pytest.raises(StockRuntimeUnavailable):
+        parse_cloud_stock_runtime(raw)

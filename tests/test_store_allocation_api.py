@@ -99,3 +99,14 @@ def test_context_enforces_permissions_scope_and_authentication(api):
     assert f.client.get(f.url+'/context').status_code == 403
     f.app.dependency_overrides.pop(get_current_user)
     assert f.client.get(f.url+'/context').status_code == 401
+
+
+def test_cloud_runtime_identity_supports_the_same_server_derived_allocation(api, monkeypatch):
+    f = api
+    monkeypatch.delenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON')
+    monkeypatch.setenv('FREIGHTLENS_CLOUD_STOCK_RUNTIME_NODE_KEY', str(f.node_key))
+    context = f.client.get(f.url + '/context')
+    assert context.status_code == 200, context.text
+    response = f.client.post(f.url, json=f.body)
+    assert response.status_code == 200, response.text
+    assert response.json()['branch_id'] == f.branches[0]

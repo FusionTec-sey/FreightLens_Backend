@@ -135,3 +135,100 @@ def test_index_failure_does_not_undo_customer_and_retry_repairs(customers, monke
     replay = f.client.post('/master-data/customers', json=f.payload).json()
     assert replay['replayed'] and replay['search_indexed']
     assert f.client.get('/master-data/customers').json()['total'] == 1
+
+
+def test_profile_update_exact_history_retry_and_stale_rejection(customers):
+    f = customers
+    created = f.client.post('/master-data/customers', json=f.payload).json()
+    key = created['customer_key']; operation = str(uuid4())
+    body = dict(operation_key=operation, expected_version=1,
+        profile=dict(name='Updated API customer', kind='BUSINESS', contacts=[
+            dict(kind='EMAIL', value='accounts@example.test', label='Accounts', primary=True)]),
+        reason='Synthetic verified correction')
+    saved = f.client.put(f'/master-data/customers/{key}/profile', json=body)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()['version'] == 2 and not saved.json()['replayed']
+    assert f.client.put(f'/master-data/customers/{key}/profile', json=body).json()['replayed']
+    current = f.client.get(f'/master-data/customers/{key}').json()
+    original = f.client.get(f'/master-data/customers/{key}?version=1').json()
+    assert current['name'] == 'Updated API customer' and current['version'] == 2
+    assert original['name'] == 'Synthetic API customer' and original['version'] == 1
+    history = f.client.get(f'/master-data/customers/{key}/history?limit=1').json()
+    assert history['total'] == 2 and history['items'][0]['version'] == 2
+    assert history['items'][0]['reason'] == 'Synthetic verified correction'
+    assert f.client.get(f'/master-data/customers/{key}/history?page=2&limit=1').json()['items'][0]['version'] == 1
+    stale = {**body, 'operation_key': str(uuid4()), 'profile': {**body['profile'], 'name': 'Stale'}}
+    assert f.client.put(f'/master-data/customers/{key}/profile', json=stale).status_code == 409
+    assert saved.headers['cache-control'] == 'no-store'
+
+
+def test_profile_write_permission_is_separate_from_private_read(customers):
+    f = customers; key = f.client.post('/master-data/customers', json=f.payload).json()['customer_key']
+    f.user.access_policy = AccessPolicy(user=f.user, org_ids=(f.org_a,),
+        permission_names=frozenset({'View_Customer', 'View_Personal_Data'}),
+        module_names=frozenset(), field_permissions={'PERSONAL': 'View_Personal_Data'})
+    body = dict(operation_key=str(uuid4()), expected_version=1,
+        profile=f.payload['profile'], reason='Denied change')
+    assert f.client.get(f'/master-data/customers/{key}/history').status_code == 200
+    assert f.client.put(f'/master-data/customers/{key}/profile', json=body).status_code == 403
+
+
+def test_duplicate_review_routes_assess_only_and_never_merge(customers):
+    from Model.Credentials.users import User
+    from Model.containermgmt.MasterData.RetailCustomer import RetailCustomer
+    f = customers
+    permissions = f.permissions | {'Request_CustomerDuplicate', 'Review_CustomerDuplicate'}
+    f.user.access_policy = AccessPolicy(user=f.user, org_ids=(f.org_a,),
+        permission_names=frozenset(permissions), module_names=frozenset(),
+        field_permissions={'PERSONAL': 'View_Personal_Data'})
+    first = f.client.post('/master-data/customers', json=f.payload).json()
+    second_payload = {**f.payload, 'operation_key': str(uuid4()),
+        'profile': {**f.payload['profile'], 'name': 'Possible duplicate'}}
+    second = f.client.post('/master-data/customers', json=second_payload).json()
+    case_key = str(uuid4())
+    request = dict(operation_key=case_key, customer_key=first['customer_key'],
+        other_customer_key=second['customer_key'], expected_customer_version=1,
+        expected_other_version=1, assessment='SAME_CUSTOMER',
+        reason='Synthetic possible duplicate')
+    response = f.client.post('/master-data/customers/duplicates/cases', json=request)
+    assert response.status_code == 200, response.text
+    cases = f.client.get('/master-data/customers/duplicates/cases').json()
+    assert cases['items'][0]['merge_authorized'] is False
+    assert cases['items'][0]['customers'][0]['version'] == 1
+    self_review = f.client.post(
+        f'/master-data/customers/duplicates/cases/{case_key}/review',
+        json=dict(operation_key=str(uuid4()), expected_version=1,
+            outcome='APPROVED', reason='Self review'))
+    assert self_review.status_code == 403
+    reviewer = User(org_id=f.org_a, username='api-review-' + uuid4().hex[:20],
+        password_hash='unusable-test-only')
+    f.db.add(reviewer); f.db.commit()
+    original_id = f.user.id; f.user.id = reviewer.id
+    try:
+        approved = f.client.post(
+            f'/master-data/customers/duplicates/cases/{case_key}/review',
+            json=dict(operation_key=str(uuid4()), expected_version=1,
+                outcome='APPROVED', reason='Profiles reviewed'))
+        assert approved.status_code == 200, approved.text
+        assert approved.json()['status'] == 'APPROVED'
+    finally:
+        f.user.id = original_id
+    assert f.db.query(RetailCustomer).filter_by(org_id=f.org_a).count() == 2
+
+
+@pytest.mark.parametrize('permission', ['Request_CustomerDuplicate', 'Review_CustomerDuplicate'])
+def test_duplicate_actions_require_their_specific_permission(customers, permission):
+    f = customers
+    f.user.access_policy = AccessPolicy(user=f.user, org_ids=(f.org_a,),
+        permission_names=frozenset(f.permissions | ({permission} if permission == 'Request_CustomerDuplicate' else set())),
+        module_names=frozenset(), field_permissions={'PERSONAL': 'View_Personal_Data'})
+    if permission == 'Request_CustomerDuplicate':
+        response = f.client.post('/master-data/customers/duplicates/cases/' + str(uuid4()) + '/review',
+            json=dict(operation_key=str(uuid4()), expected_version=1,
+                outcome='APPROVED', reason='Denied'))
+    else:
+        response = f.client.post('/master-data/customers/duplicates/cases', json=dict(
+            operation_key=str(uuid4()), customer_key=str(uuid4()),
+            other_customer_key=str(uuid4()), expected_customer_version=1,
+            expected_other_version=1, assessment='DISTINCT_CUSTOMERS', reason='Denied'))
+    assert response.status_code == 403

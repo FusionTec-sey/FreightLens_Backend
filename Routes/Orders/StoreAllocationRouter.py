@@ -1,4 +1,4 @@
-"""Opt-in local store allocation; clients cannot supply node authority or dates."""
+"""Server-authorised store allocation; clients cannot supply authority or dates."""
 from datetime import datetime, timezone
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +9,7 @@ from Schema.StoreAllocationSchema import StoreAllocationRequest, StoreAllocation
 from Services.staff_store_assignment_service import latest_assignment, require_staff_store_assignment
 from Routes.Inventory.BranchSettingsRouter import read_settings
 from Services.sales_reservation_source_service import owned
-from Services.stock_runtime_service import local_stock_runtime, StockRuntimeUnavailable
+from Services.stock_runtime_service import server_stock_runtime, StockRuntimeUnavailable
 from Services.branch_action_context_service import require_branch_action_context
 from Services.store_allocation_service import allocate_store_stock
 from Routes.Inventory.ReservationReleaseCaseRouter import guard, translate
@@ -31,7 +31,7 @@ def allocation_context(db: Session = Depends(get_db), context: OrgContext = Depe
                        user=Depends(require_permission('Allocate_SalesDraftStock'))):
     try:
         if not db.in_transaction(): db.begin()
-        runtime = local_stock_runtime()
+        runtime = server_stock_runtime()
         assignment = latest_assignment(db, context, user.id)
         if assignment is None: raise PermissionError('Working-store assignment required')
         runtime.claim_for(db, context, assignment.branch_id)
@@ -53,7 +53,7 @@ def allocate_draft(payload: StoreAllocationRequest, db: Session = Depends(get_db
                    user=Depends(require_permission('Allocate_SalesDraftStock'))):
     try:
         if not db.in_transaction(): db.begin()
-        runtime = local_stock_runtime()
+        runtime = server_stock_runtime()
         source = owned(db, SalesIntentRevision, context).filter_by(document_key=payload.source.document_key,
             version=payload.source.version).one_or_none()
         if source is None: raise LookupError('Saved draft not found')

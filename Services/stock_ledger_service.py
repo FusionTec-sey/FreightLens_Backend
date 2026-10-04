@@ -38,6 +38,7 @@ from Model.containermgmt.Inventory.SalesReservationSource import SalesReservatio
 from Services.sales_reservation_source_service import validate_reservation_source, load_reservation_demand
 from Services.reservation_release_service import load_release_binding
 from Services.manager_case_service import CaseBinding, consume_case
+from Services.stock_adjustment_service import reload_stock_adjustment_binding
 from Model.containermgmt.Inventory.ReservationReallocation import ReservationReallocation
 from Services.reservation_reallocation_service import load_reallocation_binding, reallocation_keys, require_reallocation_reserve
 
@@ -275,6 +276,63 @@ Policy transitions need a separate reviewed workflow, never another opening.
     return _post_stock(factory, context, actor_id, operation_key,
                         "stock.serial-opening.v1" if serials else "stock.batch-opening.v1" if batch else "stock.opening.v2",
                         request, apply, authorize=authorize, authority=authority, branch_id=branch_id)
+
+
+def adjust_stock_balance(factory, context, actor_id, operation_key, *, case_key,
+                         binding, reason, authorize, authority):
+    """Apply one independently reviewed physical correction to an exact bucket.
+
+    Reservations are immutable in this workflow. Serial quantities cannot be
+    corrected without the future identity-specific movement contract.
+    """
+    _uuid(operation_key); _uuid(case_key); _reason(reason)
+    if not isinstance(binding, CaseBinding) or binding.action != "inventory.stock.adjust":
+        raise ValueError("Exact approved stock-adjustment binding required")
+    if binding.source_type != "inventory.stock-balance":
+        raise ValueError("Stock adjustment source is invalid")
+    details = binding.details
+    balance_id = details.get("balance_id")
+    if type(balance_id) is not int or str(balance_id) != binding.source_key:
+        raise ValueError("Stock adjustment balance binding is invalid")
+    request = {
+        "case_key": str(case_key),
+        "binding": binding.snapshot(),
+        "reason": reason,
+    }
+
+    def load(db):
+        return reload_stock_adjustment_binding(
+            db, context, binding, replay_operation=operation_key)
+
+    def guard(db):
+        if not callable(authorize):
+            raise ValueError("Explicit stock-adjustment permission guard required")
+        authorize(db)
+        if load(db).snapshot() != binding.snapshot():
+            raise PostingConflict("Reviewed stock adjustment changed")
+
+    def apply(db):
+        consume_case(db, context, actor_id, operation_key, case_key=case_key,
+            binding=binding, load_binding=load, authorize=authorize)
+        balance = _locked_balance(db, context, balance_id)
+        before = _snapshot(balance)
+        target = QuantityBreakdown(
+            Decimal(details["target_on_hand"]), before.reserved,
+            Decimal(details["target_damaged"]),
+            Decimal(details["target_quarantined"]),
+        )
+        if format(before.reserved, ".6f") != details["reserved"]:
+            raise PostingConflict("Reserved stock changed after review")
+        balance.on_hand = target.on_hand
+        balance.damaged = target.damaged
+        balance.quarantined = target.quarantined
+        balance.version += 1
+        balance.updated_by = actor_id
+        return _record(db, balance, operation_key, actor_id, "ADJUSTMENT", reason, before)
+
+    return _post_stock(factory, context, actor_id, operation_key,
+        "stock.adjustment.v1", request, apply, authority=authority,
+        authorize=guard, balance_id=balance_id)
 
 
 def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, reservation_key,

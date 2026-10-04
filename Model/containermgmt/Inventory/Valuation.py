@@ -1,4 +1,4 @@
-"""Append-only source-linked opening valuation; not final reconciled accounts."""
+"""Append-only source-linked inventory valuation; not final reconciled accounts."""
 from sqlalchemy import Column, Integer, String, Numeric, ForeignKeyConstraint, UniqueConstraint, CheckConstraint, Index, DDL, event, text
 from sqlalchemy.dialects.postgresql import UUID
 from Model.db import Base
@@ -10,15 +10,19 @@ class InventoryValuation(OrgMixin, AuditMixin, Base):
     __table_args__ = (
         UniqueConstraint("org_id", "cost_pool_id", "product_id", "version", name="uq_valuation_pool_version"),
         UniqueConstraint('id', 'org_id', name='uq_valuation_id_org'),
-        Index('uq_valuation_opening_source', 'org_id', 'balance_id', 'source_version', unique=True, postgresql_where=text("kind = 'OPENING'")),
+        Index('uq_valuation_physical_source', 'org_id', 'balance_id', 'source_version', unique=True,
+              postgresql_where=text("kind IN ('OPENING', 'RECEIPT')")),
         UniqueConstraint('org_id', 'operation_key', 'balance_id', name='uq_valuation_operation_line'),
         ForeignKeyConstraint(['source_valuation_id', 'org_id'], ['containermgmt.inventory_valuations.id', 'containermgmt.inventory_valuations.org_id'], name='fk_valuation_charge_source'),
         ForeignKeyConstraint(["cost_pool_id", "org_id"], ["containermgmt.inventory_cost_pools.id", "containermgmt.inventory_cost_pools.org_id"], name="fk_valuation_pool"),
         ForeignKeyConstraint(["balance_id", "product_id", "org_id"], ["containermgmt.inventory_stock_balances.id", "containermgmt.inventory_stock_balances.product_id", "containermgmt.inventory_stock_balances.org_id"], name="fk_valuation_stock"),
         ForeignKeyConstraint(["balance_id", "source_version"], ["containermgmt.inventory_stock_movements.balance_id", "containermgmt.inventory_stock_movements.version"], name="fk_valuation_movement"),
         ForeignKeyConstraint(["org_id", "operation_key"], ["containermgmt.inventory_posting_operations.org_id", "containermgmt.inventory_posting_operations.operation_key"], name="fk_valuation_operation", deferrable=True, initially="DEFERRED"),
-        CheckConstraint("version > 0 AND source_version = 1 AND quantity >= 0 AND quantity < 1000000000000 AND pool_quantity >= quantity AND pool_quantity < 1000000000000", name="ck_valuation_quantity_v2"),
-        CheckConstraint("(kind = 'OPENING' AND quantity > 0 AND source_valuation_id IS NULL) OR (kind = 'CHARGE' AND quantity = 0 AND goods_value_scr = 0 AND source_valuation_id IS NOT NULL)", name='ck_valuation_kind'),
+        CheckConstraint("version > 0 AND source_version >= 1 AND quantity >= 0 AND quantity < 1000000000000 AND pool_quantity >= quantity AND pool_quantity < 1000000000000", name="ck_valuation_quantity_v3"),
+        CheckConstraint("(kind = 'OPENING' AND source_version = 1 AND quantity > 0 AND source_valuation_id IS NULL) "
+            "OR (kind = 'RECEIPT' AND quantity > 0 AND source_valuation_id IS NULL) "
+            "OR (kind = 'CHARGE' AND quantity = 0 AND goods_value_scr = 0 AND source_valuation_id IS NOT NULL)",
+            name='ck_valuation_kind_v2'),
         CheckConstraint("goods_value_scr >= 0 AND additional_cost_scr >= 0 AND pool_value_scr >= goods_value_scr + additional_cost_scr AND pool_value_scr < 1000000000000000000", name="ck_valuation_value"),
         CheckConstraint("calculation_policy = 'pool-wac-v2' AND currency = 'SCR' AND status = 'UNRECONCILED' AND length(trim(reason)) > 0 AND length(trim(base_unit)) > 0", name="ck_valuation_contract"),
         CheckConstraint("created_by IS NOT NULL AND NOT is_deleted AND deleted_at IS NULL", name="ck_valuation_audit"),
@@ -66,7 +70,8 @@ IF NEW.kind = 'CHARGE' AND NOT EXISTS (
  JOIN containermgmt.manager_case_uses used ON used.operation_key=NEW.operation_key AND used.org_id=NEW.org_id
  JOIN containermgmt.manager_cases review ON review.id=used.case_id AND review.org_id=NEW.org_id
  CROSS JOIN LATERAL jsonb_array_elements(proposal.snapshot->'lines') line
- WHERE source.id=NEW.source_valuation_id AND source.org_id=NEW.org_id AND source.kind='OPENING'
+ WHERE source.id=NEW.source_valuation_id AND source.org_id=NEW.org_id
+ AND source.kind IN ('OPENING','RECEIPT')
  AND source.cost_pool_id=NEW.cost_pool_id AND source.product_id=NEW.product_id AND source.balance_id=NEW.balance_id
  AND source.base_unit=NEW.base_unit AND proposal.cost_pool_id=NEW.cost_pool_id
  AND (line->>'valuation_id')::integer=source.id AND (line->>'allocated_scr')::numeric=NEW.additional_cost_scr
@@ -79,3 +84,32 @@ CHARGE_TRIGGER = """CREATE TRIGGER charge_valuation_guard BEFORE INSERT ON conta
 FOR EACH ROW EXECUTE FUNCTION containermgmt.guard_charge_valuation()"""
 event.listen(InventoryValuation.__table__, 'after_create', DDL(CHARGE_FUNCTION))
 event.listen(InventoryValuation.__table__, 'after_create', DDL(CHARGE_TRIGGER))
+
+RECEIPT_FUNCTION = """CREATE OR REPLACE FUNCTION containermgmt.guard_receipt_valuation()
+RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+IF NEW.kind = 'RECEIPT' AND NOT EXISTS (
+ SELECT 1 FROM containermgmt.inventory_stock_movements movement
+ JOIN containermgmt.inventory_stock_balances balance
+   ON balance.id=movement.balance_id AND balance.org_id=movement.org_id
+ JOIN containermgmt.inventory_receipt_source_uses source
+   ON source.operation_key=movement.operation_key AND source.org_id=movement.org_id
+ JOIN containermgmt.inventory_receipt_manifests manifest
+   ON manifest.manifest_key=source.manifest_key AND manifest.org_id=source.org_id
+ JOIN containermgmt.branch_cost_pools mapping
+   ON mapping.branch_id=balance.branch_id AND mapping.org_id=balance.org_id AND NOT mapping.is_deleted
+ WHERE movement.org_id=NEW.org_id AND movement.operation_key=NEW.operation_key
+ AND movement.balance_id=NEW.balance_id AND movement.version=NEW.source_version
+ AND movement.kind='RECEIPT' AND movement.on_hand_delta=NEW.quantity
+ AND balance.product_id=NEW.product_id AND balance.base_unit=NEW.base_unit
+ AND mapping.cost_pool_id=NEW.cost_pool_id
+ AND (manifest.snapshot->'source'->>'branch_id')::integer=balance.branch_id
+ AND (manifest.snapshot->'source'->>'location_id')::integer=balance.location_id
+ AND (manifest.snapshot->'source'->>'product_id')::integer=balance.product_id
+ AND manifest.snapshot->'source'->>'base_unit'=balance.base_unit
+) THEN RAISE EXCEPTION 'Receipt valuation requires its exact source-bound movement and cost pool'; END IF;
+RETURN NEW; END; $$"""
+RECEIPT_TRIGGER = """CREATE TRIGGER receipt_valuation_guard BEFORE INSERT
+ON containermgmt.inventory_valuations FOR EACH ROW
+EXECUTE FUNCTION containermgmt.guard_receipt_valuation()"""
+event.listen(InventoryValuation.__table__, 'after_create', DDL(RECEIPT_FUNCTION))
+event.listen(InventoryValuation.__table__, 'after_create', DDL(RECEIPT_TRIGGER))

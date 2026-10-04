@@ -163,3 +163,16 @@ def test_execute_only_role_can_inspect_but_not_review(api, monkeypatch):
     assert f.client.get(f'{f.url}/sources/{f.document}').status_code == 200
     assert f.client.post(f'{f.url}/{f.case}/review', json=dict(operation_key=str(uuid4()),
         expected_version=1, outcome='APPROVED', reason='Synthetic')).status_code == 403
+
+
+def test_cloud_runtime_executes_reviewed_release_without_client_authority(api, monkeypatch):
+    f = api
+    monkeypatch.delenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON', raising=False)
+    monkeypatch.setenv('FREIGHTLENS_CLOUD_STOCK_RUNTIME_NODE_KEY', str(f.node_key))
+    f.user.access_policy = replace(f.user.access_policy,
+        permission_names=f.user.access_policy.permission_names | {'Execute_ReservationRelease'})
+    f.review()
+    response = f.client.post(f'{f.url}/{f.case}/execute', json={
+        'operation_key': str(uuid4())})
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'CONSUMED'

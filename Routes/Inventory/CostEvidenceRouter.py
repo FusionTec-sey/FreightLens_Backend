@@ -1,6 +1,5 @@
 """Permission-separated evidence selection and review; never financial posting."""
 from uuid import UUID
-import os
 from dataclasses import replace
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -28,7 +27,7 @@ from auth.dependencies import get_org_context
 from auth.module_guard import require_module
 from auth.security_guards import require_permission, is_financial_user, can_view_supplier_user
 from Utils.blob_storage import blob_storage
-from Services.cost_runtime_service import local_cost_runtime, CostRuntimeUnavailable
+from Services.cost_runtime_service import server_cost_runtime, CostRuntimeUnavailable
 from Services.cost_charge_review_service import reviewed_charge_binding
 from Services.charge_posting_service import prepare_and_post_allocated_charge
 from Model.containermgmt.Inventory.Valuation import InventoryValuation
@@ -37,6 +36,8 @@ from auth.policy import get_access_policy
 from Model.Credentials.users import User
 from Model.Credentials.Organisation import Organisation
 from Services.staff_store_assignment_service import eligible_staff
+from Services.evidence_config_service import (
+    EvidenceConfigurationUnavailable, evidence_size_limit)
 from Routes.MasterData.CustomerRouter import private_response
 
 
@@ -77,7 +78,7 @@ def posting_context(pool_id: int, key: UUID, case_key: UUID, db: Session = Depen
     try:
         posting_access(context, user)
         if not db.in_transaction(): db.begin()
-        local_cost_runtime().claim_for(db, context, pool_id)
+        server_cost_runtime().claim_for(db, context, pool_id)
         evidence_limit()
         binding = reviewed_charge_binding(db, context, case_key, key,
             authorize=lambda session: posting_access(context, user),
@@ -108,7 +109,7 @@ def post_reviewed_charge(pool_id: int, key: UUID, case_key: UUID, payload: Charg
     try:
         posting_access(context, user)
         if not db.in_transaction(): db.begin()
-        runtime = local_cost_runtime()
+        runtime = server_cost_runtime()
         claim = runtime.claim_for(db, context, pool_id)
         limit = evidence_limit()
         factory = sessionmaker(bind=db.get_bind())
@@ -202,11 +203,9 @@ def scoped_cases(db, context, pool_id, key):
 
 def evidence_limit():
     try:
-        value = int(os.environ.get('COST_EVIDENCE_MAX_BYTES', '0'))
-        if value <= 0: raise ValueError()
-        return value
-    except ValueError:
-        raise HTTPException(503, 'Versioned evidence capture requires a configured positive COST_EVIDENCE_MAX_BYTES')
+        return evidence_size_limit()
+    except EvidenceConfigurationUnavailable as error:
+        raise HTTPException(503, str(error)) from error
 
 
 def metadata_binding(binding):

@@ -8,7 +8,7 @@ from Model.db import get_db
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase
 from Model.containermgmt.Inventory.StockLedger import StockBalance
 from Schema.ReservationReleaseCaseSchema import ReleaseExecutionRequest, ReleaseExecutionRead
-from Services.stock_runtime_service import local_stock_runtime, StockRuntimeUnavailable
+from Services.stock_runtime_service import server_stock_runtime, StockRuntimeUnavailable
 from Services.stock_ledger_service import release_stock
 from Schema.ReservationReleaseCaseSchema import ReleaseCaseRequest, ReleaseCaseRead, ReservationSourceRead
 from Services.reservation_source_read_service import reservation_sources_page
@@ -128,7 +128,7 @@ def execute_release(key: UUID, payload: ReleaseExecutionRequest, db: Session = D
         # Authority belongs to the held stock, not the selling branch in the case.
         balance = owned(db, StockBalance, context).filter_by(id=binding.details['balance_id']).one_or_none()
         if balance is None: raise LookupError('Stock not found')
-        authority = local_stock_runtime().claim_for(db, context, balance.branch_id)
+        authority = server_stock_runtime().claim_for(db, context, balance.branch_id)
         result = release_stock(db, context, user.id, payload.operation_key,
             balance_id=balance.id, reservation_key=UUID(case.source_key),
             source_line_key=UUID(binding.details['source_line_key']),

@@ -80,6 +80,48 @@ def test_populated_read_serializes_exact_values_and_source(valued):
         assert list_valuations(f.pool, page=2, limit=1, db=db, context=f.context, user=object())['items'] == []
 
 
+def test_reconciliation_readiness_reports_missing_ready_and_difference(valued):
+    from Routes.Inventory.CostPoolRouter import read_reconciliation_readiness
+    from Schema.InventoryLocationSchema import LocationPage
+    from Schema.InventoryValuationSchema import InventoryReconciliationRead
+    from Model.containermgmt.Inventory.StockLedger import StockBalance
+    from decimal import Decimal
+    f = valued
+    with f.factory() as db:
+        before = LocationPage[InventoryReconciliationRead](
+            **read_reconciliation_readiness(f.pool, page=1, limit=25,
+                db=db, context=f.context, user=object()))
+        assert before.items[0].readiness == 'MISSING_VALUATION'
+        assert before.items[0].physical_quantity == '10.000000'
+    f.value()
+    with f.factory() as db:
+        ready = read_reconciliation_readiness(f.pool, page=1, limit=25,
+            db=db, context=f.context, user=object())['items'][0]
+        assert ready['readiness'] == 'READY'
+        assert ready['difference'] == '0.000000'
+        assert ready['pool_value_scr'] == '120.000000'
+    # Diagnostic contract: if a physical writer ever escapes valuation, the
+    # central report fails closed rather than presenting the cost as final.
+    with f.factory.begin() as db:
+        db.get(StockBalance, f.balance).on_hand = Decimal('11')
+    with f.factory() as db:
+        mismatch = read_reconciliation_readiness(f.pool, page=1, limit=25,
+            db=db, context=f.context, user=object())['items'][0]
+        assert mismatch['readiness'] == 'QUANTITY_MISMATCH'
+        assert mismatch['difference'] == '1.000000'
+
+
+def test_reconciliation_readiness_is_scoped_and_paginated(valued):
+    from Routes.Inventory.CostPoolRouter import read_reconciliation_readiness
+    f = valued; f.value()
+    with f.factory() as db:
+        first = read_reconciliation_readiness(f.pool, page=1, limit=1,
+            db=db, context=f.context, user=object())
+        assert first['total'] == 1 and first['pages'] == 1
+        assert read_reconciliation_readiness(f.pool, page=2, limit=1,
+            db=db, context=f.context, user=object())['items'] == []
+
+
 @pytest.mark.parametrize('denial', ['anonymous', 'financial', 'product', 'module'])
 @pytest.mark.parametrize('preview', [False, True])
 def test_values_require_financial_and_product_access(locations, denial, preview):
@@ -89,6 +131,19 @@ def test_values_require_financial_and_product_access(locations, denial, preview)
     if denial == 'anonymous':
         for dependency in f.user_dependencies: f.app.dependency_overrides.pop(dependency)
     response = f.client.post('/inventory/cost-pools/1/allocate-cost-preview', json={'valuation_ids': [1], 'total_scr': '1', 'basis': 'GOODS_VALUE'}) if preview else f.client.get('/inventory/cost-pools/1/valuations')
+    assert response.status_code == (401 if denial == 'anonymous' else 403)
+
+
+@pytest.mark.parametrize('denial', ['anonymous', 'financial', 'product', 'module'])
+def test_reconciliation_readiness_requires_financial_and_product_access(locations, denial):
+    f = locations
+    grant(f, permissions=('View_Product',) if denial == 'financial' else
+        ('View_Financials',) if denial == 'product' else
+        ('View_Product', 'View_Financials'),
+        modules=() if denial == 'module' else ('INVENTORY',))
+    if denial == 'anonymous':
+        for dependency in f.user_dependencies: f.app.dependency_overrides.pop(dependency)
+    response = f.client.get('/inventory/cost-pools/1/reconciliation-readiness')
     assert response.status_code == (401 if denial == 'anonymous' else 403)
 
 

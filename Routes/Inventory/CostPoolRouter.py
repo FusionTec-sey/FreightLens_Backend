@@ -19,9 +19,10 @@ from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from Model.containermgmt.Inventory.StockLedger import StockBalance
 from Model.containermgmt.Inventory.Location import StockLocation
 from Model.containermgmt.Orders.Product import Product
-from Schema.InventoryValuationSchema import InventoryValuationRead
+from Schema.InventoryValuationSchema import InventoryValuationRead, InventoryReconciliationRead
 from Schema.InventoryValuationSchema import CostAllocationPreviewRequest, CostAllocationPreview
 from Services.inventory_costing_service import allocate_additional_cost
+from Services.inventory_reconciliation_service import reconciliation_readiness
 from decimal import Decimal
 from uuid import UUID
 from Model.containermgmt.Inventory.CostAllocation import CostAllocationProposal
@@ -182,6 +183,17 @@ def list_valuations(pool_id: int, page: int = Query(1, ge=1), limit: int = Query
     return dict(items=items, total=total, page=page, limit=limit, pages=max(1, (total + limit - 1) // limit))
 
 
+@CostPoolRouter.get('/cost-pools/{pool_id}/reconciliation-readiness',
+    response_model=LocationPage[InventoryReconciliationRead],
+    dependencies=[Depends(require_permission('View_Product'))])
+def read_reconciliation_readiness(pool_id: int, page: int = Query(1, ge=1),
+        limit: int = Query(25, ge=1, le=100), db: Session = Depends(get_db),
+        context: OrgContext = Depends(get_org_context),
+        user=Depends(require_permission('View_Financials'))):
+    scoped_pool(db, context, pool_id)
+    return reconciliation_readiness(db, context, pool_id, page=page, limit=limit)
+
+
 def visible_valuations(db, context, pool_id):
     query = db.query(InventoryValuation, Product.name).join(Product,
         (Product.id == InventoryValuation.product_id) & (Product.org_id == InventoryValuation.org_id))
@@ -204,7 +216,10 @@ def preview_cost_allocation(pool_id: int, payload: CostAllocationPreviewRequest,
         InventoryCostPool.org_id == context.org_id, InventoryCostPool.is_deleted.is_(False)), InventoryCostPool, context).first()
     if pool is None:
         raise HTTPException(404, 'Cost pool not found')
-    rows = visible_valuations(db, context, pool_id).filter(InventoryValuation.id.in_(payload.valuation_ids), InventoryValuation.kind == 'OPENING').order_by(InventoryValuation.id).all()
+    rows = visible_valuations(db, context, pool_id).filter(
+        InventoryValuation.id.in_(payload.valuation_ids),
+        InventoryValuation.kind.in_(('OPENING', 'RECEIPT'))).order_by(
+            InventoryValuation.id).all()
     if len(rows) != len(payload.valuation_ids):
         raise HTTPException(404, 'One or more valuation sources are unavailable in this pool')
     if payload.basis == 'BASE_QUANTITY' and len({row.base_unit for row, _ in rows}) != 1:

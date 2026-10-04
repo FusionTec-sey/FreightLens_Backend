@@ -8,7 +8,7 @@ from Services.inventory_costing_service import MAX_VALUE
 
 class InventoryValuationRead(BaseModel):
     id: int
-    kind: Literal['OPENING', 'CHARGE'] = 'OPENING'
+    kind: Literal['OPENING', 'RECEIPT', 'CHARGE'] = 'OPENING'
     source_valuation_id: int | None = None
     product_id: int
     product_name: str
@@ -24,6 +24,21 @@ class InventoryValuationRead(BaseModel):
     status: Literal['UNRECONCILED']
     reason: str
     created_at: datetime
+
+
+class InventoryReconciliationRead(BaseModel):
+    product_id: int
+    product_name: str
+    physical_base_units: list[str]
+    physical_quantity: str | None
+    valuation_id: int | None
+    valuation_version: int | None
+    valuation_base_unit: str | None
+    pool_quantity: str | None
+    pool_value_scr: str | None
+    difference: str | None
+    readiness: Literal['READY', 'MISSING_VALUATION', 'QUANTITY_MISMATCH',
+        'UNIT_MISMATCH']
 
 
 class CostAllocationPreviewRequest(BaseModel):

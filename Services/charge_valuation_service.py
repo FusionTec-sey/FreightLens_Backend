@@ -33,7 +33,8 @@ def append_allocated_charge_values(db, context, actor_id, operation_key, *, expe
     ids = [line['valuation_id'] for line in lines]
     if not 1 <= len(ids) <= 100 or len(set(ids)) != len(ids): raise ValueError('Bounded distinct allocation sources required')
     sources = apply_org_filter(db.query(InventoryValuation).filter(InventoryValuation.org_id == context.org_id,
-        InventoryValuation.id.in_(ids), InventoryValuation.kind == 'OPENING', InventoryValuation.is_deleted.is_(False)),
+        InventoryValuation.id.in_(ids), InventoryValuation.kind.in_(('OPENING', 'RECEIPT')),
+        InventoryValuation.is_deleted.is_(False)),
         InventoryValuation, context).all()
     products = sorted({row.product_id for row in sources})
     if len(sources) != len(ids) or set(expected_versions) != set(products):
@@ -63,11 +64,14 @@ def append_allocated_charge_values(db, context, actor_id, operation_key, *, expe
                 raise PostingConflict('Allocation source scope mismatch')
             balance = apply_org_filter(db.query(StockBalance).filter_by(id=source.balance_id,
                 org_id=context.org_id, is_deleted=False), StockBalance, context).populate_existing().with_for_update().one()
+            source_movement = apply_org_filter(db.query(StockMovement).filter_by(
+                org_id=context.org_id, balance_id=balance.id,
+                version=source.source_version, is_deleted=False), StockMovement, context).one_or_none()
             moved = apply_org_filter(db.query(StockMovement.id).filter(
                 StockMovement.org_id == context.org_id, StockMovement.balance_id == balance.id,
                 StockMovement.version > source.source_version, StockMovement.on_hand_delta != 0),
                 StockMovement, context).first()
-            if balance.on_hand != source.quantity or moved is not None:
+            if source_movement is None or balance.on_hand != source_movement.on_hand or moved is not None:
                 raise PostingConflict('Changed physical stock requires a late-cost reconciliation workflow')
             before = latest[source.product_id]; amount = Decimal(line['allocated_scr'])
             if amount < 0 or before.pool_value_scr + amount > MAX_VALUE:

@@ -1,14 +1,19 @@
-"""Opt-in single-database development runtime, never disconnected enrollment.
+"""Server-owned stock runtime identity for cloud and retained local development.
 
-The process operator pins node/branch epochs. HTTP callers cannot choose them.
-Missing configuration disables writes; never adopt the database's latest owner.
-No current preview or operational settings are enabled by importing this module.
+The cloud process pins one node identity and resolves only active branch epochs
+owned by that node. Retained local development pins exact node/branch epochs.
+HTTP callers cannot choose either. Missing configuration disables writes, and a
+runtime never adopts a different database owner. Importing this enables nothing.
 """
 import json
 import os
 from dataclasses import dataclass
 from uuid import UUID
+from Model.containermgmt.Inventory.PostingAuthority import (
+    BranchAuthorityEpoch, StoreNode,
+)
 from Services.posting_authority_service import AuthorityClaim, require_posting_authority
+from Utils.org_filter import apply_org_filter
 
 
 class StockRuntimeUnavailable(ValueError):
@@ -24,6 +29,34 @@ class LocalStockRuntime:
         if len(matches) != 1:
             raise StockRuntimeUnavailable('No configured local runtime for this store')
         claim = matches[0]
+        require_posting_authority(db, context, claim, branch_id=branch_id)
+        return claim
+
+
+@dataclass(frozen=True)
+class CloudStockRuntime:
+    """One configured cloud process identity; branch/epoch stay server-derived."""
+    node_key: UUID
+
+    def claim_for(self, db, context, branch_id):
+        if not db.in_transaction():
+            raise ValueError('Cloud stock authority requires an active transaction')
+        if context.org_id not in context.allowed_org_ids:
+            raise PermissionError('Posting authority scope denied')
+        node = apply_org_filter(db.query(StoreNode).filter_by(
+            org_id=context.org_id, node_key=self.node_key, is_deleted=False),
+            StoreNode, context).one_or_none()
+        if node is None:
+            raise PermissionError('Configured cloud runtime does not own this company')
+        authority = apply_org_filter(db.query(BranchAuthorityEpoch).filter_by(
+            org_id=context.org_id, branch_id=branch_id, is_deleted=False),
+            BranchAuthorityEpoch, context).order_by(
+                BranchAuthorityEpoch.epoch.desc()).first()
+        if authority is None or authority.state != 'ACTIVE' or authority.node_id != node.id:
+            raise PermissionError(
+                'Configured cloud runtime has no active authority for this store')
+        claim = AuthorityClaim(context.org_id, branch_id, self.node_key,
+            authority.epoch)
         require_posting_authority(db, context, claim, branch_id=branch_id)
         return claim
 
@@ -53,3 +86,26 @@ def parse_local_stock_runtime(raw):
 def local_stock_runtime():
     """Dependency reads operator-controlled process configuration, never headers."""
     return parse_local_stock_runtime(os.environ.get('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON', ''))
+
+
+def parse_cloud_stock_runtime(raw):
+    try:
+        key = UUID(raw.strip()) if isinstance(raw, str) else None
+        if key is None or not key.int:
+            raise ValueError('Missing cloud runtime key')
+        return CloudStockRuntime(key)
+    except (ValueError, TypeError, AttributeError) as error:
+        raise StockRuntimeUnavailable(
+            'Invalid cloud stock runtime configuration') from error
+
+
+def server_stock_runtime():
+    """Prefer the single cloud identity; retain explicit local dev compatibility.
+
+    An invalid cloud value never falls back. HTTP clients cannot supply either
+    identity. With neither operator setting present, stock writes remain disabled.
+    """
+    cloud = os.environ.get('FREIGHTLENS_CLOUD_STOCK_RUNTIME_NODE_KEY', '')
+    if cloud.strip():
+        return parse_cloud_stock_runtime(cloud)
+    return local_stock_runtime()

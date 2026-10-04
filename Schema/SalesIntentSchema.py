@@ -55,20 +55,27 @@ class SalesIntentSaved(BaseModel):
     version: int
     status: Literal['DRAFT']
     replayed: bool
+    search_indexed: bool = False
 
 
-class SalesIntentLineRead(SalesIntentLineInput):
+class SalesIntentHistoricalLine(SalesIntentLineInput):
     image_signed_url: str | None = None
     base_quantity: str
     base_unit: str
     product_name: str | None
     sku: str | None
     units: list[str]
+
+
+class SalesIntentLineRead(SalesIntentHistoricalLine):
     reserved_quantity: str
 
 
 class SalesIntentRead(SalesIntentInput):
     customer_name: str | None = None
+    branch_name: str | None = None
+    created_at: datetime
+    created_by: int
     document_key: UUID
     version: int
     status: Literal['DRAFT']
@@ -95,3 +102,10 @@ class SalesIntentHistoryItem(BaseModel):
     branch_id: int
     created_at: datetime
     created_by: int
+
+
+class SalesIntentHistoryDetail(SalesIntentHistoryItem):
+    branch_name: str | None = None
+    lines: list[SalesIntentHistoricalLine]
+    read_only: Literal[True] = True
+    catalogue_labels_current: Literal[True] = True
