@@ -12,6 +12,7 @@ IMPLEMENTED
 - Invoice posting binds stock rights but does not reduce on-hand or reserved quantities. T16 owns physical collection.
 - Posted reservations are rejected by reviewed release service and database guards; final released quantity must reconcile exactly to cumulative HANDOVER history.
 - Permissions View_Sale, Post_Sale and Record_ExternalCardConfirmation are distinct. Internal account references are omitted from ordinary sales responses.
+- A protected checkout-options read exposes only exact active counter, redacted payment identity and reservation-binding inputs; salespeople do not need financial-configuration access.
 
 FOCUSED VERIFICATION
 - tests/test_sales_posting.py: 8 passed, including distinct confirmer authority, safe trigger-error mapping and direct migration replay.

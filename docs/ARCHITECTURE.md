@@ -2072,6 +2072,10 @@ from the salesperson; this is an audited manual terminal observation, not provid
 authentication, and should not be granted to ordinary cashiers by default.
 A declined card may be retried on the same exact card tender. Changing the tender
 plan (for example, card to cash) requires a new saved draft revision and attempt.
+`GET /sales/posting-options/{document_key}` gives an authorised salesperson the
+exact active counter versions, safe payment method/mapping identities and active
+reservation bindings required by checkout. It omits receiving-account references
+and does not require financial-configuration access.
 
 Finalization rechecks the current branch/counter/business date, staff assignment,
 customer version, pricing/tax fingerprint, receiving-account versions and active

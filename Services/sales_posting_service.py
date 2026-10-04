@@ -9,12 +9,18 @@ from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from Model.containermgmt.Inventory.BranchCounter import BranchCounter
+from Model.containermgmt.Inventory.BranchCounter import CounterSettingsRevision
+from Model.containermgmt.Inventory.BranchSettings import BranchSettingsRevision
 from Model.containermgmt.Inventory.Location import InventoryBranch
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase, ManagerCaseUse
 from Model.containermgmt.Inventory.SalesReservationSource import SalesReservationSource
 from Model.containermgmt.Inventory.StockLedger import StockBalance, StockMovement, StockReservation
 from Model.containermgmt.MasterData.RetailCustomer import RetailCustomer
 from Model.containermgmt.Orders.Product import Product
+from Model.containermgmt.Orders.PaymentConfiguration import (
+    BranchReceivingAccount, BranchReceivingAccountRevision,
+    PaymentMethod, PaymentMethodRevision,
+)
 from Model.containermgmt.Orders.SalesIntent import SalesIntent, SalesIntentRevision, SalesIntentLineRevision
 from Model.containermgmt.Orders.SalesPosting import (
     SalesPostingAttempt, SalesPostingTender, SalesCardConfirmation,
@@ -29,6 +35,7 @@ from Schema.SalesPostingSchema import (
     SalesPostingAttemptCreate, SalesCardConfirmationAppend,
     SalesPostingFinalize,
 )
+from Schema.BranchCounterSchema import CounterConfig
 from Services.branch_action_context_service import require_branch_action_context
 from Services.customer_profile_service import read_customer_profile
 from Services.inventory_posting_service import (
@@ -140,6 +147,89 @@ def read_posting_attempt(db, context, attempt_key, *, authorize, lock=False):
     if attempt is None:
         raise LookupError("Sales posting attempt not found")
     return _attempt_read(db, context, attempt)
+
+
+def read_posting_options(db, context, actor_id, document_key, draft_version, *,
+                         authorize):
+    """Return checkout-safe exact inputs without exposing ledger accounts."""
+    _guard(context, authorize, db)
+    if type(draft_version) is not int or draft_version <= 0:
+        raise ValueError("Positive draft version required")
+    draft = _draft_snapshot(db, context, UUID(str(document_key)), draft_version,
+        authorize=authorize)
+    branch_id = draft["branch_id"]
+    assignment = latest_assignment(db, context, actor_id)
+    if assignment is None:
+        raise PermissionError("Working-store assignment missing")
+    assignment = require_staff_store_assignment(db, context, actor_id,
+        branch_id=branch_id, expected_version=assignment.version)
+    settings = _owned(db, BranchSettingsRevision, context).filter_by(
+        branch_id=branch_id).order_by(
+        BranchSettingsRevision.version.desc()).first()
+    if settings is None:
+        raise PostingConflict("Branch trading settings are required")
+
+    counters = []
+    roots = _owned(db, BranchCounter, context).filter_by(
+        branch_id=branch_id).order_by(BranchCounter.code).all()
+    for counter in roots:
+        revision = _owned(db, CounterSettingsRevision, context).filter_by(
+            counter_id=counter.id).order_by(
+            CounterSettingsRevision.version.desc()).first()
+        if revision is None:
+            continue
+        config = CounterConfig.model_validate(revision.config)
+        if config.is_enabled and config.purpose in ("CHECKOUT", "BOTH"):
+            counters.append(dict(counter_key=counter.counter_key,
+                code=counter.code, name=config.name, version=revision.version))
+
+    payment_methods = []
+    mappings = _owned(db, BranchReceivingAccount, context).filter_by(
+        branch_id=branch_id).order_by(
+        BranchReceivingAccount.mapping_key).all()
+    for mapping in mappings:
+        mapping_revision = _owned(db, BranchReceivingAccountRevision, context).filter_by(
+            mapping_key=mapping.mapping_key).order_by(
+            BranchReceivingAccountRevision.version.desc()).first()
+        method = _owned(db, PaymentMethod, context).filter_by(
+            method_key=mapping.method_key).one_or_none()
+        method_revision = (_owned(db, PaymentMethodRevision, context).filter_by(
+            method_key=mapping.method_key).order_by(
+            PaymentMethodRevision.version.desc()).first() if method else None)
+        if (mapping_revision is None or method_revision is None
+                or not mapping_revision.is_enabled or not method_revision.is_enabled
+                or method_revision.kind not in ("CASH", "CARD")):
+            continue
+        payment_methods.append(dict(method_key=method.method_key,
+            method_version=method_revision.version, code=method.code,
+            label=method_revision.label, kind=method_revision.kind,
+            mapping_key=mapping.mapping_key,
+            mapping_version=mapping_revision.version))
+
+    valid_lines = {UUID(str(line["line_key"])) for line in draft["lines"]}
+    sources = _owned(db, SalesReservationSource, context).filter_by(
+        document_key=UUID(str(document_key)), version=draft_version).order_by(
+        SalesReservationSource.line_key,
+        SalesReservationSource.reservation_key).all()
+    reservation_keys = [row.reservation_key for row in sources]
+    holds = {row.reservation_key: row for row in _owned(
+        db, StockReservation, context).filter(
+        StockReservation.reservation_key.in_(reservation_keys)).all()} if reservation_keys else {}
+    reservations = []
+    for source in sources:
+        hold = holds.get(source.reservation_key)
+        if hold is None or source.line_key not in valid_lines:
+            continue
+        remaining = Decimal(hold.quantity) - Decimal(hold.released)
+        if remaining > 0:
+            reservations.append(dict(source_line_key=source.line_key,
+                reservation_key=source.reservation_key,
+                quantity=_quantity(remaining)))
+    return dict(document_key=UUID(str(document_key)),
+        draft_version=draft_version, branch_id=branch_id,
+        branch_settings_version=settings.version,
+        assignment_version=assignment.version, counters=counters,
+        payment_methods=payment_methods, reservations=reservations)
 
 
 def _lock_branch(db, context, branch_id):

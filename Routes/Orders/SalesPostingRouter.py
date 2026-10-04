@@ -1,7 +1,7 @@
 """Recoverable payment confirmation and atomic retail invoice posting."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -10,11 +10,13 @@ from Schema.SalesPostingSchema import (
     SalesPostingAttemptCreate, SalesPostingCreateResult,
     SalesCardConfirmationAppend, SalesPostingAttemptRead,
     SalesPostingFinalize, SalesPostingFinalizeResult, SalesInvoiceRead,
+    SalesPostingOptionsRead,
 )
 from Services.inventory_posting_service import PostingConflict
 from Services.sales_posting_service import (
     append_card_confirmation, create_posting_attempt,
     finalize_posting_attempt, read_invoice, read_posting_attempt,
+    read_posting_options,
 )
 from Utils.org_filter import OrgContext
 from auth.dependencies import get_org_context
@@ -107,6 +109,18 @@ def get_attempt(attempt_key: UUID, db: Session = Depends(get_db),
                 user=Depends(require_permission("View_Sale"))):
     return _call(db, lambda: read_posting_attempt(db, context, attempt_key,
         authorize=_authorize(policy)))
+
+
+@SalesPostingRouter.get("/posting-options/{document_key}",
+    response_model=SalesPostingOptionsRead)
+def get_posting_options(document_key: UUID,
+                        draft_version: int = Query(..., gt=0),
+                        db: Session = Depends(get_db),
+                        context: OrgContext = Depends(get_org_context),
+                        policy: AccessPolicy = Depends(posting_access),
+                        user=Depends(require_permission("Post_Sale"))):
+    return _call(db, lambda: read_posting_options(db, context, user.id,
+        document_key, draft_version, authorize=_authorize(policy, write=True)))
 
 
 @SalesPostingRouter.post(

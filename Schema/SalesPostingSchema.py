@@ -196,6 +196,40 @@ class SalesPostingCreateResult(BaseModel):
     replayed: bool
 
 
+class SalesPostingCounterOption(BaseModel):
+    counter_key: UUID
+    code: str
+    name: str
+    version: int
+
+
+class SalesPostingPaymentOption(BaseModel):
+    method_key: UUID
+    method_version: int
+    code: str
+    label: str
+    kind: Literal["CASH", "CARD"]
+    mapping_key: UUID
+    mapping_version: int
+
+
+class SalesPostingReservationOption(BaseModel):
+    source_line_key: UUID
+    reservation_key: UUID
+    quantity: str
+
+
+class SalesPostingOptionsRead(BaseModel):
+    document_key: UUID
+    draft_version: int
+    branch_id: int
+    branch_settings_version: int
+    assignment_version: int
+    counters: list[SalesPostingCounterOption]
+    payment_methods: list[SalesPostingPaymentOption]
+    reservations: list[SalesPostingReservationOption]
+
+
 class SalesInvoiceLineRead(BaseModel):
     line_key: UUID
     source_line_key: UUID

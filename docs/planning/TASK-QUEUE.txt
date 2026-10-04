@@ -803,6 +803,8 @@ responsible for physical handover. External terminal results require a distinct
 audited permission, ordinary sales reads hide receiving-account references, and a
 declined card may be retried on its exact tender. Eight focused T13 tests and 42
 affected posting/payment/release/handover tests pass on an isolated synthetic database.
+The checkout-safe posting-options read supplies exact active counters, redacted
+payment identities and reservation bindings without exposing ledger accounts.
 The Wave2 full backend gate passes 1,586 tests and fresh empty-database startup/
 bootstrap verification passes. Evidence: evidence/20261005-atomic-sales-posting.txt.
 GitHub CI,

@@ -31,6 +31,7 @@ from Services.inventory_posting_service import PostingConflict
 from Services.payment_configuration_service import save_mapping, save_method
 from Services.sales_posting_service import (
     append_card_confirmation, create_posting_attempt, finalize_posting_attempt,
+    read_posting_options,
 )
 from Services.staff_store_assignment_service import save_staff_store_assignment
 from Routes.Inventory.BranchCounterRouter import save_counter
@@ -173,6 +174,15 @@ def _finalize(f, payload=None):
 
 def test_cash_attempt_and_invoice_post_once_without_handover(posting):
     f = posting
+    f.db.connection()
+    options = read_posting_options(f.db, f.context, f.user.id,
+        f.attempt.document_key, 1, authorize=lambda db: None)
+    f.db.commit()
+    assert options["branch_id"] == f.own
+    assert options["counters"][0]["counter_key"] == f.posting_counter_key
+    assert options["payment_methods"][0]["method_key"] == f.posting_method_key
+    assert "account_ref" not in options["payment_methods"][0]
+    assert options["reservations"][0]["reservation_key"] == f.posting_reservation_key
     first = _create(f)
     assert first["status"] == "READY" and not first["replayed"]
     assert _create(f)["replayed"]
@@ -307,6 +317,12 @@ def test_card_confirmation_requires_separate_permission(posting):
         module_names=frozenset(set(base.module_names) | {"SALES"}),
         field_permissions={**base.field_permissions,
             "PERSONAL": "View_Personal_Data"})
+    options = f.client.get(
+        f"/sales/posting-options/{f.attempt.document_key}?draft_version=1")
+    assert options.status_code == 200, options.text
+    assert options.json()["payment_methods"][0]["method_key"] == str(
+        f.posting_method_key)
+    assert "account_ref" not in options.text
     payload = SalesCardConfirmationAppend(confirmation_key=uuid4(),
         attempt_key=f.posting_attempt_key,
         tender_key=f.attempt.tenders[0].tender_key,

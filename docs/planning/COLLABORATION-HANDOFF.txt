@@ -269,6 +269,9 @@ tender; a different tender plan requires a new draft revision. Ordinary checkout
 responses deliberately omit internal receiving-account references. Posted holds
 may change only when its final released quantity exactly reconciles to cumulative
 T09 HANDOVER movement history.
+Use the protected `/sales/posting-options/{document_key}` read to populate checkout
+counters, payment methods and exact reservation bindings. Do not use the financial
+configuration register or reservation-review API as a salesperson-data fallback.
 Repository hooks/workflows are checked for this push; unknown external polling
 integrations cannot be ruled out merely by reading workflow files.
 
