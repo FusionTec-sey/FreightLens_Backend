@@ -29,6 +29,8 @@ PERMISSION_CATALOG = [
         ('View_Sale', 'View company-owned posted retail sales and recovery status'),
         ('Post_Sale', 'Finalize an exact authorised retail sale and its confirmed payments'),
         ('Collect_Sale', 'Hand over eligible paid sale quantities through an audited collection'),
+        ('Print_SaleInvoice', 'Create and retrieve immutable sales invoice print artifacts'),
+        ('Resolve_SalePrint', 'Resolve an uncertain or failed sales invoice print outcome'),
         ('Record_ExternalCardConfirmation',
          'Record an audited result observed from an approved external card terminal'),
         ('Request_PriceFloorException', 'Request review of an exact sales price-floor exception'),

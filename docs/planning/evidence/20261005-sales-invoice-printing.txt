@@ -1,0 +1,32 @@
+T17 SALES INVOICE PRINT FOUNDATION — 2026-10-05
+
+Scope
+- Reused ReportTemplate/ReportTemplateVersion/ReportTemplateAssignment, the existing
+  sales_invoice resolver, sandboxed HTML renderer and PDF compiler.
+- Added immutable ORIGINAL/COPY artifacts, exact RustFS version fingerprints,
+  READY/UNCERTAIN/PRINTED/FAILED jobs and append-only transition events.
+- Added tenant/private API reads, paginated history, exact-version download,
+  handoff-before-delivery and explicit audited resolution.
+
+Safety boundaries
+- Financial snapshot is the immutable T13 invoice/lines/payment display data only.
+- No account_ref, bank data, supplier cost, valuation or dynamic T16 fulfilment state.
+- COPY data/template are frozen from the original; COPY marking is server-owned.
+- Missing default template, legal identity or durable object VersionId fails closed.
+- An already-uncertain handoff cannot automatically send the PDF again.
+- Another artifact is blocked while this invoice has a READY or UNCERTAIN job.
+- The frontend opens a blank print window before handoff, then binds it to the exact
+  returned PDF; a blocked popup sends no handoff request.
+- Epson physical validation and browser acceptance remain pending.
+
+Verification
+- Migration created and replayed twice in the isolated containermgmt_test database.
+- T17 focused backend/API: 5 passed.
+- Affected T13, blob-version and render-security set: 52 passed.
+- T17 focused frontend: 15 passed across three suites.
+- Frontend production build passed with existing unrelated warnings.
+- Two initial unrelated failures were caused by stale T13/T16 database trigger
+  definitions in the long-lived isolated runner; replaying the current checked-in
+  sales migrations restored the expected contract and the affected set passed.
+- Paired integration PRs: backend #14 and frontend #12. GitHub CI and merge remain
+  pending at this evidence revision.

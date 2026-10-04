@@ -985,17 +985,33 @@ intent, excess quantities, stale stock and direct posted-sale HANDOVER bypasses
 fail closed. Ordinary reads expose payment and fulfilment status but not accounts,
 cost pools or valuation values. Six focused T16 tests and the 22-test affected
 posting/handover set pass. Evidence: evidence/20261005-sales-collection.txt.
-Next action: publish the backend slice and connect the existing sale-detail screen
-to collection options/history. Exact serial assignment and reviewed other-store
+Backend PR #13 and frontend PR #11 are merged at ea1a890 and 5e8c3dc. The existing
+sale-detail screen now connects to collection options/history with exact retry
+recovery. Exact serial assignment and reviewed other-store
 collection remain fail-closed follow-ups; browser/hardware acceptance stays open.
 
 T17 | Implement invoices and print queues
-Status: Blocked
+Status: In progress
 Dependencies: T13
 Acceptance / evidence: Immutable invoice rendering, COPY reprints, failed/uncertain queue; automated checks distinct from Epson hardware gate.
 Generated invoice artifacts belong here. Generic sales attachments, price labels
 and shipping labels are not implicitly owned by T17; assign their contract before
-exposing controls. Next action: Reuse templates; hardware acceptance remains pending.
+exposing controls. The backend foundation reuses the existing report-template and
+render engine, snapshots only immutable T13 invoice/legal/payment display fields,
+pins the exact RustFS object VersionId/hash and stores immutable ORIGINAL/COPY
+artifacts. COPY uses the original frozen snapshot and a server-owned visible mark.
+Print jobs start READY, move to UNCERTAIN before bytes leave the server, and require
+an audited explicit PRINTED/FAILED resolution; retries cannot silently redeliver an
+uncertain physical handoff. History is server-paginated and account/cost/live
+collection fields remain excluded. A second artifact is blocked while any job for
+the invoice remains READY or UNCERTAIN. Fifty-two affected T13/blob/render/T17 checks
+pass after replaying current sales migrations; the T17-only set is five passing.
+Evidence: evidence/20261005-sales-invoice-printing.txt.
+The existing sale-detail screen now has a permission-aware invoice/print panel with
+stable create/handoff/resolve intents, paginated history and explicit uncertain-state
+recovery. Fifteen focused frontend tests and the production build pass with existing
+warnings. Backend PR #14 and frontend PR #12 are open as a paired integration gate.
+Next action: merge both after CI; actual browser/Epson validation remains pending.
 
 T18 | Implement returns and credit notes
 Status: Blocked
