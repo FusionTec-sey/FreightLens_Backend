@@ -1640,6 +1640,111 @@ def resolve_quote_comparison(
     }
 
 
+SALES_INVOICE_SCHEMA_META = {
+    "company": {"type": "object", "description": "Configured legal print identity"},
+    "invoice": {"type": "object", "description": "Immutable T13 invoice totals and status"},
+    "customer": {"type": "object", "description": "Customer snapshot stored on the invoice"},
+    "branch": {"type": "object", "description": "Selling branch snapshot"},
+    "lines": {"type": "array", "description": "Immutable priced invoice lines"},
+    "payments": {"type": "array", "description": "Safe payment kinds and amounts; no accounts"},
+    "terms": {"type": "string", "description": "Configured invoice terms"},
+}
+
+SALES_INVOICE_SAMPLE_CONTEXT = {
+    "company": {"legal_name": "Sample Retail Company", "address": "Configured address",
+                "tax_id": "VAT-0000", "phone": "+248 000 0000", "email": "sales@example.test"},
+    "invoice": {"invoice_number": "INV-0001-20261005-000001", "business_date": "2026-10-05",
+                "issued_at": "2026-10-05T10:00:00+04:00", "currency": "SCR",
+                "gross_total_scr": "230.00", "net_total_scr": "200.00",
+                "tax_total_scr": "30.00", "payment_status": "PAID"},
+    "customer": {"name": "Sample customer", "contacts": [{"kind": "PHONE", "value": "+248 000 0000"}]},
+    "branch": {"code": "STORE", "name": "Sample store", "kind": "STORE"},
+    "lines": [{"product_name": "Sample item", "sku": "SAMPLE-1", "quantity": "2.000000",
+               "unit": "piece", "gross_unit_scr": "115.000000", "gross_total_scr": "230.00",
+               "tax_total_scr": "30.00", "tax_treatment": "STANDARD", "tax_rate": "0.15000000"}],
+    "payments": [{"kind": "CASH", "amount_scr": "230.00"}],
+    "terms": "Sample only — configure organisation invoice terms before use.",
+}
+
+
+@register_resolver(
+    key="sales_invoice", name="Sales Tax Invoice", category="SALES",
+    entity_type="SalesInvoice",
+    description="Resolves the immutable T13 invoice snapshot without account references.",
+    schema_meta=SALES_INVOICE_SCHEMA_META,
+    sample_context=SALES_INVOICE_SAMPLE_CONTEXT,
+    print_permissions=["Print_SaleInvoice"],
+)
+def resolve_sales_invoice(entity_id, db, org_context, user, params=None):
+    from uuid import UUID
+    from Model.containermgmt.Orders.SalesPosting import (
+        SalesInvoice, SalesInvoiceLine, SalesInvoicePayment,
+    )
+
+    invoice = apply_org_filter(db.query(SalesInvoice).filter(
+        SalesInvoice.org_id == org_context.org_id,
+        SalesInvoice.invoice_key == UUID(str(entity_id)),
+        SalesInvoice.is_deleted.is_(False)), SalesInvoice, org_context).one_or_none()
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Sales invoice not found")
+    lines = apply_org_filter(db.query(SalesInvoiceLine).filter(
+        SalesInvoiceLine.org_id == org_context.org_id,
+        SalesInvoiceLine.invoice_key == invoice.invoice_key,
+        SalesInvoiceLine.is_deleted.is_(False)), SalesInvoiceLine, org_context).order_by(
+            SalesInvoiceLine.position).all()
+    payments = apply_org_filter(db.query(SalesInvoicePayment).filter(
+        SalesInvoicePayment.org_id == org_context.org_id,
+        SalesInvoicePayment.invoice_key == invoice.invoice_key,
+        SalesInvoicePayment.is_deleted.is_(False)), SalesInvoicePayment, org_context).order_by(
+            SalesInvoicePayment.payment_key).all()
+    profile = _resolve_company_profile(db, org_context.org_id)
+    terms = profile.get("default_terms") or {}
+    if isinstance(terms, dict):
+        terms = terms.get("invoice") or terms.get("sales_invoice") or ""
+    if isinstance(terms, list):
+        terms = " • ".join(str(item) for item in terms)
+    customer = dict(invoice.customer_snapshot or {})
+    branch = dict(invoice.branch_snapshot or {})
+    company = {
+        "legal_name": profile.get("legal_name"),
+        "address": profile.get("address"),
+        "tax_id": profile.get("tax_id"),
+        "phone": profile.get("phone"),
+        "email": profile.get("email"),
+    }
+    return {
+        "company": company,
+        "invoice": {
+            "invoice_key": str(invoice.invoice_key),
+            "invoice_number": invoice.invoice_number,
+            "business_date": invoice.business_date.isoformat(),
+            "issued_at": invoice.issued_at.isoformat(),
+            "currency": invoice.currency,
+            "gross_total_scr": format(invoice.gross_total_scr, ".2f"),
+            "net_total_scr": format(invoice.net_total_scr, ".2f"),
+            "tax_total_scr": format(invoice.tax_total_scr, ".2f"),
+            "payment_status": "PAID",
+        },
+        "customer": customer,
+        "branch": branch,
+        "lines": [{
+            "line_key": str(line.line_key), "product_id": line.product_id,
+            "product_name": line.product_name, "sku": line.sku,
+            "quantity": format(line.quantity, ".6f"), "unit": line.unit,
+            "gross_unit_scr": format(line.gross_unit_scr, ".6f"),
+            "gross_total_scr": format(line.gross_total_scr, ".2f"),
+            "net_total_scr": format(line.net_total_scr, ".2f"),
+            "tax_total_scr": format(line.tax_total_scr, ".2f"),
+            "tax_treatment": line.tax_treatment,
+            "tax_rate": format(line.tax_rate, ".8f"),
+        } for line in lines],
+        "payments": [{"kind": payment.kind,
+                      "amount_scr": format(payment.amount_scr, ".2f")}
+                     for payment in payments],
+        "terms": str(terms or ""),
+    }
+
+
 def resolve_report_data(
     resolver_key: str,
     entity_id: Optional[Any],

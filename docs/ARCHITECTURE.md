@@ -2,6 +2,26 @@
 
 ## Status
 
+### Immutable sales invoice artifacts and print state (2026-10-05; in progress)
+
+T17 reuses the existing report-template resolver and rendering engine while adding
+an invoice-specific immutable system of record. An ORIGINAL binds one exact T13
+invoice, published template version, whitelisted legal identity, customer/branch
+snapshots, invoice lines and safe payment kinds/amounts. It excludes receiving
+accounts, costs and live collection state. The resulting PDF is accepted only after
+RustFS returns a non-null object VersionId and the exact bucket/key/size/SHA-256
+fingerprint matches the rendered bytes; local fallback cannot establish an artifact.
+
+Every COPY references the same invoice's ORIGINAL and reuses its frozen data and
+template source. The server allocates its sequence under the invoice lock and adds
+a server-owned visible COPY mark outside tenant-editable template content. Artifacts
+and state events are append-only. A print job starts READY, becomes UNCERTAIN before
+bytes cross the authenticated boundary, and can become PRINTED or FAILED only by an
+explicit audited resolution. A repeated uncertain handoff is not silently delivered
+again. Reads are tenant-scoped, permission-checked, private/no-store and paginated.
+This foundation does not prove a physical Epson outcome; printer hardware acceptance
+and the existing sale-detail frontend consumer remain open T17 gates.
+
 ### Atomic reserved handover and weighted-average issue (2026-10-05)
 
 The first bounded T09 pilot movement seam consumes one exact owned reservation and

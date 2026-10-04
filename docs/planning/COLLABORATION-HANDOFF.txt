@@ -1,16 +1,18 @@
 FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-05
 Decision revision: BD-20261005-01
 Wave 2 checkpoint: T13 backend PR #12 merged as d0d4f44 and its existing-checkout
-frontend consumer PR #10 merged as c903117; both GitHub checks passed. T16 is now
-in progress with the first same-store partial/final collection backend slice.
+frontend consumer PR #10 merged as c903117; both GitHub checks passed. T16 backend
+PR #13 merged as ea1a890 and frontend PR #11 merged as 5e8c3dc; both checks passed.
+T17 invoice/print work is now in progress on the integrator branch against that pair.
 Serial assignment and reviewed other-store collection remain fail closed. Read
 TASK-QUEUE.txt and evidence/20261005-sales-collection.txt before extending it.
 Current execution map: PARALLEL-PILOT-EXECUTION.txt. The integration owner must
 publish the paired baseline SHAs before either feature worktree begins.
 Completed collaborator assignment: PROGRAMMER-T12A-HANDOFF.txt (cloud payment and
 receiving-account configuration), merged through backend PR #10/frontend PR #9.
-Remaining programmer work is T10 acceptance and T17 against integrator-frozen
-contracts. The previous PROGRAMMER-T21-HANDOFF.txt package
+Remaining unassigned bounded work is T10 acceptance. Do not start a second T17
+implementation while the integrator T17 branch is active; coordinate against its
+published contract after merge. The previous PROGRAMMER-T21-HANDOFF.txt package
 is owner-deferred and historical until offline/store-node work is reactivated.
 Application starting revisions remain CHECKPOINT-20261004-UI.txt until the open
 paired baseline PRs are updated, verified and merged. The integrator must then
