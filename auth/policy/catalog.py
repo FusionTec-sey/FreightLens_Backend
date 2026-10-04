@@ -26,6 +26,8 @@ PERMISSION_CATALOG = [
     *_specs('SALES', [
         ('View_SalesDraft', 'View company-owned retail sales drafts'),
         ('Manage_SalesDraft', 'Create and revise retail sales drafts, without confirming sales'),
+        ('Request_PriceFloorException', 'Request review of an exact sales price-floor exception'),
+        ('Review_PriceFloorException', 'Independently approve or reject an exact sales price-floor exception'),
     ]),
     *_specs(None, [
         ("View_Dashboard", "View dashboard and summary statistics"),
