@@ -3,12 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from Model.db import get_db
 from Model.containermgmt.Inventory.Location import InventoryBranch
-from Model.containermgmt.Orders.Product import Product
-from Model.containermgmt.Inventory.ProductPolicyActivation import ProductPolicyActivation
 from Schema.InventoryLocationSchema import LocationPage
 from Schema.SalesSourceSchema import SalesBranchChoice, SalesProductChoice
-from Schema.InventoryPolicySchema import InventoryPolicyConfig
-from Services.search_service import search_products_with_total
+from Services.product_choice_service import product_choices
 from Routes.Orders.SalesIntentRouter import draft_access
 from Routes.MasterData.CustomerRouter import private_response
 from auth.module_guard import require_module
@@ -41,36 +38,6 @@ def branches(page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=100),
 @SalesSourceRouter.get('/products', response_model=LocationPage[SalesProductChoice])
 def products(page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=100),
              search: str = Query('', max_length=160), db: Session = Depends(get_db),
-             context: OrgContext = Depends(get_org_context)):
+             context: OrgContext = Depends(get_org_context), policy=Depends(draft_access)):
     allowed(context)
-    query = apply_org_filter(db.query(Product.id, Product.sku, Product.name).filter(
-        Product.org_id == context.org_id, Product.is_deleted.is_(False),
-        Product.is_shared.is_(False), Product.status == 'active'), Product, context)
-    if search.strip():
-        try:
-            hits, total = search_products_with_total(search.strip(),
-                filters=[f'org_id = {context.org_id}', 'is_deleted = false', 'status = active'],
-                limit=limit, offset=(page-1)*limit, strict_public=True)
-            if len(hits) > limit or any(type(hit.get('id')) is not int or hit.get('org_id') != context.org_id for hit in hits):
-                raise RuntimeError('Invalid search scope')
-            keys = [hit['id'] for hit in hits]
-            found = {row.id: row for row in query.filter(Product.id.in_(keys)).all()} if keys else {}
-            if len(found) != len(keys): raise RuntimeError('Stale product search')
-            rows = [found[key] for key in keys]
-        except RuntimeError as error:
-            raise HTTPException(503, 'Product search unavailable or stale. Clear search to browse, or retry.') from error
-    else:
-        total = query.count()
-        rows = query.order_by(Product.name, Product.id).offset((page-1)*limit).limit(limit).all()
-    model = ProductPolicyActivation
-    policies = db.query(model).filter(model.org_id == context.org_id, model.is_deleted.is_(False),
-        model.product_id.in_([row.id for row in rows])).distinct(model.product_id).order_by(model.product_id, model.version.desc()).all() if rows else []
-    by_product = {row.product_id: row for row in policies}
-    items = []
-    for row in rows:
-        policy = by_product.get(row.id)
-        config = InventoryPolicyConfig.model_validate(policy.config) if policy else None
-        items.append(dict(id=row.id, sku=row.sku, name=row.name, policy_version=policy.version if policy else 0,
-            base_unit=config.base_unit if config else None, quantity_step=config.quantity_step if config else None,
-            units=[config.base_unit] + [unit.unit for unit in config.conversions] if config else []))
-    return page_result(items, total, page, limit)
+    return product_choices(db, context, page, limit, search, authorize=lambda session: draft_access(policy))

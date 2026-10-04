@@ -4,6 +4,16 @@ from Model.containermgmt.Inventory.ManagerCase import ManagerCase
 from Model.containermgmt.Inventory.UnitBarcode import UnitBarcodeRetirement
 from Utils.seed_t05_demo import seed_demo
 from tests.test_stock_ledger import stock  # noqa: F401
+from types import SimpleNamespace
+import pytest
+
+
+@pytest.mark.parametrize('environment,database', [('production', 'isolated_test'), ('test', 'business'), ('test', '')])
+def test_demo_seed_rejects_unapproved_database(environment, database, monkeypatch):
+    monkeypatch.setenv('ENVIRONMENT', environment)
+    db = SimpleNamespace(bind=SimpleNamespace(url=SimpleNamespace(database=database)))
+    with pytest.raises(ValueError, match='dedicated local preview or isolated test'):
+        seed_demo(db, [])
 
 
 def test_demo_seed_is_atomic_scoped_and_repeatable(stock):

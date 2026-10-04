@@ -149,4 +149,6 @@ def test_case_history_immutable_and_migration_replay(cases, test_engine, monkeyp
                 db.execute(text(f"DELETE FROM containermgmt.{table} WHERE org_id=:org"), {"org": f.orgs[0]})
     monkeypatch.setattr(migration, "engine", test_engine)
     migration.ensure_manager_cases_schema(); migration.ensure_manager_cases_schema()
+    with f.factory() as db:
+        assert db.execute(text("SELECT to_regclass('containermgmt.ix_manager_cases_scope_source')")).scalar()
     assert f.request(key).replayed

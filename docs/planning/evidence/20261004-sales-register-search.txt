@@ -1,0 +1,32 @@
+SALES REGISTER SEARCH - T14B - 2026-10-04
+
+Implemented via existing Services/search_service.py and Meilisearch client.
+Private sales_drafts projection indexes draft UUID and saved customer name only;
+returns identities/version/branch, never names/contacts/prices in provider hits.
+API rehydrates the bounded page from latest same-company database revisions and
+checks revision/branch consistency. No SQL LIKE or client-side page filtering.
+Store filter, page/limit, existing module/customer/privacy permissions preserved.
+Malformed, duplicate, foreign and stale hits fail closed with clear-search recovery.
+
+Projection update is after commit and reads latest revision, including on replay.
+Failure cannot turn a committed draft into an uncertain save: receipt carries
+search_indexed=false, UI retains confirmation and permits direct opening/browsing.
+Startup repair uses bounded keyset pages. No new business model/schema/migration.
+PostgreSQL skill informed reuse of existing scoped keys and page-bounded lookups.
+
+Verification: affected backend search/draft/customer-search tests 38 pass;
+frontend register/editor 15 tests pass; production build passes with existing
+warnings. Read-only provider smoke in existing demo org returned three indexed
+versioned drafts. No preview business records changed for this slice.
+Backend tests use isolated freightlens_full_20261004_test, REQUIRE_TEST_DATABASE=1.
+Runtime logs: sales-search-tests.log / sales-search-build.log outside repositories.
+
+LIMITATIONS / NEXT GATES
+Search is eventually consistent; newly saved unindexed drafts may be absent.
+UI says this explicitly. Indexed stale hits yield 503 instead of misleading rows.
+Concurrent projection delivery can arrive out of order; version checks reject
+stale rows, but durable ordered repair/outbox consumption belongs to T22.
+Current repair: subsequent save/replay or startup rebuild, not automatic cancellation
+or a second business save. No whole-T14B or offline-readiness claim.
+Approved-scope browser acceptance of new search and broader UI remains pending.
+Local changes not pushed; next paired checkpoint must include both API/UI changes.

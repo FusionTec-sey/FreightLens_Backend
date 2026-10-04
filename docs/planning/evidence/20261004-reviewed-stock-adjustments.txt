@@ -1,0 +1,41 @@
+T08 reviewed stock adjustments — 2026-10-04
+
+Implemented boundary
+- Replaced the retired product-total adjustment path with exact location-balance
+  corrections over the existing immutable Inventory ledger.
+- Request binds company, balance/location/product/batch, exact source version,
+  reviewed unit policy, before quantities and target on-hand/damaged/quarantined.
+- Reserved quantity is never editable. A target cannot leave physical stock below
+  existing reservations. Serial totals are rejected for an identity-specific flow.
+- Request, independent review and execution use separate permissions and stable
+  operation identities. Self-review, stale cases, foreign scope and replay with
+  changed intent fail closed.
+- Execution obtains server-owned cloud posting authority, consumes the exact
+  approval and appends one immutable ADJUSTMENT movement in one transaction.
+- A PostgreSQL guard rejects direct/unreviewed adjustment movement inserts and
+  binds the movement outcome to the exact consumed approval and operation.
+- Replay-safe startup migrations add the movement constraint/guard and permissions
+  without stock backfill or business-record creation.
+
+Frontend
+- Location stock exposes Adjustment cases only when the user has a relevant
+  permission. The contained screen supports exact request, independent decision,
+  confirmed execution, failure-safe same-operation retry and immutable outcome.
+- The screen states that reservations and selling prices do not change and that
+  valuation reconciliation may be required. Serial aggregate correction is blocked.
+
+Verification
+- Backend isolated PostgreSQL regression: 65 passed, 23 dependency warnings.
+  Includes atomicity, one-effect retry, separate permissions, self-review denial,
+  stale source, reservation safety, database bypass, tenant/module/auth isolation,
+  runtime fail-closed, migration replay and authoritative product projections.
+- Frontend focused: 26 passed across StockAdjustmentCases, LocationStock and
+  inventoryLocationsApi. Includes exact case version and stable retry identity.
+- Frontend production build passed with the repository's existing unrelated lint,
+  Browserslist and bundle-size warnings.
+- Browser acceptance remains a separate gate and was not claimed.
+
+Remaining T08 boundary
+- Controlled openings/import composition and the authenticated public receipt
+  runtime/evidence-retention gates remain. This slice does not enable financial
+  posting, serial adjustment, automatic valuation change or real business data.

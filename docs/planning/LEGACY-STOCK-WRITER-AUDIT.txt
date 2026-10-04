@@ -1,0 +1,59 @@
+T06/T08 writer and reader audit — 2026-10-04
+
+Authoritative inspection: rg current_stock across non-test Python, receipt service,
+InventoryRouter metadata setattr list, frontend product form and stock modal.
+This is not a claim that stock receipt integration is complete.
+
+Write paths:
+1. InventoryRouter.update_product: current_stock included in generic setattr list.
+   Closed in this slice: non-null stock fields rejected before metadata mutation;
+   removed from allowed fields. Existing reviewed-policy guard remains first.
+   ProductMasterPage no longer sends stock or provides an editable baseline field.
+2. InventoryRouter.adjust_stock: float delta and max(0, old+delta), direct product
+   write, no location/authority/expected version/source/case. Closed as an unsafe
+   writer: the scoped, permission-checked compatibility route now rejects without
+   mutation, and all Product Master quick-adjust entry points were removed. A later
+   controlled adjustment must use the reviewed movement adapter, not revive a
+   parallel ledger or a misleading total-only success.
+3. InventoryRouter.create_product: nonzero/nonfinite opening totals now rejected;
+   omitted/null/zero remain compatible and always initialize zero. Authorised
+   opening stock still requires the existing policy-backed ledger integration.
+4. duplicate_product initializes zero; does not copy inventory. Retain zero.
+5. Utils.seed_t05_demo initializes zero only in guarded synthetic workflow.
+6. ProductCatalogSelector quick-create no longer sends current_stock. Its catalogue,
+   modal and order-picker displays now consume explicit authoritative quantity
+   fields and render incompatible totals unavailable rather than zero.
+7. No inventory CSV/inFlow stock import writer found in InventoryRouter; export is
+   a reader, bulk-category/delete are not stock imports. T26 must use Inventory.
+
+Receiving is NOT a current_stock writer:
+Services/receiving_service.post_receipt updates POItem.quantity_received, receipt
+submission and PO status/notification. It does not create stock balances/movements.
+Keep purchasing receipt totals separate from physical location receipt. Integration
+needs stable receipt-line identity, exact reviewed policy/unit conversion,
+branch/location/batch/serial identity, node fencing and one shared transaction.
+
+Existing foundations to reuse:
+stock_ledger_service policy-backed opening/reservation and shared execute_once;
+inventory_valuation_service opening source/authority/pool checks; costing receive;
+manager cases; posting authority; inventory_cost_charge evidence/consumption.
+Valuation model currently constrains source_version=1 and OPENING/CHARGE only.
+Receipt valuation needs explicit migration and source uniqueness before append;
+do not label later receipts OPENING or update old valuation rows.
+
+Readers migrated in this slice:
+InventoryRouter serializer, low-stock filters/stats/export; search_service stock
+field publication; dashboard_registry low-stock and provisional immutable valuation;
+ProductMasterPage list/quick view/export; ProductCatalogSelector and legacy OrderForm.
+The response-only current_stock alias is derived from authoritative on-hand and is
+null for mixed units. Dashboard value sums latest immutable cost-pool heads and
+remains explicitly provisional; it never implies reconciled accounting.
+policy_transition_service checks legacy stock deliberately to block unsafe activation;
+retain that safety guard until migration reconciles existing totals.
+
+The unsafe product-total adjustment is closed and its controlled replacement now
+uses exact reviewed location balances, server-owned posting authority and immutable
+ADJUSTMENT movements. Evidence: evidence/20261004-reviewed-stock-adjustments.txt.
+Next coordinated slice: controlled opening/import composition and the public receipt
+runtime/evidence-retention gates. Do not claim T06/T08 complete or enable real
+financial posting from this audit.

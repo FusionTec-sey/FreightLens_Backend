@@ -36,6 +36,12 @@ from .Orders.VendorQuote import VendorQuote
 from .Orders.VendorQuoteItem import VendorQuoteItem
 from .Orders.POItemHistory import POItemHistory
 from .Orders.POStageTransition import POStageTransition
+from .Orders.SalesPricing import (
+    SalesTaxRule, SalesTaxRuleRevision, BranchProductPrice,
+    BranchProductPriceRevision, ProductTaxAssignment,
+    ProductTaxAssignmentRevision, CustomerPriceAgreement,
+    CustomerPriceAgreementRevision, SalesTransactionPricing,
+)
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
@@ -52,6 +58,7 @@ from .Inventory.PostingOperation import PostingOperation
 from .Inventory.PostingAuthority import StoreNode, BranchAuthorityEpoch
 from .Inventory.BranchSettings import BranchSettingsRevision
 from .Inventory.BranchCounter import BranchCounter, CounterSettingsRevision
+from .Inventory.StaffStoreAssignment import StaffStoreAssignment
 from .Inventory.ManagerCase import ManagerCase, ManagerCaseDecision, ManagerCaseUse
 from .Inventory.StockLedger import StockBalance, StockReservation, StockMovement
 from .Inventory.StockSerial import StockSerialIdentity, StockSerialPosition
@@ -61,6 +68,9 @@ from .Inventory.UnitBarcode import UnitBarcode
 from .Inventory.Valuation import InventoryValuation
 from .Inventory.CostAllocation import CostAllocationProposal
 from .Inventory.CostChargeUse import CostChargeUse
+from .Inventory.ReceiptManifest import InventoryReceiptManifestRecord
+from .Inventory.ReceiptSourceUse import InventoryReceiptSourceUse
+from .Inventory.CostReconciliation import InventoryCostReconciliation
 
 __all__ = [
     "InventoryBranch", "StockLocation",
@@ -75,6 +85,10 @@ __all__ = [
     "OrderStatusHistory", "Notification", "Product", "ProductCategory", "ProductLink",
     "OrderTemplate", "OrderTemplateItem",
     "VendorQuote", "VendorQuoteItem", "POItemHistory", "POStageTransition",
+    "SalesTaxRule", "SalesTaxRuleRevision", "BranchProductPrice",
+    "BranchProductPriceRevision", "ProductTaxAssignment",
+    "ProductTaxAssignmentRevision", "CustomerPriceAgreement",
+    "CustomerPriceAgreementRevision", "SalesTransactionPricing",
     "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
     "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
     "MasterDocumentType"

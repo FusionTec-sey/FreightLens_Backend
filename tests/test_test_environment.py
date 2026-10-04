@@ -1,9 +1,12 @@
 import os
 import importlib
+from sqlalchemy.engine import make_url
 
 
 def test_test_database_is_explicitly_isolated(test_database_url):
-    assert test_database_url.endswith("/containermgmt_test")
+    # Each verification run may use its own isolated database; do not require
+    # the shared CI database's exact name.
+    assert make_url(test_database_url).database.endswith("_test")
     assert os.environ["DATABASE_URL"] == test_database_url
 
 

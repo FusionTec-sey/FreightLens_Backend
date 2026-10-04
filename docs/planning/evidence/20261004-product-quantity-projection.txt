@@ -1,0 +1,50 @@
+T08 AUTHORITATIVE PRODUCT QUANTITY PROJECTION — 2026-10-04
+
+Outcome
+- Product catalogue/list/detail/lookup/export responses now derive stock from
+  tenant-scoped Inventory StockBalance rows, not Product.current_stock.
+- On-hand, reserved, available, damaged and quarantined quantities remain separate
+  exact six-decimal strings. current_stock is only a temporary response alias for
+  the authoritative on-hand result; it never reads the legacy Product column.
+- Products with more than one base unit return MIXED_UNITS and no aggregate rather
+  than summing incompatible quantities. A true no-balance product remains an exact
+  zero with NO_BALANCE status.
+- Low-stock filters, statistics and dashboard counts use scoped StockBalance
+  summaries and exclude mixed-unit comparisons.
+- The product search document no longer publishes legacy current_stock. Search is
+  still rehydrated through PostgreSQL and the exact Inventory projection.
+- The dashboard valuation no longer multiplies Product.current_stock by catalogue
+  unit cost. It sums the latest immutable cost-pool head per product/pool in SCR,
+  labels the result provisional and exposes missing-valuation coverage.
+- Product Master, quick view, selected CSV export, catalogue selector and legacy
+  order picker use the authoritative fields. Unavailable/mixed totals are never
+  rendered as zero or “Out of stock.” The selector explains preferred same-store
+  allocation and explicit authorised other-store choice without inventing a
+  central-warehouse assignment.
+
+Boundaries
+- No stock writer, adjustment, receipt, import, allocation or financial-posting
+  action was enabled by this slice.
+- The legacy database Product.current_stock column remains at zero for compatibility
+  and for policy-transition safety checks until a reviewed migration removes it.
+- T08 stays In progress: controlled reviewed location adjustments, authorised
+  opening/import composition and the public receipt runtime/retention gates remain.
+- Dashboard valuation remains UNRECONCILED/provisional; T20/T32 accounting and
+  reporting gates are not implied.
+- Browser acceptance was not run because the applicable Product Master/dashboard
+  automation approval was not supplied for this slice.
+
+Verification
+- Isolated PostgreSQL backend:
+  pytest -q tests/test_inventory_product_quantities.py
+    tests/test_location_stock_reads.py tests/test_pos_prerequisite_regressions.py
+  Result: 63 passed, 23 existing dependency warnings.
+- Frontend:
+  npm test -- --watchAll=false --runInBand ProductQuickView.test.js
+    StockGaugeBar.test.js
+  Result: 4 passed across 2 suites.
+- Frontend production build:
+  CI=false npm run build
+  Result: passed with the repository's existing lint, browserslist and bundle-size
+  warnings; no new failure.
+

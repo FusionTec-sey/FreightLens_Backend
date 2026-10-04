@@ -106,3 +106,73 @@ def test_linked_sources_access_boundaries(api):
     assert f.client.get(url).status_code == 403
     f.app.dependency_overrides.pop(get_current_user); f.app.dependency_overrides.pop(get_request_policy)
     assert f.client.get(url).status_code == 401
+
+
+def execution(f, monkeypatch):
+    from tests.test_stock_runtime import config
+    monkeypatch.setenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON', config(f))
+    f.user.access_policy = replace(f.user.access_policy,
+        permission_names=f.user.access_policy.permission_names | {'Execute_ReservationRelease'})
+    return f'{f.url}/{f.case}/execute', dict(operation_key=str(uuid4()))
+
+
+def test_runtime_release_is_separate_from_review_and_replays_once(api, monkeypatch):
+    f = api; url, body = execution(f, monkeypatch)
+    assert f.client.post(url, json=body).status_code == 403
+    f.review()
+    result = f.client.post(url, json=body)
+    assert result.status_code == 200, result.text
+    assert result.json()['reservation_remaining'] == '15.000000'
+    assert result.json()['status'] == 'CONSUMED'
+    assert f.client.post(url, json=body).json()['replayed']
+    assert f.client.post(url, json=dict(operation_key=str(uuid4()))).status_code == 409
+
+
+def test_release_execution_permission_and_tenant_boundaries(api, monkeypatch):
+    f = api; url, body = execution(f, monkeypatch); f.review()
+    policy = f.user.access_policy
+    f.user.access_policy = replace(policy, permission_names=frozenset(f.permissions))
+    assert f.client.post(url, json=body).status_code == 403
+    f.user.access_policy = policy; f.context.current_org_id = f.orgs[1]
+    assert f.client.post(url, json=body).status_code == 404
+    f.context.current_org_id = f.orgs[0]
+    f.user.access_policy = replace(policy, module_names=frozenset({'SALES'}))
+    assert f.client.post(url, json=body).status_code == 403
+    f.app.dependency_overrides.pop(get_current_user); f.app.dependency_overrides.pop(get_request_policy)
+    assert f.client.post(url, json=body).status_code == 401
+
+
+def test_release_runtime_disabled_stale_and_client_authority_denied(api, monkeypatch):
+    from tests.test_posting_authority import append_epoch
+    f = api; url, body = execution(f, monkeypatch); f.review()
+    assert f.client.post(url, json={**body, 'authority': {}}).status_code == 422
+    monkeypatch.delenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON')
+    assert f.client.post(url, json=body).status_code == 503
+    execution(f, monkeypatch)
+    append_epoch(f, 2, 'ACTIVE')
+    assert f.client.post(url, json=body).status_code == 403
+    with f.factory.begin() as db: assert f.load_release(db).details['released_before'] == '0.000000'
+
+
+def test_execute_only_role_can_inspect_but_not_review(api, monkeypatch):
+    f = api; execution(f, monkeypatch)
+    f.user.id = f.reviewer
+    f.user.access_policy = replace(f.user.access_policy, permission_names=frozenset(
+        (f.permissions - {'Request_ReservationRelease', 'Review_ReservationRelease'}) | {'Execute_ReservationRelease'}))
+    assert f.client.get(f.url).json()['total'] == 1
+    assert f.client.get(f'{f.url}/sources/{f.document}').status_code == 200
+    assert f.client.post(f'{f.url}/{f.case}/review', json=dict(operation_key=str(uuid4()),
+        expected_version=1, outcome='APPROVED', reason='Synthetic')).status_code == 403
+
+
+def test_cloud_runtime_executes_reviewed_release_without_client_authority(api, monkeypatch):
+    f = api
+    monkeypatch.delenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON', raising=False)
+    monkeypatch.setenv('FREIGHTLENS_CLOUD_STOCK_RUNTIME_NODE_KEY', str(f.node_key))
+    f.user.access_policy = replace(f.user.access_policy,
+        permission_names=f.user.access_policy.permission_names | {'Execute_ReservationRelease'})
+    f.review()
+    response = f.client.post(f'{f.url}/{f.case}/execute', json={
+        'operation_key': str(uuid4())})
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'CONSUMED'

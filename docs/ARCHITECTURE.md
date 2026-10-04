@@ -2,6 +2,690 @@
 
 ## Status
 
+### Cloud-derived central valuation authority (2026-10-04)
+
+Central cost execution now follows the cloud-authoritative stock pattern while
+remaining a distinct authority domain. One operator-configured server node identity
+is resolved against the current company and latest active cost-pool epoch inside
+the transaction. Pool and epoch are never request fields. Foreign ownership,
+suspension, stale authority, missing configuration and invalid cloud identity fail
+closed; an invalid cloud value cannot fall back to local-development claims.
+
+The existing reviewed additional-cost context/post routes use this server resolver.
+This creates no node, pool, epoch, valuation or default configuration. Physical
+receipt composition must additionally obtain independent branch authority and exact
+reviewed evidence. Real runtime enrollment and RustFS retention remain release gates.
+
+### Reviewed exact stock adjustments (2026-10-04)
+
+The public stock-correction workflow operates on one company-scoped location
+balance, never `Product.current_stock`. A request snapshots the exact balance,
+batch, reviewed unit policy, source version and before/target quantity breakdown.
+Reserved quantity is immutable through this workflow; serial-tracked totals require
+an identity-specific future flow. A target that would consume reservations fails.
+
+Request, independent review and execution have separate permissions and stable
+operation identities. Execution resolves server-owned branch posting authority,
+revalidates the current source, consumes the exact manager case and appends one
+immutable `ADJUSTMENT` movement atomically. A database guard independently binds
+the movement to the consumed approval, actor, operation, source version and target.
+The migration is replay-safe and performs no stock backfill. No selling price,
+valuation, payment, invoice or financial record changes automatically.
+
+### Authoritative product quantity projection (2026-10-04)
+
+Product catalogue, lookup, export, low-stock and dashboard reads now project exact
+stock from company-scoped location balances. On-hand, reserved, available, damaged
+and quarantined remain distinct. A product with incompatible base units is marked
+`MIXED_UNITS` and exposes no false aggregate; a genuine missing balance remains an
+explicit zero. The legacy `current_stock` response field is compatibility-only and
+is derived from projected on-hand, while the Meilisearch product document no longer
+publishes the legacy database column.
+
+Dashboard stock valuation uses the latest immutable pool head for each product and
+cost pool in SCR. It is explicitly provisional and reports valuation coverage;
+catalogue unit cost multiplied by a mutable product total is no longer presented as
+inventory value. This read layer enables no writer or financial post. Controlled
+adjustments/import/openings, public receipt authority, evidence retention and final
+accounting reconciliation remain T08/T20/T26 gates.
+
+### Cloud-authoritative reservation execution (2026-10-04)
+
+All current public reservation writers use `server_stock_runtime`. In the cloud
+path the application process is configured with one node identity; branch and epoch
+are never client inputs. The resolver accepts only the latest active epoch when it
+belongs to that exact node, then reuses the existing locked posting-authority guard.
+Missing/invalid configuration, foreign scope, stale/suspended epochs and another
+node owner fail closed. Explicit local-development claims remain as retained test
+compatibility, but an invalid configured cloud identity never falls back to them.
+
+Same-store initial allocation, approved release and approved other-store execution
+share this resolver. This does not implement offline enrollment, synchronization or
+failover. Unconfirmed-draft release continues to reject any confirmed/non-DRAFT
+source, so T13 must preserve that boundary for paid or credit-confirmed commitments.
+
+### Reviewed sales pricing and immutable transaction inputs (2026-10-04)
+
+T11 now persists tenant-owned tax rules, store/product/selling-unit prices,
+product tax assignments and customer/product/store/unit agreements as stable
+identities with consecutive immutable revisions. Tax remains independent from
+price lists. No statutory rate, product classification, store price or customer
+agreement is seeded by code. Stable operation identities make exact PUT retries
+replay one result; changed intent, stale versions and foreign references fail.
+
+The protected `/sales/pricing` API requires SALES, product and financial access;
+customer agreements additionally require customer and personal-data access, and
+writes require financial-management permission. The draft pricing-preview endpoint
+resolves current eligible configuration, feeds the exact tax-inclusive calculator
+and returns source/version/floor/tax details without persisting or posting. Retail
+resolution reads only eligible product identity columns and never loads or changes
+supplier costs, product totals, stock, payments or invoices.
+
+Below-floor prices use the shared manager-case engine. The binding includes the
+exact draft revision and canonical fingerprint of every selected price source,
+configuration version, tax treatment and invoice total. Request and review are
+separate, self-review is denied, and source changes invalidate the case.
+
+`sales_transaction_pricing` freezes one exact canonical pricing input for a future
+T13 sale. It references the immutable draft revision and approved floor case when
+required, is itself immutable, and uses the shared stable-operation boundary. It
+does not consume the case or create invoice, payment, stock, numbering, collection
+or outbox effects. T13 must explicitly select the snapshot, revalidate and consume
+the matching case in the same transaction as all sale effects. T11 implementation
+is complete with browser and real tax/accounting configuration acceptance pending.
+
+### Exact tax-inclusive sales pricing contract (2026-10-04)
+
+`sales_pricing_service` is a pure, typed calculation boundary for future T11
+authoritative resolvers. Every line requires exactly one versioned selling-store
+price, may include already-eligible versioned customer agreements, and chooses the
+lowest eligible price; a same-price tie retains the store source. Price floors are
+reported as an approval requirement and never silently replace the customer price.
+Tax is a separate versioned snapshot, not a price-list property, and distinguishes
+STANDARD, ZERO_RATED and EXEMPT. Rates are configurable; no database default is
+hard-coded. Tax-inclusive SCR is decomposed into net/tax and deterministic cents are
+allocated only after rounding the invoice total, so displayed lines conserve gross,
+net and tax exactly. This layer does not persist prices, infer eligibility, approve a
+floor, create an invoice, change stock or post money.
+
+### Central reconciliation readiness inspection (2026-10-04)
+
+The cost-pool workspace now exposes a read-only, server-paginated comparison between
+current physical on-hand and the latest immutable valuation head for every product in
+the selected company and cost pool. It reports missing valuation, incompatible units
+and exact quantity differences instead of silently presenting unreconciled cost as
+final. Inactive locations remain part of physical truth; foreign companies and other
+pools cannot enter the report. `READY` means only that quantity and base unit agree at
+the current head. It does not mutate history, close an accounting period, validate
+blob retention, export journals or certify offline synchronization.
+
+### Atomic internal receipt coordinator (2026-10-04)
+
+`post_reviewed_receipt` now composes classification-case consumption, an independent
+receipt-cost case, exact receipt-line capacity, physical location/batch/serial
+movements, weighted-average receipt valuation, immutable operation receipt and its
+transactional event envelope under one stable key. The cost case binds the official
+PO unit price, source currency, receipt-unit quantity, explicit SCR exchange rate and
+the exact original versions and hashes of the PO-price and FX documents. Server-side
+preparation rereads those pinned blob versions outside a database transaction; the
+coordinator then locks and revalidates the complete binding and derives the SCR goods
+value itself. Callers cannot provide or override the posted goods value.
+
+Central pool authority is acquired before receiving-branch authority and source
+locks; separate financial and stock permission guards rerun on every retry. Both
+approvals, source capacity, movement, value and receipt roll back together. Same-key
+concurrent requests replay one effect, while different keys competing for the same
+receipt line leave exactly one committed business effect. The raw-value composition
+function remains a private lower-layer test seam and is a different operation kind.
+No HTTP adapter exists, and RustFS version retention, authenticated runtime identity
+and reconciliation remain release gates; mutable purchasing totals and client values
+are never posting authority.
+
+### Internal receipt valuation stream (2026-10-04)
+
+The existing `pool-wac-v2` ledger now accepts immutable `RECEIPT` sources as well
+as openings. An internal helper acquires central cost-pool authority before receipt
+locks, requires the same-operation consumed source and complete receipt movement
+set, rejects unvalued prior physical stock, allocates an exact server-reviewed SCR
+goods value across batch/location movements and appends one cumulative pool row per
+movement without committing. A database trigger binds every receipt value to its
+exact movement, manifest scope and branch cost-pool mapping. Receipt rows are valid
+sources for the existing reviewed landed-cost allocation; charge rows remain
+ineligible. The official internal coordinator derives this input from reviewed,
+version-pinned PO and FX evidence. A public adapter, authenticated central runtime,
+storage acceptance and central reconciliation remain required before physical or
+financial receipt posting is enabled.
+
+### Internal source-bound receipt movements (2026-10-04)
+
+`inventory_receipt_movement_service` can now append exact `RECEIPT` movements
+inside a caller-owned transaction after trusted branch authority and the immutable
+receipt source have both been revalidated. Authority is locked before purchasing
+source records. The service reuses the existing stock balance, batch, serial and
+movement foundations; it creates no product-total write and performs no commit.
+Database triggers require a same-operation receipt source use, exact
+branch/location/product/unit scope, exact manifest batch or serial classification,
+condition deltas and complete source quantity. The schema migration extends the
+movement-kind constraint without backfill and is replay-safe. This is an internal
+dependency only: no public physical-posting adapter or standalone action exists,
+and source use, movement, valuation and outbox must still be composed by one
+coordinator before receipt posting can be enabled.
+
+### Legacy product-total adjustment retired (2026-10-04)
+
+The scoped `/inventory/products/{id}/adjust-stock` compatibility route now fails
+closed after permission and product visibility checks. It no longer performs float
+arithmetic, clamps negatives, edits `Product.current_stock`, commits or schedules a
+search update. Product Master no longer exposes quick-adjust buttons or the legacy
+modal. This removes the last known direct product-total writer; it does not yet
+provide the reviewed location movement that T08/T09 still require.
+
+### Receipt source-use capacity boundary (2026-10-04)
+
+`inventory_receipt_source_uses` is an immutable, initially empty history for the
+future physical receipt coordinator. The internal helper rebinds and locks the
+current receipt/line/policy/manifest, consumes the exact approved classification
+case, checks prior base-unit use and appends the capacity claim inside the caller's
+existing posting transaction. A database guard locks the receipt line, requires the
+matching manifest and same-operation approved case use, and rejects aggregate
+over-consumption or later mutation. Current manifests cover a full receipt line;
+partial/location composition is not inferred. There is no public adapter. Stock,
+movement, valuation and source use must eventually commit in one outer operation;
+The later atomic receipt coordinator now verifies committed same-key replay and
+distinct-key exclusion. Public FX/cost evidence and an HTTP adapter remain pending.
+The outer-operation guard is separate and mandatory so every replay rechecks current
+source and permission before an existing operation receipt may be returned.
+
+### InFlow-informed Sales presentation (2026-10-04)
+
+BD-20261004-09 refines the existing Sales draft register and workspace without a
+second sales record or new business action. Full register and split-view rows lead
+with saved customer, selling store and Draft vN while retaining the exact UUID as
+a secondary reference. Draft detail consolidates saved customer/store/audit context,
+uses compact image/SKU/exact-unit/reservation lines and separates Demand, Reservation,
+Payment and Collection facts. Pricing remains pending / not calculated until T11;
+the UI does not claim an authoritative currency, payment, invoice or collection.
+Existing permission, paging, search, history, reservation and recovery contracts are
+unchanged. T14B-D remain in progress pending applicable visual/dark-mode acceptance
+and later T11-T17 operational integrations.
+
+### Receipt manifest inspection and classification review (2026-10-04)
+
+`/inventory/receipt-manifests` exposes server-paginated summaries and an exact UUID
+historical snapshot read for the existing immutable manifest store. Both INVENTORY
+and ORDERS modules plus product/receipt view permissions are required. Queries join
+the receipt, line and purchase-order parents inside the active company and hide
+deleted/foreign parents. Responses whitelist operational classification fields and
+exclude supplier and price data. They are private/no-store. Verify_Receipt may save
+an exact immutable proposal with a stable operation key; inventory review permissions
+request and independently decide classification through the existing manager-case
+engine. The Goods Receiving receipt modal contains an explicit, initially closed
+inspector and review panel with cancellable reads/actions, retained failed inputs and
+exact decimal display. A contained manifest editor selects the submitted receipt line,
+server-paged inventory branch/location and current reviewed policy, then uses a
+read-only `/source-preview` to show and prefill the exact converted receipt total and
+`/preview` to validate the completed classification before stable-key save. Goods-receipt reads expose
+only the linked product identity needed for this selection and eagerly load the PO
+line to avoid per-row queries; commercial fields remain excluded. Batch and serial
+entry is shared with reclassification rather than reimplemented. Saved or approved
+means not posted. There is no source consumption, stock movement, valuation or
+financial posting endpoint. Browser acceptance and atomic source consumption remain pending.
+
+### Public receipt cost evidence review (2026-10-04)
+
+The receipt manifest now owns a second, explicit `inventory.receipt.cost` review
+stream for the official PO unit price and documented SCR conversion. It reuses the
+shared manager-case engine but cannot substitute for classification approval. Public
+request/list/review routes require dedicated permissions plus financial and supplier
+field access, retain exact existing purchase-document versions and never expose object
+storage metadata. Foreign currencies require separate FX evidence; SCR is fixed to
+rate 1. The reviewer can download only the reviewed pinned bytes, with the complete
+current binding checked before and after out-of-transaction storage I/O. The Goods
+Receiving UI keeps uncertain retries stable and uses the returned case version for
+decisions. Approval records evidence only: there is no stock, valuation, selling-price
+or accounting post endpoint. Final receipt execution remains gated by storage-version
+retention and cloud runtime acceptance.
+
+### Reviewed inventory-cost checkpoints (2026-10-04)
+
+`inventory_cost_reconciliations` is an append-only certification of one exact
+product/cost-pool state. Its manager-case binding retains the latest valuation ID,
+version, quantity and value plus every current physical balance/version in branches
+mapped to the pool. Request, independent review and close are separate permissions.
+Close requires one compatible base unit, exact physical/valuation quantity agreement,
+an unconsumed approval and the current server-derived central cost authority. A stale
+balance or valuation invalidates approval; another case cannot close an identical
+source digest. The checkpoint does not update valuation rows, accounting periods,
+journals, stock or selling prices. It is therefore an inventory-cost evidence boundary,
+not the T20 accounting/till close.
+
+### Receipt classification review adapter (2026-10-04)
+
+inventory_receipt_review_service binds inventory.receipt.classify cases to the
+immutable manifest and reloaded locked source. Independent decision rejects both
+manifest creator and requestor, including proxy requests. Existing manager-case
+engine supplies exact binding/version, decision replay and history. Approval covers
+classification only, not cost evidence, node authority or cumulative source use.
+Public request/list/decision adapters preserve these checks and expose no case
+consumption or physical posting path.
+
+### Persisted receipt manifest proposals (2026-10-04)
+
+inventory_receipt_manifests stores immutable prepared source/classification JSON
+under a UUID operation identity, with indexed receipt/line references. Insert guard
+checks same-company purchasing parents, and deferred operation FK requires the
+existing posting receipt. Save has no physical effect, consumes no source capacity,
+and reruns permission/source checks on replay; changed source requires a new proposal.
+Migration20261004_receipt_manifests creates an empty table, registered after stock
+reclassification. Verify_Receipt can save exact proposals through the public scoped
+route; inspection, editor and classification review UI exist. The editor must pass
+the same server preparation as save; its preview is advisory and never a posting
+token. Source consumption, partial-location composition and valuation/movement
+posting remain pending.
+
+### Receipt manifest preparation (2026-10-04)
+
+InventoryReceiptManifest reuses explicit batch/serial identity contracts and
+QuantityBreakdown. prepare_inventory_receipt_manifest resolves the locked source,
+requires full-line quantity conservation and delegates identities/condition totals
+to validate_stock_manifest, shared with reclassification. Damaged/incorrect source
+observations may overlap: their maximum is a lower bound on unavailable stock,
+not their sum. Condition review remains required, never inferred as approved.
+Preparation is persisted only through the immutable proposal service. Saving/review
+does not consume the source. Global identity checks, partial/multi-location receipt
+composition, immutable source-use caps and atomic valuation remain pending.
+
+### Physical receipt source preparation (2026-10-04)
+
+inventory_receipt_source_service resolves existing purchasing receipt lines under
+an explicit permission guard and caller transaction. PO -> receipt -> receipt line
+-> PO line locks preserve parent links; branch/location and exclusive product locks
+protect current policy conversion. Future coordinator must acquire node/pool
+authority locks before source preparation and keep all locks until outer commit.
+Source snapshots are not posting tokens after transaction release. No quantity,
+product, pool or cost supplied by the caller is trusted. Damaged/incorrect amounts
+remain separate potentially overlapping observations, not an inferred breakdown.
+Immutable physical manifest, batch/serial condition classification, cumulative
+source consumption, receipt valuation migration and atomic posting remain T06/T08.
+
+### T08 metadata stock boundary (2026-10-04)
+
+Product update rejects non-null current_stock after the existing policy guard and
+before metadata mutation; the field is removed from the update whitelist. Product
+form no longer sends it. This repairs one C12 regression, not the remaining legacy
+adjustment/create paths. LEGACY-STOCK-WRITER-AUDIT.txt records receiving's separate
+purchasing totals and required Inventory/valuation integration. No real data changed.
+
+Follow-up: catalogue creation now also rejects nonzero/nonfinite current_stock;
+zero/null/omitted remain compatible and constructor always sets zero. Quick-create
+omits stock. Legacy adjustment writer remains to be replaced; no opening posting
+is inferred from a successful catalogue save.
+
+### Sales display metadata (2026-10-04)
+
+Current draft reads expose saved revision created_at/created_by and current scoped
+branch_name. Historical details also label branches as current display metadata;
+no historical name snapshot or salesperson assignment is inferred. Register/detail
+reuse sales_branch_labels, bounded to 100 primary-key references and strict org
+scope. Missing/deleted labels return null. No migration or write-path change.
+
+### Frontend Sales route guard (2026-10-04)
+
+Existing local recovery gates dirty/pending draft route navigation through the
+app-shell data router. No API/schema changes. Recovery must succeed before leave;
+active saves and confirmed cleanup block leaving. Full frontend291/55 and build
+pass; exact implementation/boundaries recorded in frontend architecture and
+planning/evidence/20261004-sales-navigation.txt. Browser acceptance pending.
+
+### Read-only draft revision inspection (2026-10-04)
+
+get_sales_intent supports explicit historical version selection with the same
+scope/permission guards. Historical projection skips current holds and returns
+saved line units/base quantities/policy versions plus pinned customer metadata.
+Current catalogue descriptions are labelled as current, not historical snapshots.
+UI inspection has no restoration/allocation or payment actions. No new tables.
+
+### Sales register search (2026-10-04)
+
+sales_drafts private Meilisearch projection indexes reference/saved customer name.
+The list route applies company/store filtering and rehydrates latest revisions
+before returning a bounded page. Version/branch mismatches fail closed. Projection
+runs after save commit; failed indexing never invalidates the save receipt.
+Startup keyset repair exists; durable ordered repair belongs to T22. No new tables.
+See planning/evidence/20261004-sales-register-search.txt for verification/limitations.
+
+### Explicit populated demo workflows (2026-10-04)
+
+Utils/seed_workflow_demo.py extends only the existing identified T05 demo company.
+It creates two synthetic customers, three versioned sales drafts, three count
+plans, an admin-assigned blind round and a submitted round with pending discrepancy
+reviews through existing services. Adds SALES only to that demo's modules; no role,
+credential, stock, price, payment or runtime-authority changes. Stable namespaced
+keys, an advisory transaction lock and an atomic marker preserve repeat runs/user
+edits. Search projection runs after commit. Never a startup seed or migration.
+CLI requires explicit confirmation, viewer ID and exact local preview host/database.
+Focused tests prove scope, replay, rollback, blind projection and unchanged stock.
+
+### Full-build verification checkpoint (2026-10-04)
+
+Owner resumed testing: 1325 backend tests passed, 2 known legacy stock-writer
+expected failures; 273 frontend tests passed, production build passes with warnings.
+Fresh isolated startup/replay passed with search/storage intentionally unavailable.
+Read-only Sales/Counts tablet navigation checked; populated workflows and release
+gates remain. See planning/evidence/20261004-full-build-verification.txt. Earlier
+unverified headings describe historical slice status, not a current test pause.
+
+### T33A local repair integration (2026-10-04; unverified)
+
+Collaborator count models/services/router/migrations are selectively integrated,
+with identical assignment/recount company validation and replay-safe immutable
+discrepancy decisions. Counter projections remain blind; reviews post no stock.
+Inventory count-authorised source routes include warehouses and reuse the shared
+product_choice_service also consumed by Sales under its existing privacy guards.
+No new catalogue or bypass of caller permissions. Runtime/test/browser acceptance
+is pending; unrelated collaborator notification/runtime changes are not imported.
+
+### Draft revision-history metadata (2026-10-04; unverified)
+
+GET /sales/drafts/{key}/history returns paginated immutable revision headers,
+newest first, under the same SALES/customer/product/personal-data access guards.
+Exact active-company filtering remains even for root; missing/foreign keys return
+404. It includes actor references, timestamps and version-pinned customer labels,
+not operation IDs, balances, payments or contacts. Existing org/document/version
+unique index serves the read; no new ledger or migration. UI history is read-only.
+Tests written, not run; full historical line inspection and visual gates remain.
+
+### Authenticated UI actor identity (2026-10-04; unverified)
+
+/auth/me/access now includes user_id from the authenticated policy user. Frontend
+keeps legacy username display separate and exposes numeric userId only while the
+access response matches the current token/company request. Sales recovery and
+customer/inventory review screens consume that ID rather than user.id on a string.
+Missing identity blocks sales entry instead of using a shared/default recovery
+scope. Backend permissions/self-review checks are unchanged. No identity guessed
+from localStorage or token payload. Regression added, no tests/build/browser run.
+
+### Signed sales thumbnails (2026-10-04; unverified)
+
+Sales source choices and draft lines project optional image_signed_url from
+already-scoped product rows using the existing blob signer. Only product-image
+keys are accepted; no raw paths, external URLs, documents or supplier data are
+returned. Missing/invalid/unsigned media yields null without changing eligibility.
+Current catalogue images are display aids, not historical invoice snapshots.
+No media catalogue, uploads or migration. Frontend shares a lazy thumbnail with
+a broken/missing-image placeholder; signed URLs are excluded from draft recovery.
+Tests written, not run; provider/browser acceptance remains pending.
+
+### Saved customer labels on sales drafts (2026-10-04; unverified)
+
+Register/detail responses add customer_name from each draft's exact saved
+customer/profile version. The shared historical_names_for_page helper requires
+an authorization callback and exact active-company scope, caps input at100,
+and projects names only in at most two queries across original/revised profiles.
+Missing/deleted versions yield no name, never a latest-profile or tenant fallback.
+No contact/balance projection, schema migration or historical record rewrite.
+Frontend shows names plus original references/version in details. Tests written
+for profile changes and missing versions, not run; broader UI/API checks deferred.
+
+### Sales register store filter (2026-10-04; unverified)
+
+GET /sales/drafts accepts an optional positive branch_id, filtering current
+revisions before count/pagination within the exact active company. Existing
+org/branch index remains available. A bounded page-only query projects current
+non-deleted store names; absent labels fall back to explicit IDs, not other tenants.
+Frontend reuses the paginated branch selector, resets page on filter changes
+and aborts stale loads. No full-text SQL fallback, schema migration or posting.
+Customer labels and broader search remain future register work. Tests added but
+not run; build/browser deferred under owner instruction.
+
+### Duplicate customer screens (2026-10-04; automated verification complete)
+
+Customer register exposes request and review controls under distinct permissions.
+Pair selection reuses CustomersPage selection mode; exact company/profile versions
+are submitted with an explicit assessment/reason. Review extends ManagerCases and
+loads both historical profiles through permission-checked version reads. Review
+controls require successful profile loading; backend still rechecks current source
+versions and rejects self-review. Unknown requests retain the same intent; receipts
+remain visible. There is no merge or execution control. Exact-profile readiness,
+uncertain same-intent retry and the broader customer workspace are covered by 23
+focused frontend tests. The production build succeeds with existing warnings;
+browser acceptance remains separate.
+
+### Duplicate assessment public API (2026-10-04; automated verification complete)
+
+The existing customer router now provides /duplicates/cases request/list/review
+under customer/personal-data access and separate Request_CustomerDuplicate and
+Review_CustomerDuplicate permissions. No role grants are seeded. Request-only
+users see their own cases; independent reviewers see company-scoped cases through
+the shared paginated manager-case reader. Responses expose exact customer-version
+references and assessment, not a merge instruction. No consumption endpoint exists.
+The frontend customer client is connected; request/inspection/review screen work
+is connected. Focused API/service tests cover independent review, permissions,
+profile invalidation, company scope, replay and the absence of any merge/use effect.
+No real cases were created and browser acceptance remains pending.
+
+### Duplicate customer assessment foundation (2026-10-04; verified foundation)
+
+customer_duplicate_service binds two exact same-company customer profile versions
+and an explicit SAME_CUSTOMER or DISTINCT_CUSTOMERS assessment to the existing
+manager-case engine. Sorted identity locks protect overlapping pairs; changed
+profiles invalidate review and retries. Independent review records approval or
+rejection of the assessment only. No consumption/merge, contact copying, identity
+retirement, sales redirection or balance effect is provided. Bindings contain only
+identifiers/versions and assessment, not contact values. Public permission adapter,
+paginated case register and frontend request/review are now connected and tested.
+
+### Customer profile API and screens (2026-10-04; automated verification complete)
+
+Customer master now exposes protected PUT profile and paginated GET history.
+Existing list/search/detail project current versions; explicit version reads retain
+the original history. New sales drafts lock the customer and pin the selected
+current version. Old drafts/references are never rewritten. Startup registers the
+profile migration after sales tables, and metadata creation shares the reference
+guard. The migration widens the old version-one constraint only when necessary.
+Search repair projects latest profiles; post-commit retries no longer intentionally
+index the initial profile after later edits. Concurrent external projection ordering
+and durable repair still need T22; search may lag, never authorizes customer access.
+Customers -> View now offers Edit profile and Profile history, reusing the contact
+form with required reason, expected version, retained result and exact retry intent.
+Focused PostgreSQL tests cover exact/history reads, retries, stale and concurrent
+updates, tenant/permission denial, immutable rows and migration replay. API tests
+cover history pagination and post-commit projection behavior. Frontend tests cover
+retained failures and exact history. No balance changes; browser/provider and T22
+projection-ordering acceptance remain pending.
+
+### Customer profile version foundation (2026-10-04; verified foundation)
+
+customer_profile_service now provides scoped current/exact-version reads,
+append-only edits through execute_once, and bounded newest-first history including
+the original version one. Parent identity locks serialize competing edits; expected
+versions reject stale edits. Replay checks permission/scope before returning its
+original receipt. Generic events contain identifiers only, not contacts or reasons.
+Startup migration registration, current projections, sales version pinning, protected
+API and frontend are connected. Original profile and every revision remain immutable;
+old sales references are never rewritten. Fifty-three affected backend tests pass.
+Durable ordered search repair remains T22 and browser acceptance remains pending.
+
+### Public reviewed cost posting adapter (2026-10-04; unverified, disabled)
+
+FREIGHTLENS_LOCAL_COST_RUNTIME_JSON is a separate opt-in local-development identity
+map keyed by exact company/cost pool and pinned central node/epoch. It never adopts
+branch authority or latest epochs; blank configuration disables execution.
+Cost evidence cases now expose posting-context and post endpoints under independent
+Post_InventoryCost plus financial management, supplier/document and module access.
+Context returns only bounded product stream versions, using the existing scoped
+version index. Clients cannot supply authority, amounts, allocation or file hashes.
+The existing preparation/coordinator rechecks persisted evidence and original blob
+versions outside transactions, then atomically consumes charge/case and appends
+UNRECONCILED valuation. Request DB transaction closes before file I/O; fresh session
+guards reload actor membership, modules and financial/supplier permissions.
+Frontend evidence review adds explicit cost confirmation and retained outcome.
+No settings/data were enabled or posted. Tests/build/browser remain deferred.
+Evidence: planning/evidence/t06-local-cost-runtime.txt.
+
+### Reallocation execution (2026-10-04; unverified)
+
+Execute_ReservationReallocation separately permits context lookup and execution
+of an exact approved reallocation. The stock runtime scope loader is shared with
+other-store execution, not a second authority or approval engine. Existing atomic
+reallocate_reservation handles both child movements, case consumption and history.
+Checked branch settings version now binds the parent receipt. The frontend reuses
+the runtime-confirmation control and retains source/new-hold quantities afterward.
+Older cases without a destination-history snapshot cannot execute from the UI.
+No tests/build/browser run, runtime activation or paid-source support. Evidence:
+planning/evidence/t07-reallocation-runtime.txt. T07 remains in progress.
+
+### Other-store public execution (2026-10-04; unverified)
+
+Approved cases now expose a runtime-context read and explicit execution endpoint
+under Execute_OtherStoreFulfilment, SALES/INVENTORY and draft access. The client
+sends only operation ID and observed target settings version; exact source,
+location, quantity, unit and follow-up come from the immutable case. Target stock
+authority is pinned by operator configuration. Server-derived target business date
+uses existing calendars under a shared branch lock; missing/changed settings or
+closed trading dates deny allocation. No artificial checkout counter is needed
+for a reviewed warehouse hold. Settings version joins the existing stock receipt
+fingerprint. reserve_stock remains the sole stock effect/case-consumption engine.
+Case-derived hold identity and exact operation receipts protect retries; original
+requestor assignment, stock version and compatible demand remain rechecked.
+Frontend reuses manager cases and confirmation, disables missing-runtime execution
+and retains its result. No tests/build/browser checks run at owner request.
+Evidence: planning/evidence/t07-other-store-runtime.txt. Runtime not activated.
+
+### Approved release runtime adapter (2026-10-04; verification pending)
+
+POST /inventory/reservation-release-cases/{key}/execute accepts only a stable
+operation UUID. Execute_ReservationRelease is distinct from request/review rights;
+execute-only users may inspect company-scoped cases. The exact immutable binding
+supplies quantity, unit and source. Runtime authority resolves from the held stock
+branch, never the selling branch. Existing release_stock rechecks demand and case
+eligibility and atomically consumes approval with stock, movement and receipt.
+No client authority, paid-order adapter, settings seed or runtime activation.
+Sales drafts release reviews offers explicit execution confirmation and a retained
+result. Unknown responses keep the same retry identity. Further checks/build are
+deferred at owner request; evidence: planning/evidence/t07-release-runtime.txt.
+
+### Same-store allocation screen (2026-10-04)
+
+Saved Sales draft details now offers Allocate same-store stock. A protected
+/sales/draft-allocations/context read returns only self assignment and branch
+settings versions after checking operator-pinned runtime authority; no View_User
+or client authority is needed. UI reuses paginated counter selection and exact
+operation intents, allows unset picking preference and shows holds by location.
+Unknown outcomes freeze edits for identical retries. Stale state blocks replacement.
+Runtime remains disabled in the preview. Evidence:
+planning/evidence/t07-store-allocation-ui.txt. Browser acceptance pending.
+
+### Opt-in local runtime and same-store allocation API (2026-10-04)
+
+stock_runtime_service reads only operator process configuration from
+FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON. Blank/invalid configuration disables writes.
+Mode must be local-development; each exact company/branch/node/epoch is pinned
+and rechecked against persisted authority. It never discovers/adopts the newest
+epoch or another node. This is not secure distributed enrollment or offline fencing.
+No environment configuration or real records were changed.
+POST /sales/draft-allocations requires SALES/INVENTORY, draft/customer access and
+Allocate_SalesDraftStock. Source determines branch; server time plus versioned
+branch/counter settings determine business date. Clients cannot send authority,
+node, branch override or business date. Staff assignment remains independently
+version-checked. Existing atomic store allocator creates compatible splits and
+exact receipts. Changed business date/settings can deny an old retry, never create
+another allocation. UI integration and broader lifecycle runtime adapters remain
+pending; preview is not enabled for posting. Evidence:
+planning/evidence/t07-local-runtime-allocation-api.txt.
+
+### Atomic approved other-store holds (2026-10-04)
+
+The existing reserve_stock transaction now accepts an exact other-store case
+binding, not a branch-bypass flag. It reloads saved demand, requestor assignment,
+chosen target scope/version and compatible history, consumes independent approval
+and records the ordinary hold/movement/source/receipt together. The persisted
+target-branch authority is checked before every attempt. Compatible local holds
+remain protected; all quantities count toward the same demand cap. Existing
+same-bucket supplemental restrictions remain intact. Any failure rolls back case
+consumption as well as stock. Receipt replay normalizes only its own unchanged
+movement/hold/stock version; later changes fail closed. No new ledger or migration.
+This is an internal writer only. Trusted runtime resolution and public execution
+UI remain pending; no client can supply authority through HTTP. Evidence:
+planning/evidence/t07-other-store-execution.txt.
+
+### Other-store request entry (2026-10-04)
+
+Sales drafts detail -> Request other-store stock now selects a saved line and
+explicit branch/location/bucket using the existing paginated location client.
+Stock reads accept optional exact product_id before count/pagination; existing
+location/product scope indexes remain sufficient for this bounded query shape.
+GET other-store-fulfilment-cases/working-store exposes only the authenticated
+actor's enabled current assignment (branch/version/counter), under request/draft
+permissions, without View_User or another user's identity parameter. Submission
+still rechecks assignment. Frontend locks uncertain payloads to identical retries,
+blocks stale-state replacement, confirms dirty close and states that approval
+does not allocate stock. Existing quantity caps/stock eligibility are authoritative.
+Trusted execution and browser acceptance remain pending. Evidence:
+planning/evidence/t07-other-store-request-entry.txt.
+
+### Other-store review API and queue (2026-10-04)
+
+Scoped request/list/review endpoints reuse the exact binding and manager-case
+engine under SALES, INVENTORY, draft/customer/personal-data access and separate
+Request_OtherStoreFulfilment / Review_OtherStoreFulfilment permissions. No role
+grants are seeded. Requestor identity comes from authentication; independent review
+revalidates the original requestor assignment and stock/source versions. Own-only
+requester visibility, bounded pagination and explicit response schemas exclude the
+internal hold digest. Sales drafts -> Other-store reviews reuses ManagerCases with
+exact source/stock scope, independent decisions and no activation control.
+Request-entry is now described above; trusted execution remains pending. Approval has no stock
+effect. Evidence: planning/evidence/t07-other-store-review-api.txt.
+
+### Explicit other-store review foundation (in progress)
+
+other_store_fulfilment_service loads an exact same-company, different-branch stock
+choice against saved draft demand and current salesperson assignment. Sorted branch
+locks precede assignment/document/source-allocation/stock checks. Exact stock version,
+quantity/unit conversion, available quantity and compatible existing source holds
+bind the manager case. It reuses the case engine, stock readers and history digest;
+there is no new reservation ledger or public posting bypass. Approval alone has no
+stock effect. Candidate expiry is recorded; execution still needs the target's
+trusted business date and node authority. Public review API/queue is now added
+above; request-entry and execution remain unfinished, not operational checkout.
+Evidence: planning/evidence/t07-other-store-review-foundation.txt.
+
+### Reviewed supplements to compatible multi-location demand (2026-10-04)
+
+Reallocation still releases and re-reserves the exact same physical bucket, but
+its destination may already hold matching stock in other locations of the same
+branch. The streamed target-history query joins immutable bucket identities and
+rejects active holds with different store/product/base unit/tracking/batch.
+Fully released history remains in the digest and does not constrain active lots.
+All target quantities and deadlines bind approval; combined remaining demand is
+capped across locations. Original holds are never edited to append quantity.
+The v2 history digest includes bucket IDs and invalidates older review snapshots;
+fresh review is required, not migration/reinterpretation of approved records.
+Existing document locks, exact paired release proof and deferred segment guard
+remain unchanged. No physical transfer, cross-store exception or paid-hold support.
+Evidence: planning/evidence/t07-multi-location-supplements.txt.
+
+### Staff working-store assignments (2026-10-04)
+
+StaffStoreAssignment stores append-only company/user revisions: authorised branch,
+optional usual counter, enabled flag, actor and exact posting receipt. One current
+working store per user/company; a counter is never product-access authority.
+Composite scoped foreign keys, immutable/counter-branch guard and a replayable
+startup migration seed no users or settings. User row locks serialize revisions
+and keep posting assignment checks stable until commit. Effective membership
+follows NULL-home/explicit-array semantics; empty membership denies even replay.
+Internal store allocation now requires the current assignment version in its
+intent; branch/assignment changes or revocation deny replay. Action RBAC, counter
+eligibility and trusted node authority remain independent mandatory checks.
+GET/PUT /inventory/branches/{branch}/staff-assignments[/user] require INVENTORY,
+View_Product and View_User; PUT additionally requires Edit_User and
+Manage_BranchSettings. Paginated reads project only username/id and assignment;
+they never reuse the legacy unbounded user endpoint or expose password hashes.
+Frontend Locations -> selected branch -> Staff working stores has optional-counter
+selection, explicit reassign/enable, version conflicts and exact uncertain retries.
+No real assignments seeded; no public checkout writer enabled. Evidence:
+planning/evidence/t07-staff-store-assignments.txt. Browser acceptance pending.
+
 ### Parallel-development checkpoint (2026-10-03)
 
 The canonical queue, BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt are in
@@ -14,8 +698,48 @@ them and the canonical queue supersede statements that those slices are pending.
 No cycle-count implementation, deployment or operational activation is introduced
 by this handoff. Browser/hardware/provider gates remain separate.
 
-### Work-area default allocation rule (owner clarification)
+### Store-wide allocation (BD-20261003-06 supersedes the area restriction)
 
+Salespeople may sell any eligible product in their authorised InventoryBranch.
+Counter/specialism is not a product or stock entitlement. The legacy JSON field
+default_stock_location_id remains an optional preferred picking area; no migration
+or data backfill. Unset resolves to None and inspection returns root:null/items:[],
+not an error. Stale/disabled/mis-scoped contexts still fail closed.
+Internal store_allocation_service composes deterministic reserve_stock children
+and a grouping receipt in one existing execute_once transaction. Exact saved demand,
+branch authority and permission guards are rechecked before replay. Product and
+document locks serialize planners; stock effects retain locked quantity checks.
+Candidates are active same-branch locations with active ancestry and unexpired
+lots. Streamed planning prefers the configured area then other same-store stock,
+keeping one compatible batch identity (therefore shade/calibre) per source. A short
+preferred lot cannot mask a sufficient alternative lot. No partial hold on failure.
+Source-linked reserve_stock permits compatible same-store bucket splits with a
+combined source cap. Generic source-less splits and unreviewed same-bucket
+supplements remain denied. Initial allocation cannot replace existing hold history.
+Staff/store assignment is now implemented above; trusted public runtime adapter
+remains pending. The counter is not authority. Other-store/warehouse exceptions
+remain fail-closed.
+Frontend settings/inspection say preferred picking area and explain store-wide
+selling without claiming stock availability or operational activation.
+
+### Earlier counter-area inspection foundation (historical; rule superseded above)
+
+Counter area resolution now pins an active exact-company branch and counter,
+checks the saved configuration version and validates the complete active
+SITE/ZONE/BIN ancestry in at most three indexed probes. The allocation resolver
+also requires a checkout-capable enabled counter. Shared branch locks prevent
+counter settings from changing beneath the caller's transaction.
+GET /inventory/branches/{branch}/counters/{key}/stock-area is an advisory,
+View_Product/INVENTORY-protected, version-pinned paginated read of the root and
+active descendants. Inactive intermediate zones exclude their bins; sibling areas
+and foreign branches are never substituted. Disabled counters can be inspected
+but not used by the allocation resolver. No stock quantities, staff assignment or
+posting authority is returned. Frontend Counters -> View stock area reuses the
+scoped client and pagination; errors clear stale results. No schema migration.
+Evidence: planning/evidence/t07-counter-area-scope.txt. Staff assignment and actual
+automatic allocation remain pending; this area query is not a locked stock plan.
+
+Historical BD-20261003-03 (superseded by BD-20261003-06 above):
 Ordinary eligible stock allocation should be automatic within the salesperson's
 current configured area. Insufficient stock produces a shortfall, never automatic
 cross-area selection. Explicit alternative choices use applicable manager review.

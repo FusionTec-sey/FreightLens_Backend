@@ -1,0 +1,56 @@
+T33A INTEGRATION REVIEW — 2026-10-04
+UPDATE: owner authorised integrator fixes after paired source review.
+Backend b6f888e68b67af097901db150f6680aeb1302351 includes counts at b004536;
+frontend4b6705fa07ea9414b8028c39e560ddae8681e66d includes counts at3260838.
+Backend commit was reachable by SHA even though first branch listing lacked it.
+Local repair now covers the four frontend findings below plus recount company
+membership and exact decision replay without duplicate review rows. Shared product
+choice projection now serves Sales and count-specific Inventory guards separately.
+Count migrations/router/catalog and frontend routes/menu integrated selectively.
+Pending case links now reach other reviewers; no expected data added to blind sheet.
+Regression coverage added, not run. CI query returned no PR-triggered runs for
+these checkpoint SHAs, not a universal claim of no CI. No push or branch merge.
+Earlier findings below are retained as historical review evidence, not current status.
+Read-only remote/source review; no merge or application tests performed.
+Owner subsequently confirmed T33A is still in development. Findings below are
+preliminary integration notes on the available frontend, not a completed-delivery
+rejection. Wait for the ready backend/frontend pair while independent work continues.
+
+FOUND
+Frontend origin/codex/pos-ui-theme:
+32608383d7de0bb820bad82e4276632c0c6ba7ab
+Commit adds count plans/scope/sessions/blind sheet/discrepancies, client and routes.
+Backend same branch d9798a310b8452e4bbec3a080fa481334ab0ab20 has no corresponding
+count files. Live ls-remote reviewed; cached remaining-work branches also had no
+count files. GitHub issue/PR searches for T33A/count returned no matches. This is
+not proof that no backend exists elsewhere; owner asked for its exact revision.
+
+DO NOT MERGE AS COMPLETE
+Frontend requires /inventory/counts plan/session/sheet/entry/review endpoints.
+Matching backend permissions, migrations, blind projection and immutable effects
+are unreviewed/unidentified. Do not infer backend guarantees from frontend comments.
+The branch also contains older sales UI changes; never replace current sales files
+wholesale. Review and integrate the count-specific commit plus minimal nav changes.
+
+CONCRETE FRONTEND FINDINGS
+1. CountSessionsPage passes user?.id from AuthContext, which stores a username.
+   Its assignee_id === userId check hides Count for ordinary assigned users.
+   Integrate the new authenticated userId contract, not a token/storage fallback.
+2. countsApi source choices use /sales/draft-sources/branches and /products.
+   Those endpoints require SALES/customer personal-data access; branches returns
+   active STORE only. Warehouse count planning must use Inventory-authorised,
+   same-company selectors rather than require sales access or exclude warehouses.
+3. BlindCountSheet leaves quantity/unit inputs and Back enabled on uncertain save.
+   pending preserves old request but visible edits can diverge; success clears all
+   values after retry. Freeze pending intent, guard discard/navigation, and retain
+   the saved receipt separately from refresh failure before integration acceptance.
+4. saveCounted clears inputs before a follow-up sheet refresh, then reports refresh
+   failure as an uncertain save. Separate committed receipt and failed reload;
+   never invite a new save for an already confirmed effect.
+
+KEEP
+Shared RegisterShell reuse, distinct blind/discrepancy routes, exact decimal entry,
+zero-as-count, provisional discrepancy language, no stock-posting controls.
+Actual API/tenant/blind-data enforcement and count-specific tests still need review.
+Collaborator's commit test claims are historical self-reported evidence, not
+verified against our current combined worktree. Owner test deferral remains active.

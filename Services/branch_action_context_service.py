@@ -22,6 +22,37 @@ class BranchActionContext:
     action: str
 
 
+def require_stock_business_date(db, context, *, branch_id, branch_version, instant, authorize):
+    """Reviewed stock allocation uses the target calendar, not a fabricated till.
+
+    The caller separately enforces exact approved scope and runtime ownership.
+    Settings remain locked through posting; the version must bind the receipt.
+    """
+    if not db.in_transaction() or not callable(authorize):
+        raise ValueError('Active transaction and stock permission guard required')
+    if context.org_id not in context.allowed_org_ids:
+        raise PermissionError('Branch action scope denied')
+    if type(branch_version) is not int or branch_version <= 0:
+        raise MissingBranchConfiguration('Explicit branch settings version required')
+    authorize(db)
+    branch = apply_org_filter(db.query(InventoryBranch).filter_by(id=branch_id,
+        org_id=context.org_id, is_deleted=False, is_active=True), InventoryBranch,
+        context).with_for_update(read=True).one_or_none()
+    if branch is None: raise LookupError('Active branch not found')
+    settings = apply_org_filter(db.query(BranchSettingsRevision).filter_by(
+        org_id=context.org_id, branch_id=branch_id, is_deleted=False),
+        BranchSettingsRevision, context).order_by(BranchSettingsRevision.version.desc()).first()
+    if settings is None: raise MissingBranchConfiguration('Branch trading settings required')
+    if settings.version != branch_version:
+        raise ValueError('Branch settings changed; reopen the reviewed action')
+    calendar = BranchSettingsConfig.model_validate(settings.config)
+    resolved = resolve_business_date(instant, calendar.rules(), date_overrides={
+        row.business_date: row.is_open for row in calendar.date_overrides})
+    if not resolved.trading_allowed:
+        raise PermissionError('Stock allocation is closed for this business date')
+    return resolved.business_date
+
+
 def require_branch_action_context(db: Session, context, *, branch_id: int, counter_key: UUID,
                                   branch_version: int, counter_version: int, instant: datetime,
                                   action: str, authorize) -> BranchActionContext:

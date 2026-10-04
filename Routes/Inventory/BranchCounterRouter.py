@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from Model.db import get_db
 from Model.containermgmt.Inventory.BranchCounter import BranchCounter, CounterSettingsRevision
-from Schema.BranchCounterSchema import CounterRead, CounterSave
+from Model.containermgmt.Inventory.Location import StockLocation
+from Schema.BranchCounterSchema import CounterRead, CounterSave, CounterStockAreaRead
 from Schema.InventoryLocationSchema import LocationPage
 from Routes.Inventory.BranchSettingsRouter import branch_scope
 from Utils.org_filter import OrgContext, apply_org_filter
@@ -13,7 +14,8 @@ from auth.dependencies import get_org_context
 from auth.security_guards import require_permission
 from Services.settings_revision_service import (lock_settings_operation, require_matching_retry,
     require_current_version, SettingsConflict)
-from Services.default_stock_area_service import require_owned_stock_area
+from Services.default_stock_area_service import require_owned_stock_area, counter_stock_area, stock_area_locations
+from Services.branch_business_date_service import MissingBranchConfiguration
 
 BranchCounterRouter = APIRouter(prefix="/inventory/branches", tags=["Branch Counters"])
 
@@ -99,3 +101,27 @@ def save_counter(branch_id: int, counter_key: UUID, payload: CounterSave, db: Se
     except Exception:
         db.rollback()
         raise
+
+
+@BranchCounterRouter.get('/{branch_id}/counters/{counter_key}/stock-area', response_model=CounterStockAreaRead)
+def read_counter_stock_area(branch_id: int, counter_key: UUID, expected_version: int = Query(..., gt=0),
+                            page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=100),
+                            db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
+                            user=Depends(require_permission('View_Product'))):
+    branch_scope(db, context, branch_id)
+    counter = counters(db, context).filter_by(branch_id=branch_id, counter_key=counter_key).one_or_none()
+    if counter is None: raise HTTPException(404, 'Counter not found in this branch')
+    try:
+        root, config = counter_stock_area(db, context, branch_id=branch_id,
+            counter_id=counter.id, expected_version=expected_version)
+        if root is None:
+            return dict(root=None, counter_version=expected_version, counter_enabled=config.is_enabled,
+                items=[], total=0, page=page, limit=limit, pages=1)
+        query = stock_area_locations(db, context, root)
+        total = query.count()
+        rows = query.order_by(StockLocation.code, StockLocation.id).offset((page - 1) * limit).limit(limit).all()
+        return dict(root=root, counter_version=expected_version, counter_enabled=config.is_enabled,
+            items=rows, total=total, page=page, limit=limit, pages=max(1, (total + limit - 1) // limit))
+    except MissingBranchConfiguration as error: raise HTTPException(409, str(error)) from error
+    except LookupError as error: raise HTTPException(404, str(error)) from error
+    except PermissionError as error: raise HTTPException(403, str(error)) from error

@@ -1,10 +1,60 @@
-FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — 2026-10-03
-Decision revision: BD-20261003-05
+FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-05
+Decision revision: BD-20261005-01
+Current execution map: PARALLEL-PILOT-EXECUTION.txt. The integration owner must
+publish the paired baseline SHAs before either feature worktree begins.
+Current collaborator assignment: PROGRAMMER-T12A-HANDOFF.txt (cloud payment and
+receiving-account configuration). The previous PROGRAMMER-T21-HANDOFF.txt package
+is owner-deferred and historical until offline/store-node work is reactivated.
+Application starting revisions remain CHECKPOINT-20261004-UI.txt until the open
+paired baseline PRs are updated, verified and merged. The integrator must then
+supply the new exact paired revisions before collaborator implementation.
+This supersedes the historical T33A assignment below; retain its integrated work.
+Current publication manifest: CHECKPOINT-20261004-UI.txt.
+Current task summaries T14B-D supersede historical untested/next-action notes.
+Local demo now contains populated Sales/Counts examples; run the explicitly guarded
+Utils.seed_workflow_demo CLI only in approved local preview, never on startup.
+Read its source/setup guards before reuse. No roles, real stock or money changed.
+Latest verification: CHECKPOINT-20261004-UI.txt. Backend 1329 passed/2 legacy
+xfailed; frontend 278 passed/52 suites; build passes with warnings. Earlier fresh
+isolated startup/replay passed; provider and write-workflow acceptance remain.
+Publication state and paired revisions are recorded in the current manifest;
+verify remote SHAs before starting work. Historical report hashes are not latest.
+Phase map: PHASE-ROADMAP.txt; task status remains only in TASK-QUEUE.txt.
+Full roadmap review 2026-10-04: see roadmap review section for slice-level
+readiness and T06/T08 coordinated integration. T12A configuration is Ready;
+T21 store/cloud packaging is deferred.
+T33A frontend located at 3260838; owner confirms backend is still in motion.
+Latest owner update: backend b6f888e (includes T33A b004536) is available;
+frontend head4b6705f includes T33A3260838. Owner explicitly assigned defect repair
+to integrator. Count-only files selectively integrated and repaired locally; no
+whole-branch merge. Paired checkpoint was pushed; subsequent full verification is
+recorded above. Do not rebuild the integrated backend. Preliminary review is in
+evidence/t33a-integration-review.txt; independent sales work continues.
+Do not rebuild count work or claim its remote absence from cached local refs.
 Queue: TASK-QUEUE.txt (only authoritative backlog).
-Paired revisions: BASELINE-REVISIONS.txt beside this file; do not mix arbitrary HEADs.
+Latest development checkpoint: CHECKPOINT-20261004.txt (paired PRs; verify CI).
+Historical baseline: BASELINE-REVISIONS.txt; do not mix arbitrary HEADs.
 Checkpoint evidence: evidence/20261003-parallel-checkpoint.txt.
 
 READ FIRST
+Current UI priority: remaining T14B sales register, T14C desktop split view and
+T14D tablet draft workspace; T14A approval and capability mapping are complete.
+Three concepts were shown;
+visual direction was approved on 2026-10-04. T14 retains backend-gated checkout integration;
+T14E is deferred acceptance. Reuse existing sales/customer/case/recovery code.
+No inFlow code import, duplicate sales records or tab-triggered business writes.
+Integrator owns Sales/pricing/shared interfaces; collaborator now owns the bounded
+T12A configuration slice. T21 and prior T33A assignment paragraphs below are
+historical context.
+
+CLOUD-FIRST UPDATE — BD-20261004-10
+Develop one cloud-authoritative frontend/API/database/search/object-storage system.
+Retain existing offline-safe foundations but do not expand T21-T24. Never imply
+that an internet outage can transparently fall back, accept local transactions or
+later synchronize. The collaborator must not continue the T21 package and instead
+uses PROGRAMMER-T12A-HANDOFF.txt. T12A supplies configuration/fail-closed lookup,
+not payments, balances, banking data or financial activation.
+
 Read backend AGENTS.md, relevant .agents/rules, architecture and latest10 log entries,
 then this handoff, decisions and queue. Frontend AGENTS.md points here. Later dated
 decisions/current status supersede historical architecture narratives; historical
@@ -24,7 +74,19 @@ One company-scoping boundary (OrgContext/helpers), backend RBAC/module guards,
 atomic execute_once receipts/outbox and immutable exact-source manager cases.
 Inventory: locations, stock quantity breakdowns, batch/serial reads, policy drafts,
 reviewed activation/transitions, unit barcodes/retirement, conversion proposals.
-Settings: branch calendars/counters and optional default-stock-area configuration.
+Settings: branch calendars/counters and optional preferred-picking-area configuration.
+Staff/store assignments now persist immutable versions independently of optional
+usual counters. Locations -> selected branch -> Staff working stores administers
+them. Allocation requires the current assignment version plus separate permissions
+and node authority. No real assignments seeded; browser acceptance pending.
+Reviewed reservation supplements now include existing compatible target holds
+across same-store locations. The actual reassigned quantity stays in its original
+physical bucket. New versioned history digest requires fresh review for old cases;
+no automatic approval migration or cross-store exception is introduced.
+BD-20261003-06 supersedes the hard counter-area boundary. Staff sell all eligible
+products in their authorised branch. Counter/specialism does not restrict product
+access; unset preference is valid. Compatible same-store splits are permitted;
+other branches/warehouses still require explicit selection and applicable approval.
 Cost pools: setup, historical values, allocation proposals and evidence reviews;
 central writer identity must be trusted before public financial posting.
 Customers: stable UUID identity, immutable initial profile, multiple contacts,
@@ -43,15 +105,61 @@ Screen entry points (permissions/modules still apply):
 Use current route constants/MainPage.js as authority; no fake menu buttons.
 
 WHAT REMAINS
-T06/T07 are in progress; public stock/financial runtime authority, actual default-
-area allocation, other-location exceptions, paid-source adapters and central
+T10 profile/contact edits and paginated history now have API/frontend integration
+using stable customers and immutable revisions. Existing sales version references
+are preserved. Entire slice unverified (no tests/build/browser); duplicate review
+and durable search projection ordering remain. Integrator work, not T33A.
+T06 now has separate disabled-by-default local cost runtime and approved evidence
+posting context/API/UI. This is not operational enablement or final reconciliation.
+No tests/build/browser run: evidence/t06-local-cost-runtime.txt. Permission and
+storage acceptance gates remain, along with receipt costs and reconciliation.
+Approved reallocation now also has context/execute APIs and shared frontend
+confirmation, under separate Execute_ReservationReallocation. All latest runtime
+adapters remain unverified and disabled without operator configuration. See
+evidence/t07-reallocation-runtime.txt; older pending-adapter statements are historical.
+Other-store execution context/API and shared manager execution controls are now
+implemented locally but unverified (evidence/t07-other-store-runtime.txt). Exact
+case scope, runtime and target calendar remain mandatory. No role grants or
+runtime activation. Reallocation runtime integration remains next.
+Approved release execution now has a local runtime API and explicit frontend
+confirmation using the shared case/stock engine. Separate Execute_ReservationRelease
+permission is not auto-granted. Latest receipt UX and build checks are deferred at
+owner request; see evidence/t07-release-runtime.txt. Runtime stays disabled.
+Local-development runtime resolver and same-store allocation API now exist but
+remain disabled without explicit process configuration. This is not distributed
+enrollment/failover. Tablet allocation control now exists locally; reallocation
+runtime adapter remains pending. Evidence: t07-store-allocation-ui.txt and
+t07-local-runtime-allocation-api.txt. Browser/activation gates remain pending.
+Other-store fulfilment now has exact-source binding, protected request/list/review
+API, Sales drafts review queue and explicit request-entry stock picker. Internal
+approved execution reuses reserve_stock with atomic case consumption and target
+authority (backend58 pass, t07-other-store-execution.txt). Public trusted-runtime
+integration remains unfinished. Approval alone never posts stock; not active checkout.
+The self-only assignment read needs request/draft access, not View_User. Product
+filtering extends existing stock pagination. Evidence: t07-other-store-request-entry.txt.
+Evidence: evidence/t07-other-store-review-api.txt (backend18/frontend26/build pass).
+T06/T07 are in progress. Internal initial store-wide allocation now composes existing
+atomic reservations with preferred-area ordering and same-batch splits. This is not
+a public checkout action. Persisted staff/store assignments now gate that internal
+allocator. Public stock/financial runtime authority, other-store exceptions, paid-source adapters and central
 reconciliation remain. T08 legacy writers and T09 movement lifecycle are unfinished.
 T10 full profile revisions/history/duplicate review is unfinished, not assigned.
 T11–T34 are later packages subject to queue dependencies; T13A/T15A are foundations,
 not completion of checkout, invoices, returns, money or offline sync.
 T05 implementation in agreed scope is acceptance-pending, not physical conversion.
 
-T33A DELIVERABLE AND BOUNDARIES
+T33A HISTORICAL DELIVERABLE AND RETAINED BOUNDARIES
+T33A backend/frontend were selectively integrated and repaired in the current
+paired checkpoint. Earlier missing-backend notes are historical, not current
+instructions. Preserve authenticated userId, Inventory-only warehouse selectors,
+company-scope checks and safe pending/confirmed-save recovery. The review evidence
+records the defects; do not reintroduce them from older collaborator branches.
+Presentation alignment: after T14A visual confirmation, reuse the approved
+register/detail conventions for count lists and tablet-friendly blind entry.
+Adapt existing implementation rather than replace it. Integrator coordinates
+shared navigation/layout changes; this does not delay independent count/backend
+work or depend on full checkout. Preserve count-specific actions and all blind
+visibility restrictions below. No sales/payment features or stock writer added.
 Build company/branch/location-scoped annual count planning, due schedules, staff
 assignment, blind count entry with exact units, recount rounds, discrepancy review
 and auditable manager decisions. Reuse existing products/locations/policies, users,
@@ -129,15 +237,21 @@ without accessing real company records. Report evidence in the first PR/task.
 Do not claim the collaborator's environment has been verified by this checkpoint.
 
 ACCEPTANCE / RELEASE GATES
+Navigation update BD-20261004-06: integrator reorganised the shared Menu component.
+Customers route remains unchanged but appears under Sales. Counts remain the same
+routes under Inventory; count deep links now restore their accordion. Do not
+reinsert count links under Procurement. No backend contract or permission change.
+
 New browser checks require specific approval; current browser acceptance remains
 pending. Actual Epson printing, provider/storage retention, accounting review,
-real mappings/imports, offline/paper recovery and supervised pilot are separate.
+real mappings/imports and supervised cloud pilot are separate. Offline/paper
+software recovery is retained but deferred by BD-20261004-10.
 Two legacy stock-writer xfails remain tracked by T08; not newly passing tests.
 No deployment, pilot, real money posting, external messaging or purchases authorised.
 Repository hooks/workflows are checked for this push; unknown external polling
 integrations cannot be ruled out merely by reading workflow files.
 
-COPYABLE COLLABORATOR PROMPT
+HISTORICAL T33A COLLABORATOR PROMPT (superseded first by T21, now by T12A)
 You are developing FreightLens alongside an integration owner. Read AGENTS.md,
 the paired baseline, architecture, task queue, BUSINESS-DECISIONS.txt and this
 handoff before editing. Your assignment is T33A cycle-count planning and blind-

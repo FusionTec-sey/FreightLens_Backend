@@ -88,6 +88,7 @@ def list_locations(branch_id: int, page: int = Query(1, ge=1), limit: int = Quer
 @LocationRouter.get("/{branch_id}/locations/{location_id}/stock", response_model=LocationPage[StockBalanceRead])
 def list_location_stock(branch_id: int, location_id: int,
                         page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=100),
+                        product_id: int | None = Query(None, gt=0),
                         db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
                         user=Depends(require_permission("View_Product"))):
     """Exact location only: never roll children/remote stock or legacy totals in."""
@@ -108,6 +109,8 @@ def list_location_stock(branch_id: int, location_id: int,
             StockBalance.location_id == location.id, StockBalance.is_deleted.is_(False),
             Product.is_deleted.is_(False), Product.is_shared.is_(False))
     query = apply_org_filter(query, StockBalance, context)
+    if product_id is not None:
+        query = query.filter(StockBalance.product_id == product_id)
     total = query.count()
     rows = query.order_by(StockBalance.id).offset((page - 1) * limit).limit(limit).all()
     items = []

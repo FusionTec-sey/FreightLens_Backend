@@ -1,0 +1,35 @@
+INFLOW-INFORMED P1 SALES PRESENTATION — 2026-10-04
+
+Authority and boundary
+- Owner-approved BD-20261004-09 follows a read-only InFlow comparison.
+- Existing Sales draft API, records, routes, permission checks, search, paging,
+  reservations, history and recovery are reused. No parallel sales store was added.
+- This is current-contract presentation, not operational checkout acceptance.
+
+Implemented
+- Full register uses dense customer/store/Draft vN identity with exact UUID secondary.
+- Split-view list preserves the same identity and independent payment/collection text.
+- Detail uses a compact saved customer/store/audit/save-time identity strip.
+- Demand, Reservations, Payment and Collection render as separate status facts.
+- Product rows retain image, SKU, exact selling quantity/unit, reserved base quantity,
+  base conversion and reviewed policy version.
+- Summary says Pricing pending and Not calculated without claiming a currency result.
+- Existing primary Edit/Save and secondary reservation/allocation actions remain in
+  fixed action regions; no read-only tab triggers a business write.
+
+Explicit exclusions
+- No invoice/order number invented from UUID.
+- No Mark paid, Fulfill, pick/ship percentage or single-location assumption.
+- No unversioned price, tax, freight, payment or collection calculation.
+- Saving actor remains audit provenance, not salesperson assignment.
+
+Verification
+- Focused frontend tests: SalesDraftRows, SalesDraftsPage, SalesDraftEditor and
+  SalesDraftDetails — 24 passed across 4 suites.
+- Production build passed with existing ESLint and bundle-size warnings.
+- Build log: ../runtime/inflow-p1-sales-build.log (outside Git).
+
+Outstanding
+- Applicable browser visual, dark-mode and role/menu acceptance remains pending.
+- T11-T13 own authoritative pricing/tax/money/posting; T16 collection, T17 printing,
+  T15 copying and T25 delivery remain separate dependency-gated capabilities.

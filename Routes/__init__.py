@@ -23,8 +23,12 @@ from .Inventory.CostEvidenceRouter import CostEvidenceRouter
 from .Inventory.PolicyDraftRouter import PolicyDraftRouter
 from .Inventory.BranchSettingsRouter import BranchSettingsRouter
 from .Inventory.BranchCounterRouter import BranchCounterRouter
+from .Inventory.StaffStoreAssignmentRouter import StaffStoreAssignmentRouter
 from .Inventory.ManagerCaseRouter import ManagerCaseRouter
 from .Inventory.ReclassificationProposalRouter import ReclassificationProposalRouter
+from .Inventory.ReceiptManifestRouter import ReceiptManifestRouter
+from .Inventory.StockAdjustmentRouter import StockAdjustmentRouter
+from .Inventory.CostReconciliationRouter import CostReconciliationRouter
 from .Inventory.UnitBarcodeRouter import UnitBarcodeRouter
 from .Inventory.BarcodeRetirementRouter import BarcodeRetirementRouter
 from .BlobRouter import BlobRouter
@@ -36,8 +40,12 @@ __all__ = [
     "PolicyDraftRouter",
     "BranchSettingsRouter",
     "BranchCounterRouter",
+    "StaffStoreAssignmentRouter",
     "ManagerCaseRouter",
     "ReclassificationProposalRouter",
+    "ReceiptManifestRouter",
+    "StockAdjustmentRouter",
+    "CostReconciliationRouter",
     "UnitBarcodeRouter",
     "BarcodeRetirementRouter",
     "ContainerRouter",

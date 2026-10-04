@@ -4,9 +4,12 @@ from uuid import UUID
 from sqlalchemy.dialects.postgresql import insert
 from Model.containermgmt.Orders.SalesIntent import SalesIntent, SalesIntentRevision, SalesIntentLineRevision
 from Model.containermgmt.Orders.Product import Product
+from Model.containermgmt.Inventory.Location import InventoryBranch
 from Schema.SalesIntentSchema import SalesIntentInput
 from Services.inventory_posting_service import execute_once, PostingEffect, PostingConflict
 from Services.sales_intent_source_service import prepare_sales_intent
+from Services.customer_profile_service import historical_names_for_page
+from Services.sales_product_media import sales_thumbnail
 from Services.sales_reservation_source_service import protect_held_draft, active_demand_holds
 from Utils.org_filter import apply_org_filter
 
@@ -14,6 +17,21 @@ from Utils.org_filter import apply_org_filter
 def scoped(db, model, context, document_key):
     return apply_org_filter(db.query(model).filter_by(org_id=context.org_id,
         document_key=document_key, is_deleted=False), model, context)
+
+
+def sales_branch_labels(db, context, branch_ids):
+    """Current display labels only, bounded by the existing sales page limit."""
+    if context.org_id not in context.allowed_org_ids:
+        raise PermissionError('Sales draft company denied')
+    ids = set(branch_ids)
+    if len(ids) > 100:
+        raise ValueError('Branch labels require a bounded sales page')
+    if not ids:
+        return {}
+    rows = apply_org_filter(db.query(InventoryBranch.id, InventoryBranch.name).filter(
+        InventoryBranch.org_id == context.org_id, InventoryBranch.is_deleted.is_(False),
+        InventoryBranch.id.in_(ids)), InventoryBranch, context).all()
+    return {row.id: row.name for row in rows}
 
 
 def save_sales_intent(factory, context, actor_id, operation_key, document_key,
@@ -70,28 +88,45 @@ def save_sales_intent(factory, context, actor_id, operation_key, document_key,
              draft=payload.model_dump(mode='json')), effect, authorize=authorize)
 
 
-def get_sales_intent(db, context, document_key, *, authorize):
+def get_sales_intent(db, context, document_key, *, authorize, version=None):
     if not callable(authorize): raise ValueError('Sales draft permission guard required')
     authorize(db)
     if context.org_id not in context.allowed_org_ids: raise PermissionError('Sales draft company denied')
-    revision = scoped(db, SalesIntentRevision, context, document_key).order_by(
-        SalesIntentRevision.version.desc()).first()
+    if version is not None and (type(version) is not int or version < 1):
+        raise ValueError('Positive draft version required')
+    revisions = scoped(db, SalesIntentRevision, context, document_key)
+    if version is not None:
+        revisions = revisions.filter(SalesIntentRevision.version == version)
+    revision = revisions.order_by(SalesIntentRevision.version.desc()).first()
     if revision is None: raise LookupError('Sales draft not found')
     lines = scoped(db, SalesIntentLineRevision, context, document_key).filter_by(
         version=revision.version).order_by(SalesIntentLineRevision.position).limit(100).all()
     # Current display labels are not a historical invoice snapshot. Never load
     # supplier relationships or costs merely to label the existing catalogue IDs.
-    labels = {row.id: row for row in apply_org_filter(db.query(Product.id, Product.name, Product.sku).filter(
+    labels = {row.id: row for row in apply_org_filter(db.query(Product.id, Product.name, Product.sku, Product.images).filter(
         Product.org_id == context.org_id, Product.is_deleted.is_(False),
         Product.id.in_([line.product_id for line in lines])), Product, context).all()}
-    holds = active_demand_holds(db, context, document_key)
-    return dict(document_key=str(document_key), version=revision.version, status=revision.status,
+    # Never project current reservation balances as if they belonged to history.
+    holds = active_demand_holds(db, context, document_key) if version is None else {}
+    customer_names = historical_names_for_page(db, context,
+        [(revision.customer_key, revision.customer_version)], authorize=authorize)
+    result = dict(document_key=str(document_key), version=revision.version, status=revision.status,
         customer_key=str(revision.customer_key), expected_customer_version=revision.customer_version,
-        branch_id=revision.branch_id, lines=[dict(line_key=str(line.line_key),
+        customer_name=customer_names.get((revision.customer_key, revision.customer_version)),
+        branch_id=revision.branch_id,
+        branch_name=sales_branch_labels(db, context, [revision.branch_id]).get(revision.branch_id),
+        created_at=revision.created_at, created_by=revision.created_by,
+        lines=[dict(line_key=str(line.line_key),
             product_id=line.product_id, expected_policy_version=line.policy_version,
             quantity=format(line.quantity, 'f'), unit=line.unit,
             base_quantity=format(line.base_quantity, 'f'), base_unit=line.base_unit,
             product_name=labels[line.product_id].name if line.product_id in labels else None,
             sku=labels[line.product_id].sku if line.product_id in labels else None,
-            reserved_quantity=format(holds.get(line.line_key, Decimal(0)), 'f'),
+            image_signed_url=sales_thumbnail(labels[line.product_id].images) if line.product_id in labels else None,
+            **({'reserved_quantity': format(holds.get(line.line_key, Decimal(0)), 'f')} if version is None else {}),
             units=[line.policy['base_unit']] + [unit['unit'] for unit in line.policy['conversions']]) for line in lines])
+    if version is not None:
+        result['customer_version'] = result.pop('expected_customer_version')
+        result.update(created_at=revision.created_at, created_by=revision.created_by,
+                      read_only=True, catalogue_labels_current=True)
+    return result

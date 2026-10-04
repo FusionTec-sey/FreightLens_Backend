@@ -1,0 +1,18 @@
+T07 same-store allocation screen - 2026-10-04
+Decision BD-20261003-06. T07 In progress, not operationally activated.
+
+Isolated phase0 runner /work, REQUIRE_TEST_DATABASE=1:
+python -m pytest -q --tb=short tests/test_store_allocation_api.py tests/test_store_allocation.py
+31 passed, 23 existing warnings, 8.77s. Context self projection, disabled runtime,
+tenant/permission/authentication denial; existing split/cap/retry/concurrency tests.
+
+Frontend focused CRA CI=true:
+src/component/Pages/Sales/DraftAllocation.test.js
+src/component/Pages/Sales/SalesDraftsPage.test.js
+15 passed / 2 suites, 2.62s. Exact quantity/versions, no authority/date overrides,
+permission navigation, disabled runtime, unknown identical retry, stale rejection,
+dirty-close confirmation and result distinction covered.
+Production build CI=false exit0, main.dfa28a45.js; existing warnings remain.
+
+No browser automation, real configuration/stock, deployment or Git push this slice.
+Public other-store/release runtime integration is next. T33A remains assigned out.

@@ -1,0 +1,27 @@
+T06 cloud cost-pool runtime — 2026-10-04
+
+Implemented boundary
+- Added one server-owned cloud valuation identity configured by
+  FREIGHTLENS_CLOUD_COST_RUNTIME_NODE_KEY.
+- The configured UUID identifies a persisted company node only. Cost pool and
+  latest active authority epoch are derived from locked database state; an HTTP
+  caller cannot supply or replace any part of the claim.
+- Foreign-company nodes, other-pool authority, suspended/stale epochs and missing
+  configuration fail closed. An invalid cloud value never falls back.
+- Explicit local-development JSON remains compatible only when no cloud identity
+  is configured.
+- Existing reviewed charge posting/context routes now use the server resolver.
+  This adds no authority writer, default node, cost pool, epoch or business data.
+
+Verification
+- 64 isolated PostgreSQL tests passed with 23 dependency warnings across the new
+  runtime, cost-pool authority, evidence API and atomic charge posting.
+- Tests cover current-epoch derivation, foreign-node denial, suspension, exact
+  local claims, disabled defaults and cloud-over-local precedence.
+- No frontend change or browser acceptance is claimed for this backend boundary.
+
+Remaining boundary
+- The reviewed receipt public adapter must compose this central claim with the
+  existing cloud stock claim, exact evidence and receipt coordinator.
+- RustFS version-retention/configuration and real authority enrollment remain
+  external acceptance gates. No real financial posting is enabled here.

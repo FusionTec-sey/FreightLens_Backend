@@ -21,6 +21,10 @@ from auth.security_guards import is_financial_user, has_permission, can_view_sup
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 from Services.search_service import sync_product_document, remove_product_document, search_products, search_products_with_total
+from Services.inventory_product_quantity_service import (
+    product_quantity_totals,
+    stock_quantity_summary_subquery,
+)
 
 logger = logging.getLogger("containerMgmt.inventory")
 
@@ -543,7 +547,8 @@ def product_to_dict(
     is_accounts: bool = True,
     can_view_supplier: bool = True,
     db: Session = None,
-    include_links: bool = False
+    include_links: bool = False,
+    inventory_quantity: dict | None = None,
 ) -> dict:
     cat_name = p.category.name if p.category else None
     supplier_name = p.supplier.name if (p.supplier and can_view_supplier) else None
@@ -620,6 +625,14 @@ def product_to_dict(
                     "eta_date": po.eta_date.isoformat() if po.eta_date else None
                 })
 
+    stock = inventory_quantity or {
+        "status": "NO_BALANCE", "base_unit": None,
+        "on_hand": "0.000000", "reserved": "0.000000",
+        "available": "0.000000", "damaged": "0.000000",
+        "quarantined": "0.000000",
+    }
+    current_stock = (float(stock["on_hand"])
+        if stock.get("on_hand") is not None else None)
     result = {
         "id": p.id, "org_id": p.org_id,
         # Core Identity
@@ -672,8 +685,16 @@ def product_to_dict(
         # Pricing (role-gated)
         "unit_cost": float(p.unit_cost) if p.unit_cost is not None and is_accounts else None,
         "currency": p.currency or "USD",
-        # Stock
-        "current_stock": float(p.current_stock or 0.0),
+        # Authoritative Inventory quantity projection. current_stock is retained as
+        # a compatibility alias only and never reads Product.current_stock.
+        "current_stock": current_stock,
+        "stock_status": stock["status"],
+        "stock_base_unit": stock["base_unit"],
+        "stock_on_hand": stock["on_hand"],
+        "stock_reserved": stock["reserved"],
+        "stock_available": stock["available"],
+        "stock_damaged": stock["damaged"],
+        "stock_quarantined": stock["quarantined"],
         "min_stock_quantity": float(p.min_stock_quantity or 0.0),
         "max_stock_quantity": float(p.max_stock_quantity) if p.max_stock_quantity is not None else None,
         "order_threshold_qty": float(p.order_threshold_qty) if p.order_threshold_qty is not None else None,
@@ -681,7 +702,7 @@ def product_to_dict(
         "min_quantity_order": float(p.min_quantity_order) if p.min_quantity_order is not None else None,
         "lead_time_days": p.lead_time_days,
         "is_low_stock": (
-            float(p.current_stock or 0.0) <= float(p.min_stock_quantity or 0.0)
+            current_stock is not None and current_stock <= float(p.min_stock_quantity or 0.0)
             if p.min_stock_quantity and float(p.min_stock_quantity) > 0 else False
         ),
         # Suppliers & Factory Codes
@@ -724,9 +745,13 @@ def get_inventory_stats(
     total_products = q_prod.count()
     q_cat = apply_org_filter(db.query(ProductCategory).filter(ProductCategory.is_deleted == False), ProductCategory, org_context)
     total_categories = q_cat.count()
-    low_stock_count = q_prod.filter(
+    stock_summary = stock_quantity_summary_subquery(db, org_context)
+    low_stock_count = q_prod.outerjoin(
+        stock_summary, stock_summary.c.product_id == Product.id
+    ).filter(
         Product.min_stock_quantity > 0,
-        Product.current_stock <= Product.min_stock_quantity
+        func.coalesce(stock_summary.c.unit_count, 0) <= 1,
+        func.coalesce(stock_summary.c.on_hand, 0) <= Product.min_stock_quantity,
     ).count()
     q_items = (
         db.query(func.coalesce(func.sum(POItem.quantity_ordered - POItem.quantity_received), 0))
@@ -774,6 +799,8 @@ def lookup_products(
     try:
         meili_hits = search_products(q or "", filters=filters, limit=limit)
         if meili_hits:
+            quantity_map = product_quantity_totals(db, org_context,
+                [p["id"] for p in meili_hits])
             return [{
                 "id": p["id"],
                 "code": p.get("code") or "",
@@ -792,7 +819,15 @@ def lookup_products(
                 "category_name": p.get("category_name"),
                 "default_supplier_id": None if hide_supplier else p.get("default_supplier_id"),
                 "supplier_name": None if hide_supplier else p.get("supplier_name"),
-                "current_stock": float(p.get("current_stock") or 0.0),
+                "current_stock": (float(quantity_map[p["id"]]["on_hand"])
+                    if quantity_map[p["id"]]["on_hand"] is not None else None),
+                "stock_status": quantity_map[p["id"]]["status"],
+                "stock_base_unit": quantity_map[p["id"]]["base_unit"],
+                "stock_on_hand": quantity_map[p["id"]]["on_hand"],
+                "stock_reserved": quantity_map[p["id"]]["reserved"],
+                "stock_available": quantity_map[p["id"]]["available"],
+                "stock_damaged": quantity_map[p["id"]]["damaged"],
+                "stock_quarantined": quantity_map[p["id"]]["quarantined"],
                 "min_stock_quantity": float(p.get("min_stock_quantity") or 0.0),
                 "unit_cost": None if hide_fin else (float(p["unit_cost"]) if p.get("unit_cost") is not None else None),
                 "currency": p.get("currency") or "USD"
@@ -824,6 +859,7 @@ def lookup_products(
     if supplier_id:
         query = query.filter(Product.default_supplier_id == supplier_id)
     prods = query.order_by(Product.name.asc()).limit(limit).all()
+    quantity_map = product_quantity_totals(db, org_context, [p.id for p in prods])
 
     results = []
     for p in prods:
@@ -874,7 +910,15 @@ def lookup_products(
             "category_name": p.category.name if p.category else None,
             "default_supplier_id": None if hide_supplier else p.default_supplier_id,
             "supplier_name": None if hide_supplier else (p.supplier.name if p.supplier else None),
-            "current_stock": float(p.current_stock or 0.0),
+            "current_stock": (float(quantity_map[p.id]["on_hand"])
+                if quantity_map[p.id]["on_hand"] is not None else None),
+            "stock_status": quantity_map[p.id]["status"],
+            "stock_base_unit": quantity_map[p.id]["base_unit"],
+            "stock_on_hand": quantity_map[p.id]["on_hand"],
+            "stock_reserved": quantity_map[p.id]["reserved"],
+            "stock_available": quantity_map[p.id]["available"],
+            "stock_damaged": quantity_map[p.id]["damaged"],
+            "stock_quarantined": quantity_map[p.id]["quarantined"],
             "min_stock_quantity": float(p.min_stock_quantity or 0.0),
             "unit_cost": None if hide_fin else (float(p.unit_cost) if p.unit_cost is not None else None),
             "currency": p.currency or "USD"
@@ -941,15 +985,21 @@ def list_products(
             )
             prod_map = {p.id: p for p in prods}
             sorted_prods = [prod_map[hid] for hid in hit_ids if hid in prod_map]
+            quantity_map = product_quantity_totals(db, org_context,
+                [p.id for p in sorted_prods])
 
             if low_stock_only:
                 sorted_prods = [
                     p for p in sorted_prods
-                    if p.min_stock_quantity and float(p.min_stock_quantity) > 0 and float(p.current_stock or 0.0) <= float(p.min_stock_quantity)
+                    if p.min_stock_quantity and float(p.min_stock_quantity) > 0
+                    and quantity_map[p.id]["on_hand"] is not None
+                    and float(quantity_map[p.id]["on_hand"]) <= float(p.min_stock_quantity)
                 ]
 
             return {
-                "items": [product_to_dict(p, is_accounts=is_acc, can_view_supplier=can_view_supplier, db=db) for p in sorted_prods],
+                "items": [product_to_dict(p, is_accounts=is_acc,
+                    can_view_supplier=can_view_supplier, db=db,
+                    inventory_quantity=quantity_map[p.id]) for p in sorted_prods],
                 "total": total_count,
                 "page": page,
                 "limit": limit,
@@ -981,13 +1031,23 @@ def list_products(
     if status:
         query = query.filter(Product.status == status)
     if low_stock_only:
-        query = query.filter(Product.min_stock_quantity > 0, Product.current_stock <= Product.min_stock_quantity)
+        stock_summary = stock_quantity_summary_subquery(db, org_context)
+        query = query.outerjoin(
+            stock_summary, stock_summary.c.product_id == Product.id
+        ).filter(
+            Product.min_stock_quantity > 0,
+            func.coalesce(stock_summary.c.unit_count, 0) <= 1,
+            func.coalesce(stock_summary.c.on_hand, 0) <= Product.min_stock_quantity,
+        )
 
     total_count = query.count()
     items = query.order_by(Product.name.asc()).offset(offset).limit(limit).all()
+    quantity_map = product_quantity_totals(db, org_context, [p.id for p in items])
 
     return {
-        "items": [product_to_dict(p, is_accounts=is_acc, can_view_supplier=can_view_supplier, db=db) for p in items],
+        "items": [product_to_dict(p, is_accounts=is_acc,
+            can_view_supplier=can_view_supplier, db=db,
+            inventory_quantity=quantity_map[p.id]) for p in items],
         "total": total_count,
         "page": page,
         "limit": limit,
@@ -1038,11 +1098,14 @@ def export_products(
         query = query.filter(Product.status == status)
 
     prods = query.order_by(Product.name.asc()).all()
+    quantity_map = product_quantity_totals(db, org_context, [p.id for p in prods])
 
     output = io.StringIO()
     writer = csv.writer(output)
 
-    headers = ["SKU", "Code", "Name", "Category", "Brand", "Unit", "Current Stock", "Min Stock", "Max Stock", "Status"]
+    headers = ["SKU", "Code", "Name", "Category", "Brand", "Selling Unit",
+        "Stock Status", "Stock Base Unit", "On Hand", "Reserved", "Available",
+        "Damaged", "Quarantined", "Min Stock", "Max Stock", "Status"]
     if can_view_supplier:
         headers.extend(["Default Supplier", "Factory Code"])
     if is_acc:
@@ -1051,9 +1114,13 @@ def export_products(
     writer.writerow(headers)
     for p in prods:
         cat_name = p.category.name if p.category else ""
+        stock = quantity_map[p.id]
         row = [
             p.sku or "", p.code or "", p.name or "", cat_name, p.brand or "",
-            p.unit or "PCS", float(p.current_stock or 0.0), float(p.min_stock_quantity or 0.0),
+            p.unit or "PCS", stock["status"], stock["base_unit"] or "",
+            stock["on_hand"] or "", stock["reserved"] or "",
+            stock["available"] or "", stock["damaged"] or "",
+            stock["quarantined"] or "", float(p.min_stock_quantity or 0.0),
             float(p.max_stock_quantity) if p.max_stock_quantity is not None else "",
             p.status or "active"
         ]
@@ -1144,12 +1211,11 @@ def bulk_delete(
 def adjust_stock(
     product_id: int,
     payload: StockAdjustSchema,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context)
 ):
-    """Adjust product stock quantity with reason logging."""
+    """Retired compatibility route; stock totals are never edited on Product."""
     if not has_permission(current_user, "Adjust_Stock"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to adjust stock.")
 
@@ -1161,27 +1227,9 @@ def adjust_stock(
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    prev_stock = float(prod.current_stock or 0.0)
-    new_stock = max(0.0, prev_stock + payload.quantity_delta)
-    prod.current_stock = new_stock
-    prod.updated_by = current_user.id
-    prod.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(prod)
-    background_tasks.add_task(sync_product_document, prod)
-
-    logger.info(
-        f"Stock adjusted for product {prod.id} ({prod.sku}): {prev_stock} -> {new_stock} "
-        f"(delta: {payload.quantity_delta}, reason: {payload.reason}, user: {current_user.id})"
-    )
-
-    is_acc = is_accounts_user(current_user, org_context)
-    can_view_supplier = check_can_view_supplier(current_user, org_context)
-    return {
-        "success": True,
-        "message": f"Stock adjusted from {prev_stock} to {new_stock}",
-        "product": product_to_dict(prod, is_accounts=is_acc, can_view_supplier=can_view_supplier, db=db)
-    }
+    raise HTTPException(status_code=400, detail=(
+        "Direct product-total adjustment is disabled. Use the reviewed Inventory "
+        "location movement workflow when it becomes available."))
 
 
 @InventoryRouter.post("/products/{product_id}/duplicate")
@@ -1307,7 +1355,9 @@ def duplicate_product(
     background_tasks.add_task(sync_product_document, new_prod)
     is_acc = is_accounts_user(current_user, org_context)
     can_view_supplier = check_can_view_supplier(current_user, org_context)
-    return product_to_dict(new_prod, is_accounts=is_acc, can_view_supplier=can_view_supplier, db=db)
+    stock = product_quantity_totals(db, org_context, [new_prod.id])[new_prod.id]
+    return product_to_dict(new_prod, is_accounts=is_acc,
+        can_view_supplier=can_view_supplier, db=db, inventory_quantity=stock)
 
 
 @InventoryRouter.get("/products/{product_id}")
@@ -1329,7 +1379,10 @@ def get_product_detail(
         raise HTTPException(status_code=404, detail="Product not found")
     is_acc = is_accounts_user(current_user, org_context)
     can_view_supplier = check_can_view_supplier(current_user, org_context)
-    return product_to_dict(prod, is_accounts=is_acc, can_view_supplier=can_view_supplier, db=db, include_links=True)
+    stock = product_quantity_totals(db, org_context, [prod.id])[prod.id]
+    return product_to_dict(prod, is_accounts=is_acc,
+        can_view_supplier=can_view_supplier, db=db, include_links=True,
+        inventory_quantity=stock)
 
 
 @InventoryRouter.post("/products")
@@ -1342,6 +1395,9 @@ def create_product(
 ):
     if not has_permission(current_user, "Add_Product"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to register products.")
+
+    if payload.current_stock not in (None, 0):
+        raise HTTPException(400, 'Create the catalogue product without stock. Opening quantities require a reviewed Inventory opening movement.')
 
     target_org_id = org_context.org_id
     sku_val = payload.sku.strip().upper() if payload.sku and payload.sku.strip() else f"SKU-{datetime.utcnow().strftime('%y%m%d%H%M%S')}"
@@ -1398,7 +1454,7 @@ def create_product(
         default_bin=payload.default_bin,
         packaging_specs=payload.packaging_specs or {},
         unit_cost=payload.unit_cost, currency=payload.currency or "USD",
-        current_stock=payload.current_stock or 0.0,
+        current_stock=0,
         min_stock_quantity=payload.min_stock_quantity or 0.0,
         max_stock_quantity=payload.max_stock_quantity,
         order_threshold_qty=payload.order_threshold_qty,
@@ -1439,7 +1495,9 @@ def create_product(
 
     background_tasks.add_task(sync_product_document, new_prod)
     is_acc = is_accounts_user(current_user, org_context)
-    return product_to_dict(new_prod, is_accounts=is_acc, db=db)
+    stock = product_quantity_totals(db, org_context, [new_prod.id])[new_prod.id]
+    return product_to_dict(new_prod, is_accounts=is_acc, db=db,
+        inventory_quantity=stock)
 
 
 @InventoryRouter.put("/products/{product_id}")
@@ -1468,6 +1526,9 @@ def update_product(
         db.rollback()
         raise HTTPException(409, str(exc)) from exc
 
+    if payload.current_stock is not None:
+        raise HTTPException(400, 'Stock totals cannot be replaced through product metadata. Use the reviewed Inventory movement workflow.')
+
     if payload.sku is not None:
         new_sku = payload.sku.strip().upper()
         if not new_sku:
@@ -1495,7 +1556,7 @@ def update_product(
         "pallet_type", "cartons_per_layer", "layers_per_pallet", "total_cartons_per_pallet", "max_stacking_layers",
         "est_qty_20ft", "est_qty_40hc",
         "warehouse_location", "default_bin", "packaging_specs",
-        "current_stock", "min_stock_quantity", "max_stock_quantity",
+        "min_stock_quantity", "max_stock_quantity",
         "order_threshold_qty", "threshold_qty", "min_quantity_order", "lead_time_days",
         "default_supplier_id",
         "images", "videos", "attachment",
@@ -1526,7 +1587,9 @@ def update_product(
     db.refresh(prod)
     background_tasks.add_task(sync_product_document, prod)
     is_acc = is_accounts_user(current_user, org_context)
-    return product_to_dict(prod, is_accounts=is_acc, db=db)
+    stock = product_quantity_totals(db, org_context, [prod.id])[prod.id]
+    return product_to_dict(prod, is_accounts=is_acc, db=db,
+        inventory_quantity=stock)
 
 
 @InventoryRouter.post("/products/{product_id}/media")

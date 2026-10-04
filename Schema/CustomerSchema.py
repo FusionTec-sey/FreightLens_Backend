@@ -1,5 +1,6 @@
 """Customer identity only; no inferred consent, credit, tax or duplicate merge."""
 from typing import Literal
+from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -71,3 +72,24 @@ class CustomerSearchRequest(BaseModel):
     search: str = Field(min_length=1, max_length=160)
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=25, ge=1, le=100)
+
+
+class CustomerProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    operation_key: UUID
+    expected_version: int = Field(ge=1, strict=True)
+    profile: CustomerIdentityInput
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class CustomerProfileSaved(BaseModel):
+    customer_key: UUID
+    version: int
+    replayed: bool
+    search_indexed: bool = False
+
+
+class CustomerProfileHistory(CustomerIdentityRead):
+    reason: str
+    created_by: int
+    created_at: datetime

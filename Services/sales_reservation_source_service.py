@@ -15,7 +15,8 @@ def owned(db, model, context):
     return apply_org_filter(db.query(model).filter_by(org_id=context.org_id, is_deleted=False), model, context)
 
 
-def validate_reservation_source(db, context, source, balance_id, quantity, input_unit):
+def load_reservation_demand(db, context, source):
+    """One locked, version-checked saved-demand boundary for planners and writers."""
     if not isinstance(source, SalesDemandReference): raise ValueError('Typed saved sales demand required')
     if not db.in_transaction(): raise ValueError('Caller transaction required')
     parent = owned(db, SalesIntent, context).filter_by(document_key=source.document_key).with_for_update().one_or_none()
@@ -25,6 +26,11 @@ def validate_reservation_source(db, context, source, balance_id, quantity, input
     line = owned(db, SalesIntentLineRevision, context).filter_by(document_key=source.document_key,
         version=source.version, line_key=source.line_key).one_or_none()
     if line is None: raise LookupError('Sales demand line not found')
+    return revision, line
+
+
+def validate_reservation_source(db, context, source, balance_id, quantity, input_unit):
+    revision, line = load_reservation_demand(db, context, source)
     balance = owned(db, StockBalance, context).filter_by(id=balance_id).one_or_none()
     if balance is None or balance.product_id != line.product_id or balance.base_unit != line.base_unit:
         raise PostingConflict('Stock does not match saved demand')

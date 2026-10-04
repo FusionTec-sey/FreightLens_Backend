@@ -1,0 +1,30 @@
+FreightLens receipt cost public review checkpoint — 2026-10-04
+
+Scope
+- Added permission-separated public request/list/independent-review endpoints for exact receipt unit-price and SCR exchange-rate evidence.
+- Added reviewed, version-pinned document downloads that revalidate the complete current binding before and after storage I/O.
+- Added the Goods Receiving manifest UI for SCR or documented foreign-currency declarations, existing purchase-document selection, stable retries, separate reviewer views and version-bound decisions.
+- Kept classification review, cost-evidence review and later physical/financial posting as distinct operations. Approval has no stock, valuation, selling-price or accounting effect.
+
+Safety boundaries
+- Financial and supplier field access is required in addition to the dedicated request/review permission.
+- Generic manifest and case reads do not expose storage paths, object keys, hashes or version identities.
+- Foreign currency requires a separate FX evidence document; SCR requires a rate of exactly 1.
+- Self-review, stale source/document content, company mismatch and unknown storage-size configuration fail closed.
+- Object storage is read outside the business transaction; current source and fingerprint binding are checked again under a fresh database transaction.
+- Retry operation identities remain stable. Review decisions use the listed case version rather than a client default.
+
+Verification
+- Backend: 49 passed
+  pytest -q tests/test_receipt_manifest_api.py tests/test_inventory_receipt_cost_reviews.py tests/test_cost_evidence_api.py
+- Frontend: 9 passed across 3 focused suites
+  receiptManifestsApi.test.js
+  ReceiptCostReviewControls.test.js
+  ReceiptManifestPanel.test.js
+- Production build: passed with the repository's existing unrelated lint and bundle-size warnings.
+
+Remaining gates
+- Public physical receipt and valuation posting is still disabled.
+- RustFS/object-store version retention, evidence-size configuration and real identity acceptance remain external release gates.
+- T06 immutable reconciliation/close and T08 controlled opening/import composition remain open.
+- Browser and real accounting configuration acceptance remain separate.

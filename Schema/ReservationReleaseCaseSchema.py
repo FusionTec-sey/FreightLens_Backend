@@ -36,6 +36,20 @@ class ReleaseCaseRead(ReservationCaseRead):
     release_quantity: str
 
 
+class ReleaseExecutionRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    operation_key: UUID
+
+
+class ReleaseExecutionRead(BaseModel):
+    operation_key: UUID
+    case_key: UUID
+    reservation_key: UUID
+    reservation_remaining: str
+    status: Literal['CONSUMED']
+    replayed: bool
+
+
 class ReservationSourceRead(BaseModel):
     reservation_key: UUID
     document_key: UUID

@@ -38,3 +38,11 @@ def test_access_endpoint_and_export_permission_are_explicit():
     report_source = open("Routes/Reports/ReportRouter.py", encoding="utf-8").read()
     assert '@router.get("/auth/me/access")' in auth_source
     assert report_source.count('require_any("Export_Report")') >= 2
+
+
+def test_access_response_uses_authenticated_actor_identity():
+    from auth.routes import get_my_access
+    response = get_my_access(_policy(user=SimpleNamespace(id=72)))
+    assert response['user_id'] == 72
+    assert response['permissions'] == ['View_Order']
+    assert 'username' not in response and 'password' not in response

@@ -1,5 +1,6 @@
 """Sales demand, not an invoice, payment, reservation or collection entitlement."""
 from decimal import Decimal
+from datetime import datetime
 from uuid import UUID
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -31,7 +32,7 @@ class SalesIntentLineInput(BaseModel):
 class SalesIntentInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     customer_key: UUID
-    expected_customer_version: int = Field(ge=1, le=1, strict=True)
+    expected_customer_version: int = Field(ge=1, strict=True)
     branch_id: int = Field(gt=0, strict=True)
     lines: list[SalesIntentLineInput] = Field(min_length=1, max_length=100)
 
@@ -54,18 +55,27 @@ class SalesIntentSaved(BaseModel):
     version: int
     status: Literal['DRAFT']
     replayed: bool
+    search_indexed: bool = False
 
 
-class SalesIntentLineRead(SalesIntentLineInput):
+class SalesIntentHistoricalLine(SalesIntentLineInput):
+    image_signed_url: str | None = None
     base_quantity: str
     base_unit: str
     product_name: str | None
     sku: str | None
     units: list[str]
+
+
+class SalesIntentLineRead(SalesIntentHistoricalLine):
     reserved_quantity: str
 
 
 class SalesIntentRead(SalesIntentInput):
+    customer_name: str | None = None
+    branch_name: str | None = None
+    created_at: datetime
+    created_by: int
     document_key: UUID
     version: int
     status: Literal['DRAFT']
@@ -73,8 +83,29 @@ class SalesIntentRead(SalesIntentInput):
 
 
 class SalesIntentSummary(BaseModel):
+    customer_name: str | None = None
     document_key: UUID
     version: int
     status: Literal['DRAFT']
     customer_key: UUID
     branch_id: int
+    branch_name: str | None = None
+
+
+class SalesIntentHistoryItem(BaseModel):
+    document_key: UUID
+    version: int
+    status: Literal['DRAFT']
+    customer_key: UUID
+    customer_version: int
+    customer_name: str | None = None
+    branch_id: int
+    created_at: datetime
+    created_by: int
+
+
+class SalesIntentHistoryDetail(SalesIntentHistoryItem):
+    branch_name: str | None = None
+    lines: list[SalesIntentHistoricalLine]
+    read_only: Literal[True] = True
+    catalogue_labels_current: Literal[True] = True

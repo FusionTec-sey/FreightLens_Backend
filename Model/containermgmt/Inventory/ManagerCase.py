@@ -1,5 +1,5 @@
 """One reusable immutable request/decision/use history for manager cases."""
-from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKeyConstraint, CheckConstraint, DDL, event
+from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKeyConstraint, CheckConstraint, DDL, event, Index, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from Model.db import Base
 from Model.mixins import OrgMixin, AuditMixin
@@ -12,6 +12,8 @@ class ManagerCase(OrgMixin, AuditMixin, Base):
         UniqueConstraint("id", "org_id", name="uq_manager_case_id_org"),
         CheckConstraint("source_version > 0 AND jsonb_typeof(binding) = 'object'", name="ck_manager_case_binding"),
         CheckConstraint("created_by IS NOT NULL AND NOT is_deleted AND deleted_at IS NULL", name="ck_manager_case_audit"),
+        Index("ix_manager_cases_scope_source", "org_id", "action", "source_type", "source_key", "id",
+              postgresql_where=text("NOT is_deleted")),
         {"schema": "containermgmt"},
     )
     id = Column(Integer, primary_key=True)

@@ -22,7 +22,8 @@ def test_browse_scoped_branches_and_reviewed_units(choices):
     assert branches['total'] == 1 and branches['items'][0]['id'] == f.own
     products = f.client.get('/sales/draft-sources/products?limit=1').json()
     assert products['total'] == 1 and products['items'][0]['units'] == ['PCS', 'BOX']
-    assert set(products['items'][0]) == {'id', 'sku', 'name', 'policy_version', 'base_unit', 'units', 'quantity_step'}
+    assert set(products['items'][0]) == {'id', 'sku', 'name', 'policy_version', 'base_unit', 'units', 'quantity_step', 'image_signed_url'}
+    assert products['items'][0]['image_signed_url'] is None
     assert f.client.get('/sales/draft-sources/products?page=2&limit=1').json()['items'] == []
     assert f.client.get('/sales/draft-sources/products?limit=101').status_code == 422
 
@@ -41,7 +42,7 @@ def test_sources_require_permissions_module_and_auth(choices, path):
 
 
 def test_search_is_rehydrated_and_foreign_or_failed_search_is_not_empty_success(choices, monkeypatch):
-    f = choices; name = 'Routes.Orders.SalesSourceRouter.search_products_with_total'
+    f = choices; name = 'Services.product_choice_service.search_products_with_total'
     search = Mock(return_value=([dict(id=f.product.id, org_id=f.org_a, name='untrusted')], 1))
     monkeypatch.setattr(name, search)
     result = f.client.get('/sales/draft-sources/products?search=tile')

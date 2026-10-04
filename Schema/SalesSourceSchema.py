@@ -8,6 +8,7 @@ class SalesBranchChoice(BaseModel):
 
 
 class SalesProductChoice(BaseModel):
+    image_signed_url: str | None = None
     id: int
     sku: str
     name: str

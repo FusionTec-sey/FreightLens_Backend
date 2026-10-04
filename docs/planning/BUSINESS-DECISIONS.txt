@@ -1,5 +1,5 @@
 FREIGHTLENS BUSINESS DECISIONS
-Revision: BD-20261003-05
+Revision: BD-20261005-01
 Canonical companion: TASK-QUEUE.txt. Recorded 2026-10-03 from owner instructions.
 These decisions preserve actionable requirements, not the full private chat.
 Do not publish customer records, legal PDFs, credentials or personal chat exports.
@@ -62,6 +62,158 @@ and shared-contract integration. T10 remains unassigned; do not rebuild T10A.
 T33A creates count/audit records only, not inventory adjustments. Price labels,
 movement-aware reconciliation and stock posting remain deferred to T33/T09/T11.
 Do not freeze inventory or pretend a raw discrepancy is a posting-ready adjustment.
+
+BD-20261003-06 | Store-wide selling; counter is a preference | T03,T07,T14
+Supersedes BD-20261003-03's hard counter-area boundary. Staff may sell any eligible
+product in their authorised InventoryBranch, regardless of counter/specialism.
+The usual counter remains a workstation, separate from staff/store permissions.
+default_stock_location_id is retained as an optional preferred picking area, not
+an entitlement. Unset means no preference, not blocked sales. Prefer eligible stock
+in that area, then other compatible locations in the same branch before shortage.
+Store-wide never means every warehouse on the island. Another store or separately
+configured warehouse requires explicit choice and applicable reviewed approval;
+no company-boundary exception. Preserve batch/shade/calibre, exact source-demand
+caps, reservations and retries. Same-store compatible location splits are allowed.
+Initial automatic allocation must not silently replace/top up historical holds;
+their reviewed lifecycle remains protected. T33A remains collaborator-owned.
+
+BD-20261004-01 | Design-first sales queue revision | T07,T10,T13-T17,T25,T29
+Recorded 2026-10-04. Owner requested revising the queue after reviewing three
+proposed inFlow-inspired raster screens. This approves planning the redesign,
+not final visual approval or financial activation. T14A records confirmation;
+T14B-D bring register, desktop and tablet draft presentation forward, reusing
+existing services/components/recovery. T14 still owns full checkout integration;
+T14E records integrated acceptance. Existing task IDs and T33A ownership remain.
+Do not copy inFlow code or its business behavior. Tab navigation must be read-only,
+with explicit separate commands for reservations, payment and physical collection.
+Retain FreightLens branding, exact unit policies, tax-inclusive SCR configuration,
+independent store prices, protected holds and BD-20261003-06 store-wide selling.
+Mockup data/logos/statuses are illustrative. Unsupported actions stay unavailable
+with accurate reasons, never fake success. No duplicate sales/catalogue/cart store.
+Tests remain deferred under the owner's existing instruction; eventual verification,
+browser approval and release gates are unchanged. This revises presentation order,
+not any commercial rule. Design-dependent implementation awaits confirmation.
+
+BD-20261004-02 | Phase roadmap and count-screen alignment | All phases,T33A
+Owner authorised aligning the overall phase plan, not just the sales queue.
+PHASE-ROADMAP.txt maps historical Cxx packages to the canonical task IDs and
+separates early screen work, backend integration and acceptance. Existing work
+is retained; later capability development need not wait for a live pilot.
+T33A shares approved register/detail/tablet conventions without changing blind
+count protections or adding stock posting. Adapt existing collaborator screens,
+do not rebuild them. Visual approval remains pending; independent count services
+can proceed. No test resumption, deployment or collaborator completion is implied.
+
+BD-20261004-03 | Sales visual direction approved | T14A-E,T33A
+Owner explicitly approved the design on 2026-10-04: the three concepts shown
+for the sales register, desktop split-view workspace and tablet product/cart.
+This resolves BD-20261004-01/02's pending visual approval. Retain FreightLens
+branding and authoritative units/data; generated logos, example figures and
+sample records are not configuration. Adapt shared conventions to T33A, not
+its count workflow to a shopping cart. Implementation may proceed using existing
+contracts; final screen acceptance, test resumption and operational activation
+are separate and not authorised by this visual approval.
+
+BD-20261004-04 | Full verification resumed | All implemented tasks
+Owner requested a full test of the build so far and approved read-only local Sales
+and Stock Counts checks including tablet layout. This supersedes the earlier
+test pause for this checkpoint. Use isolated synthetic databases; do not deploy,
+enable real posting or write preview business records. Record expected failures
+and acceptance gates, not blanket phase completion.
+
+BD-20261004-05 | Populate sample workflows | T13A,T14,T33A
+Owner requested populating workflows after the empty-state build verification.
+Use the existing clearly labelled local demo company for synthetic Sales drafts,
+customers, count plans/rounds/discrepancies. This permits sample record creation,
+not real inventory, money posting, external delivery or production activation.
+
+BD-20261004-06 | Module navigation arrangement | Shared frontend,T14,T33A
+Owner approved the reviewed menu arrangement: Sales and Inventory separated
+from Procurement; Customers under Sales; count workflows under Inventory;
+reservation reviews grouped; policy approvals explicitly named; Reports separate;
+Template Studio under Administration; packing lists under Logistics with existing
+Orders access retained. Preserve all routes and permissions. Organisation settings
+and tenant administration remain distinct destinations with explicit labels.
+
+BD-20261004-07 | Reconciled checkpoint and new collaborator package | T14,T21
+Owner requested updating the plan, pushing latest work and providing development
+work for another programmer. Integrator selected the dependency-ready T21 isolated
+development packaging slice, bounded in PROGRAMMER-T21-HANDOFF.txt. This supersedes
+the old T33A assignment for the new package; integrated count work is retained.
+No deployment, real-node enrollment, financial activation or automatic merge.
+
+BD-20261004-08 | T33A lessons applied to collaborator assignment | T21
+Owner requested revising the assignment to prevent recurrence of T33A cleanup.
+PROGRAMMER-T21-HANDOFF.txt revision 2 requires a real-contract inventory, complete
+revision pairing, scoped permissions/resources, partial-success/retry recovery,
+negative isolation tests, minimal diffs and a reproducible PR manifest. T21 scope
+is unchanged; no new business APIs, enrollment or sync authorised. This tightens
+BD-20261004-07 delivery gates rather than reopening completed T33A implementation.
+
+BD-20261004-09 | InFlow-informed Sales presentation and lifecycle scope | T11-T18,T25,T29
+Owner approved revising the queue after a read-only comparison with InFlow. Adopt
+its useful information density, split-workspace hierarchy and persistent action
+placement without copying its combined order/payment/fulfilment behaviour. Current
+draft screens lead with customer/store and Draft vN; exact UUID remains the secondary
+reference. Show saved customer/store/audit context, exact unit and reservation facts,
+and separate Demand, Reservation, Payment and Collection states. Pricing remains
+pending until T11 supplies an authoritative versioned result. Mark paid, Fulfill,
+invented invoice numbers, one-location assumptions, unversioned financial edits,
+ordinary-user cost exposure and unrestricted returns remain prohibited.
+T29 acceptance now includes versioned salesperson assignment, customer PO reference,
+confirmed/ordered date, requested ship-by or ETA, remarks and order address snapshots
+coordinated with T10. This is typed order metadata, not last-mile delivery execution.
+T15 copy, T17 print artifacts, T25 digital delivery and T18 returns retain their
+existing safety boundaries. Generic sales attachments, purchase/dropship conversion,
+unconfirm and split-order transitions remain unowned until separately approved.
+Task dependencies, current statuses and release gates are unchanged.
+
+BD-20261004-10 | Cloud-first single runtime; offline work deferred | T12,T21-T26,T32,T34
+Owner confirmed on 2026-10-04 that FreightLens should now be developed as one
+cloud-hosted system and that store-local/offline operation for internet outages is
+not required in the current delivery. Existing authority, outbox, recovery and
+packaging work is retained; do not remove or weaken it. Stop expanding multi-node
+store packaging, synchronization, cached offline eligibility or software paper-
+recovery workflows until the owner explicitly reactivates that scope. Internet
+outages use an operational contingency outside the current software build; do not
+claim offline sales, silent local fallback or automatic later synchronization.
+
+This supersedes the current priority and pre-pilot requirement portions of T21-T24,
+not the long-term capability definitions. Current development targets one cloud
+database/API/frontend/search/object-storage authority. Cloud queued delivery may
+reuse the T13 outbox without depending on store synchronization. Import/backup
+rehearsals and supervised cloud readiness no longer wait for T24, but their own
+accounting, data, provider, hardware and owner-approval gates remain.
+
+The other programmer's T21 packaging assignment is deferred. Its replacement is
+the bounded T12A payment and receiving-account configuration package documented in
+PROGRAMMER-T12A-HANDOFF.txt. It configures synthetic methods/account mappings and
+fail-closed lookup only; it does not post money, create customer balances, enable
+credit, process cheques/deposits/refunds or use real banking details.
+
+BD-20261005-01 | Accelerated three-lane cloud sales pilot | T08-T20
+Owner approved a pilot-first parallel delivery plan on 2026-10-05. Establish one
+paired, verified backend/frontend baseline before creating feature worktrees. Then
+run three active lanes: integrator/core, full-stack programmer and checkout UI.
+The integrator exclusively owns shared stock/posting/authority contracts, common
+registries, permission catalogues, migration ordering and final merges. The
+programmer starts with T12A, then remaining T10 acceptance and T17. The checkout
+lane finishes T14B-D/T15 and later connects T14/T16/T18 to frozen backend contracts.
+
+Use one task branch per bounded package and paired backend/frontend PRs when both
+repositories change. No feature branch starts from an uncommitted checkout. Reserve
+migration filenames before implementation; other lanes supply registration manifests
+instead of editing protected registration files. Run focused checks per PR and full
+backend/frontend/fresh-install gates at the paired baseline, atomic-posting checkpoint
+and pilot acceptance. This supersedes serial execution as the current scheduling
+policy but does not relax business rules, dependency gates or release authority.
+
+The first supervised cloud pilot prioritises customer selection, configured store
+pricing/tax, protected reservations, configured cash and externally confirmed card
+methods, atomic sale posting, invoices, line-level collection, returns/credit notes
+and till close. Cheques, deposits, contract credit, promotions, full reporting,
+provider delivery and T21-T24 offline work remain later. No deployment, real account
+mapping, live financial posting or customer messaging is authorised by this decision.
 
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record

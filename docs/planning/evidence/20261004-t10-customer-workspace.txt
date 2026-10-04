@@ -1,0 +1,30 @@
+FreightLens T10 customer workspace focused verification - 2026-10-04
+
+Verified
+- Append-only customer profile/contact revisions with exact expected versions,
+  immutable original profile, exact historical reads and newest-first pagination.
+- Same-key retries return one receipt; changed/stale intent fails. Concurrent edits
+  at one version serialize and only one next revision commits.
+- Personal-data, customer-management, company and foreign-root scope fail closed.
+- Migration replay preserves history. Generic operation/event receipts exclude
+  contact values and edit reasons.
+- Duplicate review binds two exact profile identities/versions and a typed SAME or
+  DISTINCT assessment. Pair ordering is stable, later profile edits invalidate the
+  review, and the requestor cannot review their own case.
+- Separate request/reviewer permissions are enforced by the public API. Approval
+  confirms assessment only: no case consumption, identity retirement, contact copy,
+  sales reference rewrite or customer/balance merge exists.
+- Frontend exact history, exact-profile readiness, failed refresh clearing and
+  uncertain duplicate-request retry with the same operation intent are covered.
+
+Evidence
+- 53 affected backend tests pass in isolated PostgreSQL.
+- 23 focused frontend tests pass.
+- Production frontend build succeeds with existing unrelated lint/Browserslist
+  warnings; no warning comes from the verified customer workflow.
+
+Remaining gates
+- Browser acceptance and provider/search recovery acceptance remain.
+- Ordered/durable external search projection belongs to T22. Broader sales, returns,
+  cheque and credit history will attach through their owning source records later.
+- No real customer, financial record, deployment or automatic merge was performed.

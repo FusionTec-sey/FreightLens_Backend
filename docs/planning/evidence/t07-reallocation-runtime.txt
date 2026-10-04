@@ -1,0 +1,26 @@
+T07 reallocation runtime and frontend — 2026-10-04
+Status: Implemented—verification pending
+Entire slice untested by owner instruction. No build/browser checks run.
+
+Separate Execute_ReservationReallocation permission, no role grants.
+GET /inventory/reservation-reallocation-cases/{key}/execution-context checks scoped
+case, actual stock branch runtime and configured target settings.
+POST .../{key}/execute accepts operation UUID and checked branch settings version.
+The exact approval supplies both drafts, quantity, original stock and follow-up.
+Existing reallocate_reservation atomically consumes approval, releases source,
+reserves destination and records paired history/receipts. Settings version is now
+part of parent fingerprint. No public arbitrary authority or physical stock move.
+The shared reviewed_stock_scope service is used by both runtime adapters.
+
+Frontend: Sales drafts -> Reallocation reviews -> approved snapshot -> explicit
+confirmation. Shared PolicyActivation loads runtime context and retains operation
+identity on unknown outcome. Result shows remaining source and new target hold;
+does not imply combined destination total, handover or financial posting.
+Cases lacking the destination-history snapshot do not expose execution controls.
+
+Pending: API auth/module/tenant checks, execute-only access, replay/concurrency and
+transaction rollback, settings/authority changes, stale source/target/approval,
+UI context and errors, retained receipt and build. Existing internal-engine test
+history is not verification of these new public paths. Preserve tests and update
+old UI assumptions when owner resumes verification. No real data, runtime changes,
+push, merge, deployment, customer messaging or pilot activation.

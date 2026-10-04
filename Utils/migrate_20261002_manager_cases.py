@@ -7,6 +7,7 @@ from Model.containermgmt.Inventory.ManagerCase import (
 
 def ensure_manager_cases_schema():
     with engine.begin() as conn:
+        conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         for model in (ManagerCase, ManagerCaseDecision, ManagerCaseUse):
             model.__table__.create(conn, checkfirst=True)
         conn.execute(text(IMMUTABLE)); conn.execute(text(REVIEW_CHECK))
@@ -19,3 +20,6 @@ def ensure_manager_cases_schema():
             if not conn.execute(text("""SELECT 1 FROM pg_trigger WHERE tgrelid=to_regclass(:table)
                 AND tgname=:name AND NOT tgisinternal"""), {"table": "containermgmt." + table, "name": name}).scalar():
                 conn.execute(text(sql))
+        conn.execute(text("""CREATE INDEX IF NOT EXISTS ix_manager_cases_scope_source
+            ON containermgmt.manager_cases (org_id, action, source_type, source_key, id)
+            WHERE NOT is_deleted"""))

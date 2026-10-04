@@ -45,6 +45,7 @@ def format_receipt(gr: GoodsReceipt) -> dict:
             {
                 "id": it.id,
                 "po_item_id": it.po_item_id,
+                "product_id": it.po_item.product_id if it.po_item else None,
                 "packing_item_id": it.packing_item_id,
                 "description": it.description,
                 "expected_quantity": float(it.expected_quantity or 0),
@@ -83,7 +84,7 @@ async def list_receipts(
             joinedload(GoodsReceipt.purchase_order),
             joinedload(GoodsReceipt.container),
             joinedload(GoodsReceipt.receiver),
-            joinedload(GoodsReceipt.items)
+            joinedload(GoodsReceipt.items).joinedload(ReceiptItem.po_item)
         )
         .filter(GoodsReceipt.is_deleted == False)
     )
@@ -141,7 +142,7 @@ async def get_receipt(
             joinedload(GoodsReceipt.purchase_order),
             joinedload(GoodsReceipt.container),
             joinedload(GoodsReceipt.receiver),
-            joinedload(GoodsReceipt.items)
+            joinedload(GoodsReceipt.items).joinedload(ReceiptItem.po_item)
         )
         .filter(GoodsReceipt.id == receipt_id, GoodsReceipt.is_deleted == False)
     )

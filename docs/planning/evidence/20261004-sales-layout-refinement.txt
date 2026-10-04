@@ -1,0 +1,20 @@
+Sales layout refinement - 2026-10-04
+
+Implemented: separate register amount/payment/collection columns, desktop
+saved-draft sidebar beside editor, product-card catalogue, persistent tablet
+cart at 768px+, compact quantity controls and read-only order summary.
+Reuses existing draft services, exact quantity validation and recovery logic.
+Switching drafts is disabled while editing to avoid discarding unsaved work.
+
+No authoritative pricing is available: totals explicitly say Not calculated.
+No payment or collection state is inferred from a draft. No financial posting,
+deployment or business record changes were performed for this layout slice.
+
+Verification: 30 focused Sales tests passed (8 suites). Production build passed
+with existing warnings. Read-only local preview checked desktop 1280px and
+tablet 1024px; tablet screenshot saved in runtime/sales-tablet-refined-20261004.png.
+Browser review caught narrow reserved-text wrapping; corrected to span cart row.
+
+This is a layout refinement, not full T14 checkout completion or final design
+acceptance. Pricing, payments, collection and original mockup fidelity remain
+separate work/acceptance gates. Phone and dark-mode review remain pending.

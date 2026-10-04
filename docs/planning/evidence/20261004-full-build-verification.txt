@@ -1,0 +1,69 @@
+FULL BUILD VERIFICATION — 2026-10-04
+
+Owner resumed full testing and approved read-only local Sales/Stock Counts checks.
+Baseline: backend 7b7a71ea286e5c6d30a4feec903e5c8c29e54b54 and frontend
+2040542f7ca755b686fc6b61bdc8006b7187e963, plus local fixes below.
+
+FINAL RESULTS
+Backend: 1325 passed, 2 xfailed, 23 warnings; 173.09s. No skips/errors.
+  python -m pytest -q --tb=short --junitxml=<runtime report>
+  REQUIRE_TEST_DATABASE=1; new isolated freightlens_full_20261004_test database.
+Frontend: 52 suites / 273 tests passed; 20.133s.
+  CI=true node node_modules/react-scripts/bin/react-scripts.js test
+    --watchAll=false --runInBand --json --outputFile=<runtime report>
+Production build: exit 0, existing ESLint/Browserslist warnings remain.
+  CI=false node node_modules/react-scripts/bin/react-scripts.js build
+  Strict CI warning enforcement is NOT claimed to pass.
+Fresh installation: freightlens_fresh_final_20261004_test verified initially empty.
+  Two FastAPI TestClient lifespan cycles passed migrations, database health,
+  bootstrap login, platform-admin access and protected /getUsers access.
+  This is startup/migration replay, NOT process/crash recovery. Scheduler disabled;
+  search/storage deliberately pointed at unavailable loopback endpoints. Expected
+  degraded-provider logs remain; their live integrations are NOT verified here.
+Both repositories: git diff --check passed (line-ending notices only).
+
+REPAIRS
+- CRA did not recognise BigInt globally: declared it for ESLint, preserving exact
+  arithmetic. No numeric coercion or production permission weakening.
+- Updated auth/router/axios test mocks and review navigation assertions to current
+  dedicated routes. Retained permission denial/disabled-execution assertions.
+- Customer-history test explicitly starts its required caller-owned transaction.
+- Product-source test now includes optional signed thumbnail, null in its fixture.
+- Isolated test names may end _test instead of requiring shared CI's exact name.
+  Demo seed permits these names only with ENVIRONMENT=test; three new rejection
+  tests protect non-test/arbitrary database destinations.
+- First backend run used an incorrect test password: 439 passed, 882 setup errors,
+  1 failed, 2 xfailed. Corrected runner credential, not application authentication.
+  Next run: 1318 passed, 4 failed, 2 xfailed; fixed stale assumptions above and reran.
+- Initial frontend: 48/52 suites passed, 247 tests passed/4 failed, two collection
+  failures. Once mocks loaded, six old Sales assertions required route/text updates.
+
+BROWSER (read-only existing local admin session)
+Sales register and unsaved New draft workspace opened; Cancel returned without
+saving. Product search/barcode, customer/store selectors, save/cancel and pagination
+visible. No sales records in selected company. Count plans, Count rounds, My count
+rounds and Discrepancies loaded empty states through the menu. No business writes.
+Viewed landscape 1024x768 and portrait 768x1024. Portrait body measured 768x1024
+without outer overflow. Default viewport and All Companies selection restored;
+left on /sales/drafts. Captured browser error log returned no entries.
+Tablet refinement: Count Refresh measured ~37px high, below a 44px touch target.
+Populated tables, blind entry, approvals, dark theme and hardware remain unverified.
+
+OUTSTANDING GATES
+Two strict expected failures remain in test_pos_prerequisite_regressions.py:
+excessive negative adjustment clamps to zero; metadata permits stock replacement.
+These belong to T08; expected failure does not mean safe/fixed behavior.
+T33A populated multi-user/concurrent counts and full browser workflows, sales
+posting/collection/returns acceptance, providers, hardware, offline/paper recovery,
+accounting and supervised pilot remain separate gates. No whole-phase completion.
+No deployment, financial activation, customer messaging or GitHub push this turn.
+Local verification changes are not committed/pushed. Preview was not stopped.
+
+LOCAL ARTIFACTS (outside Git)
+../runtime/full-backend-final-20261004.log
+../runtime/full-frontend-final-20261004.log and .json
+../runtime/full-frontend-build-retest-20261004.log
+../runtime/full-fresh-install-final-20261004.log
+../runtime/verify_fresh_20261004.py
+Runner XML: /tmp/freightlens-full-final-20261004.xml
+Isolated databases retained; no existing database deleted or replaced.
