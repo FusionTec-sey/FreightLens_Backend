@@ -15,7 +15,7 @@ def owned(db, model, context):
     return apply_org_filter(db.query(model).filter_by(org_id=context.org_id, is_deleted=False), model, context)
 
 
-def validate_reservation_source(db, context, source, balance_id, quantity, input_unit):
+def validate_reservation_source(db, context, source, balance_id, quantity, input_unit, *, allow_other_store=False):
     if not isinstance(source, SalesDemandReference): raise ValueError('Typed saved sales demand required')
     if not db.in_transaction(): raise ValueError('Caller transaction required')
     parent = owned(db, SalesIntent, context).filter_by(document_key=source.document_key).with_for_update().one_or_none()
@@ -28,7 +28,7 @@ def validate_reservation_source(db, context, source, balance_id, quantity, input
     balance = owned(db, StockBalance, context).filter_by(id=balance_id).one_or_none()
     if balance is None or balance.product_id != line.product_id or balance.base_unit != line.base_unit:
         raise PostingConflict('Stock does not match saved demand')
-    if balance.branch_id != revision.branch_id:
+    if balance.branch_id != revision.branch_id and not allow_other_store:
         raise PostingConflict('Another store requires an explicit fulfilment approval')
     base_quantity = convert_quantity(InventoryPolicyConfig.model_validate(line.policy), quantity, input_unit or balance.base_unit)
     if base_quantity > line.base_quantity: raise PostingConflict('Hold exceeds saved line quantity')

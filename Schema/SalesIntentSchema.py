@@ -1,4 +1,5 @@
 """Sales demand, not an invoice, payment, reservation or collection entitlement."""
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 from typing import Literal
@@ -78,3 +79,9 @@ class SalesIntentSummary(BaseModel):
     status: Literal['DRAFT']
     customer_key: UUID
     branch_id: int
+    # Display labels for the register. The customer name is personal data and is
+    # served only under the existing customer and personal-data entitlement.
+    customer_name: str | None = None
+    branch_name: str | None = None
+    created_at: datetime | None = None
+    line_count: int = 0

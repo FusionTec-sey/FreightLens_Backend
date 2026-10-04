@@ -35,7 +35,7 @@ from Services.policy_compatibility_service import extends_policy
 from Utils.org_filter import apply_org_filter
 from Schema.SalesReservationSchema import SalesDemandReference
 from Model.containermgmt.Inventory.SalesReservationSource import SalesReservationSource
-from Services.sales_reservation_source_service import validate_reservation_source
+from Services.sales_reservation_source_service import validate_reservation_source, active_demand_holds
 from Services.reservation_release_service import load_release_binding
 from Services.manager_case_service import CaseBinding, consume_case
 from Model.containermgmt.Inventory.ReservationReallocation import ReservationReallocation
@@ -279,7 +279,8 @@ Policy transitions need a separate reviewed workflow, never another opening.
 
 def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, reservation_key,
                   source_line_key, quantity: Decimal, review_at: datetime, reason, input_unit=None,
-                  business_date: date | None = None, authorize=None, authority=None, sales_source=None, reallocation_parent=None):
+                  business_date: date | None = None, authorize=None, authority=None, sales_source=None, reallocation_parent=None,
+                  other_area_case=None, other_area_binding=None, load_other_area_binding=None):
     _uuid(reservation_key); _uuid(source_line_key); _positive(quantity); _reason(reason)
     if not isinstance(review_at, datetime) or review_at.utcoffset() is None:
         raise ValueError("Reservation review time must include a timezone")
@@ -296,12 +297,25 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
     if reallocation_parent is not None:
         _uuid(reallocation_parent)
         request['reallocation_parent'] = str(reallocation_parent)
+    if other_area_case is not None:
+        _uuid(other_area_case)
+        if (not isinstance(other_area_binding, CaseBinding)
+                or other_area_binding.action != 'inventory.reservation.other-area'
+                or not callable(load_other_area_binding) or reallocation_parent is not None):
+            raise ValueError('Exact other-area reservation approval required')
+        request['other_area_case'] = str(other_area_case)
+        request['other_area_binding'] = other_area_binding.snapshot()
+    line = None
     def source_guard(db):
+        nonlocal line
         if not callable(authorize): raise ValueError('Reservation action permission guard required')
         authorize(db)
-        line = None
         if sales_source is not None:
-            line = validate_reservation_source(db, context, sales_source, balance_id, quantity, input_unit)
+            line = validate_reservation_source(db, context, sales_source, balance_id, quantity, input_unit,
+                allow_other_store=other_area_case is not None)
+        if other_area_case is not None:
+            if line is None or load_other_area_binding(db).snapshot() != other_area_binding.snapshot():
+                raise PostingConflict('Approved other-area reservation changed')
         if reallocation_parent is not None:
             if line is None or input_unit is None: raise ValueError('Reallocation requires saved demand and explicit base units')
             if input_unit != line.base_unit: raise ValueError('Reallocation quantity must use base units')
@@ -328,7 +342,11 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
         other_hold = _query(db, StockReservation, context).filter(
             StockReservation.source_line_key == source_line_key, StockReservation.balance_id != balance_id).first()
         if other_hold:
-            raise PostingConflict("Source line already uses another stock bucket; mixed-batch or multi-location fulfilment requires an approved request")
+            if other_area_case is None:
+                raise PostingConflict("Source line already uses another stock bucket; mixed-batch or multi-location fulfilment requires an approved request")
+        if sales_source is not None:
+            if line is None or active_demand_holds(db, context, sales_source.document_key).get(sales_source.line_key, ZERO) + base_quantity > line.base_quantity:
+                raise PostingConflict('Hold exceeds remaining saved demand')
         if reallocation_parent is None and _query(db, StockReservation, context).filter_by(balance_id=balance_id,
                                                           source_line_key=source_line_key).first():
             raise PostingConflict("Source line already has a reservation for this stock bucket")
@@ -338,6 +356,9 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
             reservation_key=reservation_key, source_line_key=source_line_key, quantity=base_quantity,
             released=ZERO, review_at=review_at, created_by=actor_id)
         db.add(hold); db.flush()
+        if other_area_case is not None:
+            consume_case(db, context, actor_id, operation_key, case_key=other_area_case,
+                binding=other_area_binding, load_binding=load_other_area_binding, authorize=authorize)
         if sales_source is not None:
             db.add(SalesReservationSource(org_id=context.org_id, reservation_key=reservation_key,
                 document_key=sales_source.document_key, version=sales_source.version,
