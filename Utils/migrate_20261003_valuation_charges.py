@@ -14,7 +14,13 @@ def prepare_valuation_charges(conn):
         'ck_valuation_quantity_v3', 'ck_valuation_kind_v2', 'fk_valuation_charge_source']
     constraints = {item.name: item for item in InventoryValuation.__table__.constraints}
     for name in wanted:
-        if name not in existing: conn.execute(AddConstraint(constraints[name]))
+        replacement = {
+            'ck_valuation_quantity_v3': 'ck_valuation_quantity_v4',
+            'ck_valuation_kind_v2': 'ck_valuation_kind_v3',
+        }.get(name, name)
+        current = name if name in constraints else replacement
+        if name not in existing and current not in existing:
+            conn.execute(AddConstraint(constraints[current]))
     for index in InventoryValuation.__table__.indexes:
         if index.name in ('uq_valuation_physical_source',
                 'ix_containermgmt_inventory_valuations_source_valuation_id'):

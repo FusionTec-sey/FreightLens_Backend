@@ -703,10 +703,18 @@ progress for receipt storage-retention/runtime acceptance and real import rehear
 no real opening balances or inFlow data were loaded.
 
 T09 | Complete transfers and stock movements
-Status: Blocked
+Status: In progress
 Dependencies: T08
 Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments with batch/serial history; destination available only after receipt.
-Next action: Extend immutable movement gateway. Integrate retained reclassification
+Accelerated pilot slice: internal reserved `HANDOVER` and central-pool `ISSUE` now
+commit under one retry-safe operation with exact reservation/source, stock/value
+versions, branch/pool authority, conservation and immutable history. Same-key replay
+has one effect and competing versions cannot reuse the hold/value. Serial handover
+remains blocked until exact identity history; no public collection endpoint exists.
+Evidence: evidence/t09-pilot-handover-movement.txt.
+Next action: Extend the identity-specific serial movement gateway, then let T16 bind
+this seam to authoritative invoice-line/payment eligibility and collector history.
+After the pilot slice, complete dispatch/transit/receipt/write-off. Integrate retained reclassification
 proposals only with product-wide compatibility, global identity checks, node fencing,
 exact physical/condition/value conservation and immutable atomic movement lineage.
 

@@ -1,0 +1,36 @@
+T09 PILOT RESERVED HANDOVER / COST ISSUE — 2026-10-05
+Decision: BD-20261005-01
+
+Scope
+- Internal only: no HTTP route, invoice, collector, payment or collection status.
+- Consumes one exact owned reservation and on-hand quantity.
+- Appends one immutable HANDOVER movement and its central-pool weighted-average
+  ISSUE valuation in the same stable posting operation.
+- Revalidates stock and financial permission guards, branch and pool authority,
+  exact branch mapping, source line, expected stock/value versions and physical/
+  valuation reconciliation on every attempt, including replay.
+- Does not change selling prices. Serial stock fails closed pending exact identity
+  assignment and movement history; no quantity-only serial handover is permitted.
+
+Schema/migration
+- `migrate_20261005_stock_movements.py` extends existing movement/valuation streams
+  without rewriting historical rows or creating business data.
+- Database guards bind HANDOVER to its predecessor/reservation and ISSUE to the
+  exact handover, prior pool head and conserved residual quantity/value.
+- Earlier valuation migrations remain replay-safe against the newer constraint set.
+
+Verification
+- New focused handover tests: 8 passed, including foreign active-company denial.
+- Final affected selection covering handover, stock ledger, receipt movements,
+  receipt valuation, opening valuation and fresh-install contract: 71 passed.
+- A broader first affected run exposed one historical test that looked up only the
+  superseded v2 valuation constraint name; the assertion now accepts the current v3
+  contract and the corrected selection passes.
+- Browser/hardware/provider/accounting/pilot acceptance was not attempted.
+
+Remaining
+- Exact serial assignment/history gateway.
+- T16 invoice-line, payment/credit eligibility, collector and cumulative collection
+  boundary using this internal seam.
+- Transfer dispatch/transit/receipt, write-off and condition movement completion.
+- Full suite is reserved for the T13 checkpoint under the accelerated plan.

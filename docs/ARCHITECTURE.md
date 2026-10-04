@@ -2,6 +2,25 @@
 
 ## Status
 
+### Atomic reserved handover and weighted-average issue (2026-10-05)
+
+The first bounded T09 pilot movement seam consumes one exact owned reservation and
+the corresponding physical on-hand quantity in the same operation that appends its
+central pool weighted-average cost issue. The stable operation identity, expected
+stock and valuation versions, source-line identity, exact quantity, branch authority,
+central cost authority and both permission guards are revalidated on every attempt,
+including replay. Lock order is operation, central pool, branch, product, balance and
+reservation. Competing handovers therefore cannot reuse stock, holds or cost value.
+
+`HANDOVER` stock movements and `ISSUE` valuation rows are immutable and mutually
+bound by database guards. The issue carries the exact residual pool quantity/value;
+it does not change selling prices. This is an internal composition seam for T16,
+not a collection endpoint: invoices, payment/credit eligibility, collector identity
+and cumulative line limits remain T13/T16 responsibilities. Serial-tracked stock is
+deliberately rejected until its exact identity-assignment history gateway is built;
+there is no quantity-only serial escape path. Transfers, write-offs, returns and
+public movement screens remain later T09/T16/T18 work.
+
 ### Reviewed opening/import composition (2026-10-05)
 
 One exact opening or staged import row now passes through the existing manager-case,

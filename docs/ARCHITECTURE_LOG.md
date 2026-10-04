@@ -1,5 +1,17 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T09 pilot reserved handover and cost issue
+
+- Added an internal one-transaction movement seam that consumes an exact owned
+  reservation, reduces its stock bucket and appends the matching central-pool
+  weighted-average `ISSUE` valuation.
+- Added immutable `HANDOVER`/`ISSUE` contracts, predecessor/conservation guards,
+  exact branch/pool authority, current permission and expected-version checks.
+- Same-key retries have one effect and competing expected versions cannot reuse a
+  hold or value. Serial stock fails closed pending exact identity movement history.
+- Seventy-one focused stock/valuation/migration/fresh-install checks pass. No invoice,
+  payment, collector, public collection action, transfer, return or live posting is enabled.
+
 ## 2026-10-05 - T12A payment and branch-account configuration
 
 - Added versioned payment methods and exact selling-branch receiving-account
