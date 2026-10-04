@@ -15,8 +15,13 @@ def prepare_receipt_valuation_schema(conn):
         WHERE conrelid='containermgmt.inventory_valuations'::regclass""")).scalars())
     constraints = {item.name: item for item in InventoryValuation.__table__.constraints}
     for name in ('ck_valuation_quantity_v3', 'ck_valuation_kind_v2'):
-        if name not in existing:
-            conn.execute(AddConstraint(constraints[name]))
+        replacement = {
+            'ck_valuation_quantity_v3': 'ck_valuation_quantity_v4',
+            'ck_valuation_kind_v2': 'ck_valuation_kind_v3',
+        }[name]
+        current = name if name in constraints else replacement
+        if name not in existing and current not in existing:
+            conn.execute(AddConstraint(constraints[current]))
     for name in ('ck_valuation_quantity', 'ck_valuation_quantity_v2', 'ck_valuation_kind'):
         if name in existing:
             conn.execute(text(

@@ -94,6 +94,8 @@ def test_engine(test_database_url):
             prepare_stock_serials(connection)
             from Utils.migrate_20261003_valuation_charges import prepare_valuation_charges
             prepare_valuation_charges(connection)
+            from Utils.migrate_20261005_stock_movements import prepare_inventory_handover_schema
+            prepare_inventory_handover_schema(connection)
     except OperationalError as exc:
         engine.dispose()
         if os.getenv("REQUIRE_TEST_DATABASE") == "1":

@@ -1,6 +1,6 @@
 FREIGHTLENS ACCELERATED CLOUD SALES PILOT
 Decision: BD-20261005-01
-Status: Wave0 baseline verified and merged; Wave1 ready
+Status: Wave0 merged; Wave1 bounded packages merged/merging; T09 pilot slice in progress
 Integration branches: codex/pos-development in both repositories
 Merged baseline PRs: backend #6 and frontend #7 from codex/local-area-scope
 
@@ -71,3 +71,10 @@ Known frontend compiler warnings and the bundle-size warning remain non-blocking
 Browser/tablet acceptance, payment-provider setup, real branch/account mappings,
 Epson hardware validation, imports, accounting acceptance and owner pilot approval
 remain explicit gates. No external deployment or live financial posting occurred.
+
+WAVE1/WAVE2 CHECKPOINT — 2026-10-05
+T08 reviewed receipt/opening composition and paired T12A payment configuration are
+merged. T14/T15 safe draft-copy foundation is merged. The core lane has started the
+reserved handover/cost-issue portion of T09 from the current backend integration
+history. Exact merged revisions and CI remain in the associated PRs/evidence; this
+checkpoint does not activate financial posting or close whole tasks.

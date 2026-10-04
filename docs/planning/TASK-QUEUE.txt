@@ -703,10 +703,18 @@ progress for receipt storage-retention/runtime acceptance and real import rehear
 no real opening balances or inFlow data were loaded.
 
 T09 | Complete transfers and stock movements
-Status: Blocked
+Status: In progress
 Dependencies: T08
 Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments with batch/serial history; destination available only after receipt.
-Next action: Extend immutable movement gateway. Integrate retained reclassification
+Accelerated pilot slice: internal reserved `HANDOVER` and central-pool `ISSUE` now
+commit under one retry-safe operation with exact reservation/source, stock/value
+versions, branch/pool authority, conservation and immutable history. Same-key replay
+has one effect and competing versions cannot reuse the hold/value. Serial handover
+remains blocked until exact identity history; no public collection endpoint exists.
+Evidence: evidence/t09-pilot-handover-movement.txt.
+Next action: Extend the identity-specific serial movement gateway, then let T16 bind
+this seam to authoritative invoice-line/payment eligibility and collector history.
+After the pilot slice, complete dispatch/transit/receipt/write-off. Integrate retained reclassification
 proposals only with product-wide compatibility, global identity checks, node fencing,
 exact physical/condition/value conservation and immutable atomic movement lineage.
 
@@ -770,14 +778,14 @@ PROGRAMMER-T12A-HANDOFF.txt and BD-20261004-10. Stable T03/T10 identities permit
 this independent slice. Build versioned payment-method and branch receiving-account
 configuration plus fail-closed lookup using synthetic data. Customer-credit balances,
 payment posting, deposits, cheques and real bank/account seeds remain later T12/T27.
-T12A implementation is now on paired branches: immutable versioned CASH/externally-
+T12A is merged through backend PR #10 and frontend PR #9: immutable versioned CASH/externally-
 confirmed-CARD methods, exact selling-branch receiving-account mappings, a fail-closed
 read lookup and a locked exact-version resolver for T13. The usable Sales screen
 retains stable retry identities and exposes no money-post action. Focused backend,
-frontend and production-build checks pass; integrated CI and browser acceptance are
-pending. Evidence: evidence/t12a-payment-configuration-handoff.txt. T12 remains In
+frontend and production-build checks pass; both integrated CI runs passed. Browser
+acceptance remains pending. Evidence: evidence/t12a-payment-configuration-handoff.txt. T12 remains In
 progress because customer-credit liability and actual payment posting are not part
-of T12A; they cannot block the pilot cash/card configuration contract after merge.
+of T12A; they do not block the merged pilot cash/card configuration contract.
 
 T13 | Complete atomic sales posting
 Status: Blocked

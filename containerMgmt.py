@@ -240,6 +240,8 @@ async def startup_event():
     ensure_valuation_charges_schema()
     from Utils.migrate_20261004_receipt_valuation import ensure_receipt_valuation_schema
     ensure_receipt_valuation_schema()
+    from Utils.migrate_20261005_stock_movements import ensure_inventory_handover_schema
+    ensure_inventory_handover_schema()
     from Utils.migrate_20261003_cost_allocation import ensure_cost_allocation_schema
     ensure_cost_allocation_schema()
     from Utils.migrate_20261003_cost_charge_uses import ensure_cost_charge_uses_schema

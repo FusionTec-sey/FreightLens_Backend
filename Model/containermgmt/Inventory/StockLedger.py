@@ -34,6 +34,8 @@ MOVEMENT_KIND_CHECK = """(kind = 'OPENING' AND reservation_id IS NULL AND versio
                         AND version > 1 AND on_hand_delta = 0 AND reserved_delta > 0) OR
                         (kind = 'RELEASE' AND reservation_id IS NOT NULL AND version > 1
                         AND on_hand_delta = 0 AND reserved_delta < 0) OR
+                        (kind = 'HANDOVER' AND reservation_id IS NOT NULL AND version > 1
+                        AND on_hand_delta < 0 AND reserved_delta = on_hand_delta) OR
                         (kind = 'ADJUSTMENT' AND reservation_id IS NULL AND version > 1
                         AND reserved_delta = 0)"""
 
@@ -277,6 +279,28 @@ event.listen(StockMovement.__table__, 'after_create', DDL(RECEIPT_FUNCTION))
 event.listen(StockMovement.__table__, 'after_create', DDL(RECEIPT_TRIGGER))
 event.listen(StockMovement.__table__, 'after_create', DDL(RECEIPT_TOTAL_FUNCTION))
 event.listen(StockMovement.__table__, 'after_create', DDL(RECEIPT_TOTAL_TRIGGER))
+
+HANDOVER_FUNCTION = """CREATE OR REPLACE FUNCTION containermgmt.guard_handover_stock_movement()
+RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE prior record; BEGIN
+IF NEW.kind <> 'HANDOVER' THEN RETURN NEW; END IF;
+SELECT on_hand, reserved, damaged, quarantined INTO prior
+FROM containermgmt.inventory_stock_movements
+WHERE balance_id=NEW.balance_id AND org_id=NEW.org_id AND version=NEW.version-1;
+IF prior IS NULL OR NEW.on_hand_delta >= 0 OR NEW.reserved_delta <> NEW.on_hand_delta
+ OR NEW.on_hand <> prior.on_hand + NEW.on_hand_delta
+ OR NEW.reserved <> prior.reserved + NEW.reserved_delta
+ OR NEW.damaged <> prior.damaged OR NEW.quarantined <> prior.quarantined
+ OR NOT EXISTS (
+   SELECT 1 FROM containermgmt.inventory_stock_reservations reservation
+   WHERE reservation.id=NEW.reservation_id AND reservation.balance_id=NEW.balance_id
+   AND reservation.org_id=NEW.org_id AND NOT reservation.is_deleted
+ ) THEN RAISE EXCEPTION 'Handover movement must consume its exact reservation and predecessor'; END IF;
+RETURN NEW; END; $$"""
+HANDOVER_TRIGGER = """CREATE TRIGGER handover_stock_movement_guard BEFORE INSERT
+ON containermgmt.inventory_stock_movements FOR EACH ROW
+EXECUTE FUNCTION containermgmt.guard_handover_stock_movement()"""
+event.listen(StockMovement.__table__, 'after_create', DDL(HANDOVER_FUNCTION))
+event.listen(StockMovement.__table__, 'after_create', DDL(HANDOVER_TRIGGER))
 
 BALANCE_IDENTITY_FUNCTION = """
 CREATE OR REPLACE FUNCTION containermgmt.protect_stock_balance_identity()

@@ -177,7 +177,9 @@ def test_receipt_valuation_migration_replays(test_engine, monkeypatch):
         definition = conn.execute(text("""SELECT pg_get_constraintdef(oid)
             FROM pg_constraint WHERE
             conrelid='containermgmt.inventory_valuations'::regclass
-            AND conname='ck_valuation_kind_v2'""")).scalar()
+            AND conname IN ('ck_valuation_kind_v3', 'ck_valuation_kind_v2')
+            ORDER BY CASE WHEN conname='ck_valuation_kind_v3' THEN 0 ELSE 1 END
+            LIMIT 1""")).scalar()
         assert 'RECEIPT' in definition
 
 
