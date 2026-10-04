@@ -225,11 +225,25 @@ def read_posting_options(db, context, actor_id, document_key, draft_version, *,
             reservations.append(dict(source_line_key=source.line_key,
                 reservation_key=source.reservation_key,
                 quantity=_quantity(remaining)))
+    existing = _owned(db, SalesPostingAttempt, context).filter_by(
+        document_key=UUID(str(document_key)),
+        draft_version=draft_version).one_or_none()
+    existing_status = existing_invoice_key = None
+    if existing is not None:
+        existing_status, existing_invoice_key = _attempt_status(
+            db, context, existing)
+        if existing_status != "POSTED" and existing.created_by != actor_id:
+            raise PermissionError(
+                "This draft checkout is controlled by another salesperson")
     return dict(document_key=UUID(str(document_key)),
         draft_version=draft_version, branch_id=branch_id,
         branch_settings_version=settings.version,
         assignment_version=assignment.version, counters=counters,
-        payment_methods=payment_methods, reservations=reservations)
+        payment_methods=payment_methods, reservations=reservations,
+        existing_attempt_key=(existing.attempt_key if existing else None),
+        existing_operation_key=(existing.operation_key if existing else None),
+        existing_status=existing_status,
+        existing_invoice_key=existing_invoice_key)
 
 
 def _lock_branch(db, context, branch_id):

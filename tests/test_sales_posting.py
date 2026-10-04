@@ -183,9 +183,16 @@ def test_cash_attempt_and_invoice_post_once_without_handover(posting):
     assert options["payment_methods"][0]["method_key"] == f.posting_method_key
     assert "account_ref" not in options["payment_methods"][0]
     assert options["reservations"][0]["reservation_key"] == f.posting_reservation_key
+    assert options["existing_attempt_key"] is None
     first = _create(f)
     assert first["status"] == "READY" and not first["replayed"]
     assert _create(f)["replayed"]
+    f.db.connection()
+    recovery = read_posting_options(f.db, f.context, f.user.id,
+        f.attempt.document_key, 1, authorize=lambda db: None)
+    f.db.commit()
+    assert recovery["existing_attempt_key"] == f.posting_attempt_key
+    assert recovery["existing_status"] == "READY"
     posted = _finalize(f)
     assert not posted["replayed"]
     assert posted["invoice"]["payment_status"] == "PAID"

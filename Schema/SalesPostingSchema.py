@@ -228,6 +228,10 @@ class SalesPostingOptionsRead(BaseModel):
     counters: list[SalesPostingCounterOption]
     payment_methods: list[SalesPostingPaymentOption]
     reservations: list[SalesPostingReservationOption]
+    existing_attempt_key: UUID | None = None
+    existing_operation_key: UUID | None = None
+    existing_status: Literal["AWAITING_CARD", "READY", "DECLINED", "POSTED"] | None = None
+    existing_invoice_key: UUID | None = None
 
 
 class SalesInvoiceLineRead(BaseModel):
