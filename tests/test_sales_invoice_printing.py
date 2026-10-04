@@ -163,6 +163,25 @@ def test_copy_uses_frozen_original_and_server_owned_visible_mark(posting):
         assert copy_row.data_snapshot["data"]["company"]["legal_name"] == "Synthetic Retail Ltd"
 
 
+def test_unresolved_job_blocks_another_invoice_artifact(posting):
+    f = posting; template = _configure(f); storage = ExactStorage()
+    factory = sessionmaker(bind=f.db.get_bind())
+    original = _request(f, template)
+    create_invoice_print_job(factory, f.context, f.user.id, original,
+        authorize=lambda db: None, storage=storage,
+        pdf_renderer=lambda html: b"%PDF original")
+    copy = SalesInvoicePrintRequest(job_key=uuid4(), operation_key=uuid4(),
+        artifact_key=uuid4(), invoice_key=f.posting_invoice_key, kind="COPY",
+        source_artifact_key=original.artifact_key)
+    with pytest.raises(PostingConflict, match="Resolve the current invoice print job"):
+        create_invoice_print_job(factory, f.context, f.user.id, copy,
+            authorize=lambda db: None, storage=storage,
+            pdf_renderer=lambda html: b"%PDF copy")
+    with factory() as db:
+        assert db.query(SalesInvoiceArtifact).filter_by(
+            artifact_key=copy.artifact_key).count() == 0
+
+
 def test_missing_exact_blob_version_fails_without_artifact(posting):
     f = posting; template = _configure(f); storage = ExactStorage()
     storage.fingerprint_file_version = lambda *args, **kwargs: (_ for _ in ()).throw(
