@@ -1,5 +1,5 @@
 FreightLens sequential development task queue
-Updated: 2026-10-03
+Updated: 2026-10-04
 
 PARALLEL OWNERSHIP — BD-20261003-05
 Read BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt before work.
@@ -8,6 +8,12 @@ Collaborator owns new T33A cycle-count workspace, not existing T10 customer work
 No shared-file changes without interface coordination; linked PRs to integration.
 
 LATEST VERIFICATION
+Latest extension: compatible multi-location reviewed supplements. Backend52,
+frontend30 and production build passed; evidence/t07-multi-location-supplements.txt.
+Latest slice: staff working-store assignments. Backend66/frontend36 and production
+build passed; evidence/t07-staff-store-assignments.txt. Browser gate pending.
+Prior store-wide allocation: backend127/frontend22/build passed;
+evidence/t07-store-wide-allocation.txt. Full checkpoint below precedes both slices.
 Parallel integration checkpoint: backend1199 passed/2 known C12 xfails;
 frontend213 passed/41 suites; production build passed with existing warnings.
 Evidence: evidence/20261003-parallel-checkpoint.txt. Fixed legacy blob-test auth
@@ -21,13 +27,15 @@ recorded surfaces; this is not acceptance of every later workflow.
 Counts within older task entries are historical slice checkpoints.
 
 EXECUTION CONTRACT
-Owner clarification: automatically allocate eligible stock within the salesperson's
-configured current work area. A shortfall must not silently spill into other areas.
-Other locations are an explicit salesperson choice with applicable manager approval.
-Do not require a manager case for an ordinary eligible local-area allocation.
-Counter settings now persist an optional scoped default stock-location root; missing
-or stale defaults fail closed. Staff work-context assignment and automatic planning/
-posting integration remain to be implemented; this setting alone makes no holds.
+Owner correction BD-20261003-06: sell any eligible product across the authorised
+InventoryBranch. Counter/specialism is not a product or stock-access boundary.
+Prefer its optional picking area, then compatible same-store stock before shortage.
+Unset preference is valid; stale/invalid configuration still requires refresh.
+Other branches/separate warehouses require explicit choice and applicable approval.
+Staff assignment remains separate from counter preference and posting authority.
+Internal initial-allocation composition is implemented and focused tests pass;
+staff/store assignment now gates automatic allocation with an expected version.
+Trusted runtime/public integration remains pending.
 Owner clarification 2026-10-03: a verified slice is a progress checkpoint, not a
 reason to end execution. Continue to the next authorised dependency-ready item
 within the active turn. End for completion, explicit stop, a genuine required
@@ -385,8 +393,32 @@ segments, preserving original quantity/date and enforcing combined demand caps.
 Exact history digest invalidates concurrent/stale reviews; deferred DB guard
 requires paired reallocation. Backend110/frontend38 and build pass; evidence:
 evidence/t07-reservation-segments.txt. Prior existing-target restriction is superseded.
-Next action: Resolve salesperson work context and default-area automatic allocation,
-then explicit other-area/multi-location exceptions and
+Counter area resolver now validates ancestry and scoped counter/version under a
+branch lock; read-only paginated frontend shows active area descendants. Evidence:
+evidence/t07-counter-area-scope.txt. This is not staff assignment or stock posting.
+BD-20261003-06 replaces counter-area restrictions with optional preference and
+same-store compatible splits. Internal atomic initial-allocation coordinator and
+counter UI wording implemented; backend127/frontend22/build pass (evidence:
+evidence/t07-store-wide-allocation.txt). Browser acceptance remains pending. Existing holds
+still require reviewed lifecycle; no initial-allocation top-up/replacement bypass.
+Authorised staff/store assignments now persist separately from optional counters;
+automatic allocation requires their current version. Backend66/frontend36/build
+pass; evidence/t07-staff-store-assignments.txt. No real assignments or public writer.
+Reviewed supplements now accept compatible same-store target locations with exact
+all-hold history binding and combined caps; evidence/t07-multi-location-supplements.txt.
+Internal exact other-store review binding implemented; request/decision engine
+reuse has no stock effect. Evidence: evidence/t07-other-store-review-foundation.txt.
+Scoped other-store request/review API and sales review queue now implemented;
+backend18/frontend26/build pass. Evidence: evidence/t07-other-store-review-api.txt.
+Explicit request-entry stock picker and self-only working-store read implemented;
+backend22/frontend27/build pass, evidence/t07-other-store-request-entry.txt.
+Internal reviewed execution now reuses reserve_stock with target-store authority,
+atomic case consumption, exact replay and protected compatible local holds.
+Backend58 pass: evidence/t07-other-store-execution.txt.
+Opt-in local runtime and same-store allocation API implemented (backend22 pass);
+evidence/t07-local-runtime-allocation-api.txt. No preview configuration enabled.
+Next action: Add tablet allocation control and runtime-aware context read; connect
+other-store/release execution through the same server-derived runtime. Continue
 trusted runtime adapters. Protect paid holds; no automatic expiry or other-store
 allocation. Source-less internal compatibility is not a public sales capability.
 T13A automated contract is ready; external browser/provider acceptance stays pending.

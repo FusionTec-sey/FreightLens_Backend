@@ -23,6 +23,7 @@ from .Inventory.CostEvidenceRouter import CostEvidenceRouter
 from .Inventory.PolicyDraftRouter import PolicyDraftRouter
 from .Inventory.BranchSettingsRouter import BranchSettingsRouter
 from .Inventory.BranchCounterRouter import BranchCounterRouter
+from .Inventory.StaffStoreAssignmentRouter import StaffStoreAssignmentRouter
 from .Inventory.ManagerCaseRouter import ManagerCaseRouter
 from .Inventory.ReclassificationProposalRouter import ReclassificationProposalRouter
 from .Inventory.UnitBarcodeRouter import UnitBarcodeRouter
@@ -36,6 +37,7 @@ __all__ = [
     "PolicyDraftRouter",
     "BranchSettingsRouter",
     "BranchCounterRouter",
+    "StaffStoreAssignmentRouter",
     "ManagerCaseRouter",
     "ReclassificationProposalRouter",
     "UnitBarcodeRouter",

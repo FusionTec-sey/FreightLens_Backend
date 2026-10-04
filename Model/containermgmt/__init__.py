@@ -52,6 +52,7 @@ from .Inventory.PostingOperation import PostingOperation
 from .Inventory.PostingAuthority import StoreNode, BranchAuthorityEpoch
 from .Inventory.BranchSettings import BranchSettingsRevision
 from .Inventory.BranchCounter import BranchCounter, CounterSettingsRevision
+from .Inventory.StaffStoreAssignment import StaffStoreAssignment
 from .Inventory.ManagerCase import ManagerCase, ManagerCaseDecision, ManagerCaseUse
 from .Inventory.StockLedger import StockBalance, StockReservation, StockMovement
 from .Inventory.StockSerial import StockSerialIdentity, StockSerialPosition

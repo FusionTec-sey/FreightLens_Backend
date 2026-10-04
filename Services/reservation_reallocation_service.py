@@ -5,7 +5,7 @@ from uuid import uuid5
 from hashlib import sha256
 from sqlalchemy import text, select, func
 from Model.containermgmt.Inventory.SalesReservationSource import SalesReservationSource
-from Model.containermgmt.Inventory.StockLedger import StockReservation, StockMovement
+from Model.containermgmt.Inventory.StockLedger import StockReservation, StockMovement, StockBalance
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase, ManagerCaseUse
 from Model.containermgmt.Inventory.ReservationDeadline import ReservationDeadline
 from Model.containermgmt.Orders.SalesIntent import SalesIntent, SalesIntentRevision
@@ -22,30 +22,41 @@ def reallocation_keys(operation):
     return tuple(uuid5(operation, label) for label in ('reallocation-release-v1', 'reallocation-reserve-v1', 'reallocation-target-hold-v1'))
 
 
-def target_hold_snapshot(db, context, target, balance_id, *, exclude=None):
+def target_hold_snapshot(db, context, target, balance_id, *, exclude=None, compatible_branches=None):
     """Stream one indexed demand's histories; constant memory, exact review digest.
 
     Caller owns the target document/allocation lock and stock-bucket lock. Deadline
     and release writers share that document lock, so the snapshot cannot tear.
+    Existing target holds may span compatible locations in the same store. Their
+    immutable bucket identity and complete history are included in the review.
     """
+    destination = owned(db, StockBalance, context).filter_by(id=balance_id).one_or_none()
+    if destination is None: raise LookupError('Destination stock not found')
+    identity = (destination.branch_id, destination.product_id, destination.base_unit,
+                destination.tracking_policy, destination.batch_key)
+    branches = {destination.branch_id} if compatible_branches is None else set(compatible_branches)
     latest = select(func.max(ReservationDeadline.version)).where(
         ReservationDeadline.org_id == context.org_id,
         ReservationDeadline.reservation_key == StockReservation.reservation_key).correlate(StockReservation).scalar_subquery()
     query = owned(db, StockReservation, context).outerjoin(SalesReservationSource,
         (SalesReservationSource.org_id == StockReservation.org_id) &
-        (SalesReservationSource.reservation_key == StockReservation.reservation_key)).filter(
+        (SalesReservationSource.reservation_key == StockReservation.reservation_key)).join(StockBalance,
+        (StockBalance.id == StockReservation.balance_id) & (StockBalance.org_id == StockReservation.org_id)).filter(
             StockReservation.source_line_key == target.stock_source_key())
     if exclude is not None: query = query.filter(StockReservation.reservation_key != exclude)
     rows = query.with_entities(StockReservation.reservation_key, StockReservation.balance_id,
         StockReservation.quantity, StockReservation.released, StockReservation.review_at,
         SalesReservationSource.document_key, SalesReservationSource.line_key,
-        SalesReservationSource.version, func.coalesce(latest, 0)).order_by(StockReservation.id).yield_per(128)
-    digest = sha256(); count = 0; remaining = Decimal(0)
-    for key, bucket, held, released, review_at, document, line, version, deadline_version in rows:
-        if bucket != balance_id: raise PostingConflict('Another stock bucket requires an explicit multi-location or batch review')
+        SalesReservationSource.version, func.coalesce(latest, 0), StockBalance.branch_id,
+        StockBalance.product_id, StockBalance.base_unit, StockBalance.tracking_policy,
+        StockBalance.batch_key).order_by(StockReservation.id).yield_per(128)
+    digest = sha256(b'store-compatible-target-history-v2\n'); count = 0; remaining = Decimal(0)
+    for key, bucket, held, released, review_at, document, line, version, deadline_version, branch, product, unit, tracking, batch in rows:
+        if held > released and (branch not in branches or (product, unit, tracking, batch) != identity[1:]):
+            raise PostingConflict('Destination holds require the same store, product and batch')
         if document != target.document_key or line != target.line_key:
             raise PostingConflict('Destination reservation history has no matching saved-demand attribution')
-        digest.update(f'{key}|{held:f}|{released:f}|{review_at.isoformat()}|{version}|{deadline_version}\n'.encode())
+        digest.update(f'{key}|{bucket}|{held:f}|{released:f}|{review_at.isoformat()}|{version}|{deadline_version}\n'.encode())
         count += 1
         with localcontext(Context(prec=48)): remaining += held-released
     return dict(count=count, remaining=format(remaining, 'f'), digest=digest.hexdigest())

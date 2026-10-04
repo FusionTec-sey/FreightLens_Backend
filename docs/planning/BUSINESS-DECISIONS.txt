@@ -1,5 +1,5 @@
 FREIGHTLENS BUSINESS DECISIONS
-Revision: BD-20261003-05
+Revision: BD-20261003-06
 Canonical companion: TASK-QUEUE.txt. Recorded 2026-10-03 from owner instructions.
 These decisions preserve actionable requirements, not the full private chat.
 Do not publish customer records, legal PDFs, credentials or personal chat exports.
@@ -62,6 +62,20 @@ and shared-contract integration. T10 remains unassigned; do not rebuild T10A.
 T33A creates count/audit records only, not inventory adjustments. Price labels,
 movement-aware reconciliation and stock posting remain deferred to T33/T09/T11.
 Do not freeze inventory or pretend a raw discrepancy is a posting-ready adjustment.
+
+BD-20261003-06 | Store-wide selling; counter is a preference | T03,T07,T14
+Supersedes BD-20261003-03's hard counter-area boundary. Staff may sell any eligible
+product in their authorised InventoryBranch, regardless of counter/specialism.
+The usual counter remains a workstation, separate from staff/store permissions.
+default_stock_location_id is retained as an optional preferred picking area, not
+an entitlement. Unset means no preference, not blocked sales. Prefer eligible stock
+in that area, then other compatible locations in the same branch before shortage.
+Store-wide never means every warehouse on the island. Another store or separately
+configured warehouse requires explicit choice and applicable reviewed approval;
+no company-boundary exception. Preserve batch/shade/calibre, exact source-demand
+caps, reservations and retries. Same-store compatible location splits are allowed.
+Initial automatic allocation must not silently replace/top up historical holds;
+their reviewed lifecycle remains protected. T33A remains collaborator-owned.
 
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record

@@ -1,5 +1,141 @@
 # FreightLens Architecture Log
 
+## 2026-10-04 - Paired GitHub checkpoint
+
+- Reviewed changed/untracked files; no private documents, runtime credentials,
+  databases or generated artifacts included. Both repository webhook lists empty;
+  checked-in workflows run tests/build/fresh-install only.
+- Full local checkpoint: backend1298 passed, 2 known legacy xfails; frontend230
+  passed across44 suites; production build succeeds with existing warnings.
+- Paired revisions and unfinished UI/runtime gates: planning/CHECKPOINT-20261004.txt.
+  Publish task branches and linked PRs; no direct integration overwrite/deployment.
+
+## 2026-10-04 - Local runtime resolver and same-store allocation API
+
+- Added fail-closed operator-configured local identity with pinned branch epochs;
+  no client identity, owner discovery, auto-enrollment or active environment change.
+- Added typed same-store allocation endpoint using existing calendars, settings,
+  staff assignment, permission guards and atomic stock allocation. Both sales and
+  inventory modules are required. No role grants seeded.
+- 22 focused API/runtime tests pass, including split/replay, permissions, tenant,
+  module/authentication, forged authority/date, stale settings and disabled runtime.
+- Frontend allocation control remains next; no new frontend build claim.
+  Evidence: planning/evidence/t07-local-runtime-allocation-api.txt.
+
+## 2026-10-04 - Atomic approved other-store stock hold
+
+- Extended reserve_stock rather than adding a parallel ledger or posting engine.
+  Exact request/assignment/stock/history binding and independent case consumption
+  are required; ordinary source validation still rejects other stores.
+- Retained target-node authority, batch expiry, source caps and compatible lots.
+  Existing local holds remain unchanged. No same-bucket supplement bypass.
+- Replay normalizes only its unchanged committed effect. Concurrent identical
+  requests return one receipt; failure after approval consumption rolls it back.
+- 58 affected backend tests pass, 23 existing dependency warnings. No frontend
+  changes/build rerun this slice; prior request-entry build remains the evidence.
+- Public trusted-runtime adapter remains next, not enabled. Evidence:
+  planning/evidence/t07-other-store-execution.txt.
+
+## 2026-10-04 - Explicit other-store request entry
+
+- Added self-only current working-store read with existing membership/version
+  checks and no user-directory permission or exposed credentials.
+- Added optional product filter before stock count/pagination, reusing existing
+  location/product indexes as guided by the PostgreSQL skill; no migration.
+- Sales draft detail now opens exact line/store/location/stock selection using
+  the shared picker. Quantities remain strings; unknown outcomes freeze intent
+  for identical retry. Stale state blocks replacement and dirty exit asks first.
+- Backend22/frontend27 targeted tests and production build pass; existing build
+  warnings remain. Request/review posts no stock; trusted execution is next.
+  Evidence: planning/evidence/t07-other-store-request-entry.txt.
+
+## 2026-10-04 - Other-store review API and sales queue
+
+- Added protected typed request/list/review endpoints using the existing manager
+  case engine, original requestor assignment and exact saved demand/stock binding.
+- Added explicit request/review permissions without granting roles. Bounded reads
+  expose only approved fields and exclude the internal hold digest.
+- Sales drafts has Other-store reviews through the shared ManagerCases component;
+  approval does not post and no activation control is available.
+- Focused verification: 18 backend tests, 26 frontend tests and production build
+  passed (existing warnings). Request-entry and trusted execution remain pending.
+  Evidence: planning/evidence/t07-other-store-review-api.txt. No browser checks,
+  business records, deployment or push.
+
+## 2026-10-04 - Exact other-store fulfilment review foundation
+
+- Added an internal authoritative binding loader for an explicitly chosen other
+  store/warehouse bucket. Same-company demand, staff assignment, quantity, stock
+  version and compatible existing holds are bound to the existing manager case.
+- Reused the history reader with server-derived branch compatibility for review;
+  ordinary reallocation still defaults to one branch. No public bypass flag.
+- PostgreSQL guidance informed branch/user/document/source/stock lock ordering.
+- Request and independent-review tests confirm no stock effect, stale version and
+  assignment rejection, combined cap, shortage and foreign-company denial.
+- Public APIs, frontend and execution remain next, not declared complete.
+  Evidence: planning/evidence/t07-other-store-review-foundation.txt.
+
+## 2026-10-04 - Reviewed supplements across compatible target locations
+
+- Removed the target-history single-bucket restriction for same-store matching
+  product/unit/tracking/batch. Actual release/reserve stays in its original bucket.
+- Exact streamed history digest now binds bucket IDs, all quantities and follow-up
+  versions; changed destination history invalidates approval and combined caps hold.
+- Retained paired-release proof, immutable history and deferred SQL segment guard.
+  No generic bypass, cross-store exception, physical transfer or paid-hold support.
+- Updated request/review explanations. PostgreSQL guidance informed scoped history
+  join and streaming under the existing document locks; no migration required.
+- Verification evidence: planning/evidence/t07-multi-location-supplements.txt.
+  No browser acceptance, real business records, deployment or external push.
+
+## 2026-10-04 - Authorised working store separated from usual counter
+
+- Added immutable staff/store assignment revisions, scoped foreign keys, counter
+  branch guard and replayable empty migration using existing posting receipts.
+- Effective company membership and branch-before-user locks protect assignment
+  changes; automatic allocation requires the current assignment version on replay.
+- Paginated API exposes username/assignment only, guarded by user/product viewing
+  and separate user-edit/branch-settings permissions for writes. No role grants.
+- Added Staff working stores from branch workspace; optional counter, explicit
+  store reassignment, enabled state, version conflict and identical uncertain retry.
+- PostgreSQL skill informed indexes, projected membership reads and short locks.
+  Backend66/frontend36 focused tests and build passed; preview/API200, browser pending.
+  Evidence: planning/evidence/t07-staff-store-assignments.txt. No real data or push.
+- Continue trusted runtime/public reservation integration and explicit other-store
+  exceptions. Multi-bucket reviewed supplements remain a separate unfinished slice.
+
+## 2026-10-03 - Store-wide selling with optional picking preference
+
+- Recorded BD-20261003-06 superseding the counter-area restriction; queue and
+  collaborator handoff updated. T33A ownership unchanged; no external publication.
+- Optional null preference is valid. Frontend settings/inspection distinguish
+  workstation/specialism from authorised store and staff/stock permissions.
+- Internal initial allocator composes existing deterministic stock children and
+  atomic receipts, searches compatible store-wide stock and keeps batch identity.
+  Source-linked splits enforce aggregate demand caps; no generic/supplement bypass.
+- Centralised saved-demand loading rather than duplicate locking/version checks.
+  PostgreSQL skill informed indexed candidate filtering, streaming, stable locking
+  and transaction-only effects. No schema changes or new stock ledger.
+- Backend127/frontend22 affected tests and production build pass; existing warnings.
+  Evidence: planning/evidence/t07-store-wide-allocation.txt. Both previews HTTP200.
+- Remaining: persisted staff/store assignment, trusted public runtime adapter,
+  explicit other-store workflow, multi-bucket reviewed supplements and paid sources.
+  No whole-T07 completion, browser acceptance, real posting, deployment or push.
+
+## 2026-10-03 - Counter area boundary and read-only scope screen
+
+- Continued on separate codex/local-area-scope task branches; T33A remains owned
+  by the collaborator. No integration-branch overwrite or external push.
+- Resolver rechecks exact counter/branch/version and active ancestry, retaining
+  branch lock against settings changes. Added bounded active descendant read.
+- Frontend Counters -> View stock area shows scope, not availability or posting;
+  stale/failed reads clear data and company changes abort obsolete requests.
+- PostgreSQL skill informed indexed parent probes and short scoped transactions.
+- Backend48/frontend21 focused checks and production build passed; preview200.
+  Evidence: planning/evidence/t07-counter-area-scope.txt. Browser checks pending.
+- Next: persisted salesperson work-context assignment and automatic allocation
+  composition. No new staff assignment, real records, financial or stock posting.
+
 ## 2026-10-03 - Shared GitHub checkpoint and revised collaborator assignment
 
 - Added owner-approved AGENTS reading protocol, canonical business decisions and

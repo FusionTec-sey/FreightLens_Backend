@@ -179,6 +179,8 @@ async def startup_event():
     ensure_branch_settings_schema()
     from Utils.migrate_20261002_branch_counters import ensure_branch_counters_schema
     ensure_branch_counters_schema()
+    from Utils.migrate_20261003_staff_store_assignments import ensure_staff_store_assignments_schema
+    ensure_staff_store_assignments_schema()
     from Utils.migrate_20261002_manager_cases import ensure_manager_cases_schema
     ensure_manager_cases_schema()
     ensure_stock_ledger_schema()
@@ -331,6 +333,7 @@ app.include_router(CostEvidenceRouter)
 app.include_router(PolicyDraftRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(BranchSettingsRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(BranchCounterRouter, dependencies=[Depends(require_module("INVENTORY"))])
+app.include_router(StaffStoreAssignmentRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(ManagerCaseRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(ReclassificationProposalRouter, dependencies=[Depends(require_module("INVENTORY"))])
 app.include_router(UnitBarcodeRouter, dependencies=[Depends(require_module("INVENTORY"))])
@@ -347,6 +350,10 @@ from Routes.Inventory.ReservationReleaseCaseRouter import ReservationReleaseCase
 app.include_router(ReservationReleaseCaseRouter)
 from Routes.Inventory.ReservationReallocationRouter import ReservationReallocationRouter
 app.include_router(ReservationReallocationRouter)
+from Routes.Inventory.OtherStoreFulfilmentRouter import OtherStoreFulfilmentRouter
+app.include_router(OtherStoreFulfilmentRouter)
+from Routes.Orders.StoreAllocationRouter import StoreAllocationRouter
+app.include_router(StoreAllocationRouter)
 from Routes.Inventory.ReservationDeadlineRouter import ReservationDeadlineRouter
 app.include_router(ReservationDeadlineRouter)
 app.include_router(BlobRouter)

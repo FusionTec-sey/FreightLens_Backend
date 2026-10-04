@@ -2,6 +2,116 @@
 
 ## Status
 
+### Opt-in local runtime and same-store allocation API (2026-10-04)
+
+stock_runtime_service reads only operator process configuration from
+FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON. Blank/invalid configuration disables writes.
+Mode must be local-development; each exact company/branch/node/epoch is pinned
+and rechecked against persisted authority. It never discovers/adopts the newest
+epoch or another node. This is not secure distributed enrollment or offline fencing.
+No environment configuration or real records were changed.
+POST /sales/draft-allocations requires SALES/INVENTORY, draft/customer access and
+Allocate_SalesDraftStock. Source determines branch; server time plus versioned
+branch/counter settings determine business date. Clients cannot send authority,
+node, branch override or business date. Staff assignment remains independently
+version-checked. Existing atomic store allocator creates compatible splits and
+exact receipts. Changed business date/settings can deny an old retry, never create
+another allocation. UI integration and broader lifecycle runtime adapters remain
+pending; preview is not enabled for posting. Evidence:
+planning/evidence/t07-local-runtime-allocation-api.txt.
+
+### Atomic approved other-store holds (2026-10-04)
+
+The existing reserve_stock transaction now accepts an exact other-store case
+binding, not a branch-bypass flag. It reloads saved demand, requestor assignment,
+chosen target scope/version and compatible history, consumes independent approval
+and records the ordinary hold/movement/source/receipt together. The persisted
+target-branch authority is checked before every attempt. Compatible local holds
+remain protected; all quantities count toward the same demand cap. Existing
+same-bucket supplemental restrictions remain intact. Any failure rolls back case
+consumption as well as stock. Receipt replay normalizes only its own unchanged
+movement/hold/stock version; later changes fail closed. No new ledger or migration.
+This is an internal writer only. Trusted runtime resolution and public execution
+UI remain pending; no client can supply authority through HTTP. Evidence:
+planning/evidence/t07-other-store-execution.txt.
+
+### Other-store request entry (2026-10-04)
+
+Sales drafts detail -> Request other-store stock now selects a saved line and
+explicit branch/location/bucket using the existing paginated location client.
+Stock reads accept optional exact product_id before count/pagination; existing
+location/product scope indexes remain sufficient for this bounded query shape.
+GET other-store-fulfilment-cases/working-store exposes only the authenticated
+actor's enabled current assignment (branch/version/counter), under request/draft
+permissions, without View_User or another user's identity parameter. Submission
+still rechecks assignment. Frontend locks uncertain payloads to identical retries,
+blocks stale-state replacement, confirms dirty close and states that approval
+does not allocate stock. Existing quantity caps/stock eligibility are authoritative.
+Trusted execution and browser acceptance remain pending. Evidence:
+planning/evidence/t07-other-store-request-entry.txt.
+
+### Other-store review API and queue (2026-10-04)
+
+Scoped request/list/review endpoints reuse the exact binding and manager-case
+engine under SALES, INVENTORY, draft/customer/personal-data access and separate
+Request_OtherStoreFulfilment / Review_OtherStoreFulfilment permissions. No role
+grants are seeded. Requestor identity comes from authentication; independent review
+revalidates the original requestor assignment and stock/source versions. Own-only
+requester visibility, bounded pagination and explicit response schemas exclude the
+internal hold digest. Sales drafts -> Other-store reviews reuses ManagerCases with
+exact source/stock scope, independent decisions and no activation control.
+Request-entry is now described above; trusted execution remains pending. Approval has no stock
+effect. Evidence: planning/evidence/t07-other-store-review-api.txt.
+
+### Explicit other-store review foundation (in progress)
+
+other_store_fulfilment_service loads an exact same-company, different-branch stock
+choice against saved draft demand and current salesperson assignment. Sorted branch
+locks precede assignment/document/source-allocation/stock checks. Exact stock version,
+quantity/unit conversion, available quantity and compatible existing source holds
+bind the manager case. It reuses the case engine, stock readers and history digest;
+there is no new reservation ledger or public posting bypass. Approval alone has no
+stock effect. Candidate expiry is recorded; execution still needs the target's
+trusted business date and node authority. Public review API/queue is now added
+above; request-entry and execution remain unfinished, not operational checkout.
+Evidence: planning/evidence/t07-other-store-review-foundation.txt.
+
+### Reviewed supplements to compatible multi-location demand (2026-10-04)
+
+Reallocation still releases and re-reserves the exact same physical bucket, but
+its destination may already hold matching stock in other locations of the same
+branch. The streamed target-history query joins immutable bucket identities and
+rejects active holds with different store/product/base unit/tracking/batch.
+Fully released history remains in the digest and does not constrain active lots.
+All target quantities and deadlines bind approval; combined remaining demand is
+capped across locations. Original holds are never edited to append quantity.
+The v2 history digest includes bucket IDs and invalidates older review snapshots;
+fresh review is required, not migration/reinterpretation of approved records.
+Existing document locks, exact paired release proof and deferred segment guard
+remain unchanged. No physical transfer, cross-store exception or paid-hold support.
+Evidence: planning/evidence/t07-multi-location-supplements.txt.
+
+### Staff working-store assignments (2026-10-04)
+
+StaffStoreAssignment stores append-only company/user revisions: authorised branch,
+optional usual counter, enabled flag, actor and exact posting receipt. One current
+working store per user/company; a counter is never product-access authority.
+Composite scoped foreign keys, immutable/counter-branch guard and a replayable
+startup migration seed no users or settings. User row locks serialize revisions
+and keep posting assignment checks stable until commit. Effective membership
+follows NULL-home/explicit-array semantics; empty membership denies even replay.
+Internal store allocation now requires the current assignment version in its
+intent; branch/assignment changes or revocation deny replay. Action RBAC, counter
+eligibility and trusted node authority remain independent mandatory checks.
+GET/PUT /inventory/branches/{branch}/staff-assignments[/user] require INVENTORY,
+View_Product and View_User; PUT additionally requires Edit_User and
+Manage_BranchSettings. Paginated reads project only username/id and assignment;
+they never reuse the legacy unbounded user endpoint or expose password hashes.
+Frontend Locations -> selected branch -> Staff working stores has optional-counter
+selection, explicit reassign/enable, version conflicts and exact uncertain retries.
+No real assignments seeded; no public checkout writer enabled. Evidence:
+planning/evidence/t07-staff-store-assignments.txt. Browser acceptance pending.
+
 ### Parallel-development checkpoint (2026-10-03)
 
 The canonical queue, BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt are in
@@ -14,8 +124,48 @@ them and the canonical queue supersede statements that those slices are pending.
 No cycle-count implementation, deployment or operational activation is introduced
 by this handoff. Browser/hardware/provider gates remain separate.
 
-### Work-area default allocation rule (owner clarification)
+### Store-wide allocation (BD-20261003-06 supersedes the area restriction)
 
+Salespeople may sell any eligible product in their authorised InventoryBranch.
+Counter/specialism is not a product or stock entitlement. The legacy JSON field
+default_stock_location_id remains an optional preferred picking area; no migration
+or data backfill. Unset resolves to None and inspection returns root:null/items:[],
+not an error. Stale/disabled/mis-scoped contexts still fail closed.
+Internal store_allocation_service composes deterministic reserve_stock children
+and a grouping receipt in one existing execute_once transaction. Exact saved demand,
+branch authority and permission guards are rechecked before replay. Product and
+document locks serialize planners; stock effects retain locked quantity checks.
+Candidates are active same-branch locations with active ancestry and unexpired
+lots. Streamed planning prefers the configured area then other same-store stock,
+keeping one compatible batch identity (therefore shade/calibre) per source. A short
+preferred lot cannot mask a sufficient alternative lot. No partial hold on failure.
+Source-linked reserve_stock permits compatible same-store bucket splits with a
+combined source cap. Generic source-less splits and unreviewed same-bucket
+supplements remain denied. Initial allocation cannot replace existing hold history.
+Staff/store assignment is now implemented above; trusted public runtime adapter
+remains pending. The counter is not authority. Other-store/warehouse exceptions
+remain fail-closed.
+Frontend settings/inspection say preferred picking area and explain store-wide
+selling without claiming stock availability or operational activation.
+
+### Earlier counter-area inspection foundation (historical; rule superseded above)
+
+Counter area resolution now pins an active exact-company branch and counter,
+checks the saved configuration version and validates the complete active
+SITE/ZONE/BIN ancestry in at most three indexed probes. The allocation resolver
+also requires a checkout-capable enabled counter. Shared branch locks prevent
+counter settings from changing beneath the caller's transaction.
+GET /inventory/branches/{branch}/counters/{key}/stock-area is an advisory,
+View_Product/INVENTORY-protected, version-pinned paginated read of the root and
+active descendants. Inactive intermediate zones exclude their bins; sibling areas
+and foreign branches are never substituted. Disabled counters can be inspected
+but not used by the allocation resolver. No stock quantities, staff assignment or
+posting authority is returned. Frontend Counters -> View stock area reuses the
+scoped client and pagination; errors clear stale results. No schema migration.
+Evidence: planning/evidence/t07-counter-area-scope.txt. Staff assignment and actual
+automatic allocation remain pending; this area query is not a locked stock plan.
+
+Historical BD-20261003-03 (superseded by BD-20261003-06 above):
 Ordinary eligible stock allocation should be automatic within the salesperson's
 current configured area. Insufficient stock produces a shortfall, never automatic
 cross-area selection. Explicit alternative choices use applicable manager review.

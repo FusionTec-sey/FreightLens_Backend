@@ -76,6 +76,16 @@ def test_batch_details_are_scoped_and_separate_per_lot(locations):
         assert row["expires_on"] == "2027-01-01" and row["batch_calibre"] == "600"
 
 
+def test_product_filter_precedes_pagination(locations):
+    f = locations; location = site(f.client, f.own).json()['id']
+    first = seed(f, location); second = seed(f, location, 'SECOND')
+    data = f.client.get(path(f, location)+f'?product_id={second.id}&limit=1').json()
+    assert data['total'] == 1 and data['pages'] == 1
+    assert data['items'][0]['product_id'] == second.id
+    assert f.client.get(path(f, location)+f'?product_id={first.id}&page=2&limit=1').json()['items'] == []
+    assert f.client.get(path(f, location)+'?product_id=0').status_code == 422
+
+
 @pytest.mark.parametrize("denial", ["anonymous", "permission", "module"])
 def test_stock_read_access_guards(locations, denial):
     f = locations

@@ -46,8 +46,8 @@ def test_counter_default_area_is_scoped_versioned_and_never_falls_back(locations
     with f.db.begin_nested(), pytest.raises(MissingBranchConfiguration, match='changed'):
         require_default_stock_area(f.db, f.context, context)
     from dataclasses import replace
-    with f.db.begin_nested(), pytest.raises(MissingBranchConfiguration, match='Set the counter'):
-        require_default_stock_area(f.db, f.context, replace(context, counter_settings_version=3))
+    with f.db.begin_nested():
+        assert require_default_stock_area(f.db, f.context, replace(context, counter_settings_version=3)) is None
 
 
 def test_counter_identity_revisions_retry_and_pagination(locations):

@@ -2,6 +2,7 @@ from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from Schema.BranchSettingsSchema import BranchSettingsSave
+from Schema.InventoryLocationSchema import LocationRead, LocationPage
 
 
 class CounterConfig(BaseModel):
@@ -29,4 +30,11 @@ class CounterRead(BaseModel):
     code: str
     version: int
     config: CounterConfig
+    operational_activation: Literal[False] = False
+
+
+class CounterStockAreaRead(LocationPage[LocationRead]):
+    root: LocationRead | None
+    counter_version: int
+    counter_enabled: bool
     operational_activation: Literal[False] = False
