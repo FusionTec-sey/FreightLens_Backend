@@ -1,0 +1,33 @@
+FreightLens reviewed receipt posting boundary — 2026-10-05
+
+Scope
+- Added GET /inventory/receipt-manifests/{key}/posting-context with only the
+  server-derived branch, product, exact cost pool and current valuation version.
+- Added POST /inventory/receipt-manifests/{key}/post over the existing atomic
+  reviewed-receipt coordinator.
+- Added the dedicated Post_InventoryReceipt permission and typed request/result
+  contracts. No authority identity, stock scope or SCR value is client supplied.
+
+Safety
+- Posting requires Inventory and Orders modules, current company staff access,
+  Verify_Receipt, Post_InventoryReceipt and the existing independent financial,
+  supplier-evidence and Post_InventoryCost permissions.
+- The current server stock node and central cost runtime derive and recheck exact
+  branch/pool epochs. Missing branch mappings, runtimes and evidence-size policy
+  block posting instead of selecting a fallback.
+- Version-pinned object evidence is prepared outside the business transaction,
+  then the complete approvals/source/stock/value/outbox effect commits atomically.
+- Operation-key replays recheck permissions and authority but are not rejected by
+  a newer stream version created by their own first successful attempt.
+
+Verification
+- 50 focused backend checks passed in the isolated PostgreSQL test database:
+  test_permission_catalog.py, test_receipt_manifest_api.py,
+  test_inventory_receipt_cost_reviews.py, test_inventory_receipt_valuation.py and
+  test_inventory_receipt_movements.py.
+
+Remaining gates
+- Controlled opening/import composition remains the final T08 code package.
+- Real cloud node identities, version-retention policy, accounting reconciliation,
+  browser acceptance and live stock/financial activation remain owner-controlled
+  release gates. No external deployment or real business posting occurred.

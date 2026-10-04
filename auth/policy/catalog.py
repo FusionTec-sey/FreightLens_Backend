@@ -122,6 +122,7 @@ PERMISSION_CATALOG = [
     ]),
     *_specs("INVENTORY", [
         ('Post_InventoryCost', 'Post independently verified inventory costs through central authority'),
+        ('Post_InventoryReceipt', 'Post an approved receipt into stock and valuation atomically'),
         ('Request_ReservationRelease', 'Request exact saved-demand stock release review'),
         ('Review_ReservationRelease', 'Approve or reject saved-demand stock release requests'),
         ('Execute_ReservationRelease', 'Execute an exact approved saved-demand stock release'),

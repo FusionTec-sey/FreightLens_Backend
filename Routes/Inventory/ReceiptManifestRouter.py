@@ -1,4 +1,4 @@
-"""Permission-scoped receipt classification and cost evidence; no stock posting."""
+"""Permission-scoped receipt review and approved atomic stock/value posting."""
 from uuid import UUID
 from typing import Literal
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
@@ -7,11 +7,16 @@ from urllib.parse import quote
 from Model.db import get_db
 from Model.containermgmt.Inventory.ReceiptManifest import InventoryReceiptManifestRecord as Manifest
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase, ManagerCaseDecision, ManagerCaseUse
+from Model.containermgmt.Inventory.CostPool import BranchCostPool, InventoryCostPool
+from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from Model.containermgmt.Orders.GoodsReceipt import GoodsReceipt, ReceiptItem
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+from Model.Credentials.Organisation import Organisation
+from Model.Credentials.users import User
 from Schema.InventoryReceiptSchema import (InventoryReceiptManifest, ReceiptManifestCreate,
     ReceiptManifestSaved, ReceiptManifestPreview, ReceiptManifestSummary, ReceiptManifestDetail,
-    ReceiptManifestReviewCase, InventoryReceiptSource, ReceiptSourceSnapshot)
+    ReceiptManifestReviewCase, InventoryReceiptSource, ReceiptSourceSnapshot,
+    ReceiptPostingContext, ReceiptPostingRead, ReceiptPostingRequest)
 from Schema.InventoryLocationSchema import LocationPage
 from Schema.StockReclassificationSchema import ReclassificationReviewRequest
 from Schema.ManagerCaseSchema import PolicyCaseReview, CaseActionRead
@@ -26,17 +31,22 @@ from Services.inventory_receipt_cost_review_service import (
     ACTION as RECEIPT_COST_ACTION, metadata_binding,
     receipt_cost_binding, request_receipt_cost_review, review_receipt_cost)
 from Services.inventory_receipt_cost_content_service import prepare_receipt_cost_content
+from Services.inventory_receipt_posting_service import prepare_and_post_reviewed_receipt
 from Services.inventory_posting_service import PostingConflict
 from Services.manager_case_service import CaseBinding
 from Services.manager_case_read_service import case_metadata, case_page
 from Services.evidence_config_service import (
     EvidenceConfigurationUnavailable, evidence_size_limit)
+from Services.stock_runtime_service import StockRuntimeUnavailable, server_stock_runtime
+from Services.cost_runtime_service import CostRuntimeUnavailable, server_cost_runtime
+from Services.staff_store_assignment_service import eligible_staff
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 from auth.dependencies import get_org_context, get_current_user
 from auth.security_guards import (
     require_permission, has_permission, is_financial_user, can_view_supplier_user)
 from auth.module_guard import require_module
+from auth.policy import get_access_policy
 
 
 def private_response(response: Response):
@@ -108,6 +118,72 @@ def receipt_cost_access(context, user, permission=None):
             or not can_view_supplier_user(user, context)):
         raise HTTPException(403, 'Financial and supplier evidence access required')
     return user
+
+
+def receipt_posting_access(context, user):
+    required = {
+        'View_Product', 'View_GoodsReceipt', 'Verify_Receipt',
+        'Post_InventoryReceipt', 'View_Financials', 'Manage_Financials',
+        'View_Supplier', 'View_OrderDocument', 'Post_InventoryCost',
+    }
+    if (not all(has_permission(user, name) for name in required)
+            or not is_financial_user(user, context)
+            or not can_view_supplier_user(user, context)):
+        raise PermissionError(
+            'Receipt posting requires separate stock, cost and evidence authority')
+    return user
+
+
+def current_receipt_actor(db, context, actor_id):
+    if db.query(Organisation.id).filter_by(
+            id=context.org_id, is_active=True).first() is None:
+        raise PermissionError('Receipt posting company is inactive')
+    if eligible_staff(db, context).filter(User.id == actor_id).first() is None:
+        raise PermissionError('Receipt posting actor is unavailable in this company')
+    actor = db.query(User).filter_by(id=actor_id, is_deleted=False).one_or_none()
+    if actor is None:
+        raise PermissionError('Receipt posting actor is unavailable')
+    actor.access_policy = get_access_policy(user=actor, org_context=context, db=db)
+    if (not actor.access_policy.is_platform_admin
+            and not {'INVENTORY', 'ORDERS'}.issubset(
+                actor.access_policy.module_names)):
+        raise PermissionError('Inventory and orders access required')
+    receipt_posting_access(context, actor)
+    return actor
+
+
+def receipt_posting_scope(db, context, key):
+    record = visible_manifest(db, context, key)
+    try:
+        branch_id = record.snapshot['source']['branch_id']
+        product_id = record.snapshot['source']['product_id']
+    except (KeyError, TypeError):
+        raise PostingConflict('Receipt manifest has an invalid posting scope') from None
+    if any(type(value) is not int or value <= 0
+            for value in (branch_id, product_id)):
+        raise PostingConflict('Receipt manifest has an invalid posting scope')
+    mapping = apply_org_filter(db.query(BranchCostPool).join(
+        InventoryCostPool,
+        (InventoryCostPool.id == BranchCostPool.cost_pool_id)
+        & (InventoryCostPool.org_id == BranchCostPool.org_id)).filter(
+            BranchCostPool.org_id == context.org_id,
+            BranchCostPool.branch_id == branch_id,
+            BranchCostPool.is_deleted.is_(False),
+            InventoryCostPool.is_active.is_(True),
+            InventoryCostPool.is_deleted.is_(False)),
+        BranchCostPool, context).one_or_none()
+    if mapping is None:
+        raise ValueError('An active exact branch cost-pool mapping is required')
+    latest = apply_org_filter(db.query(InventoryValuation.version).filter(
+        InventoryValuation.org_id == context.org_id,
+        InventoryValuation.cost_pool_id == mapping.cost_pool_id,
+        InventoryValuation.product_id == product_id,
+        InventoryValuation.is_deleted.is_(False)),
+        InventoryValuation, context).order_by(
+            InventoryValuation.version.desc()).first()
+    return dict(manifest_key=key, branch_id=branch_id,
+        product_id=product_id, cost_pool_id=mapping.cost_pool_id,
+        valuation_version=latest.version if latest else 0)
 
 
 def receipt_cost_case_access(context=Depends(get_org_context),
@@ -411,6 +487,83 @@ def download_cost_review_document(key: UUID, case_key: UUID, document_id: UUID,
                 quote(filename, safe=''),
             'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
     except EvidenceConfigurationUnavailable as error:
+        db.rollback(); raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        db.rollback(); raise translate(error) from error
+
+
+@ReceiptManifestRouter.get('/{key}/posting-context',
+    response_model=ReceiptPostingContext)
+def posting_context(key: UUID, db: Session = Depends(get_db),
+        context: OrgContext = Depends(get_org_context),
+        user=Depends(require_permission('Post_InventoryReceipt'))):
+    """Return only server-derived branch/pool/version context; never post."""
+    try:
+        receipt_posting_access(context, user)
+        if not db.in_transaction():
+            db.begin()
+        scope = receipt_posting_scope(db, context, key)
+        server_stock_runtime().claim_for(
+            db, context, scope['branch_id'])
+        server_cost_runtime().claim_for(
+            db, context, scope['cost_pool_id'])
+        evidence_size_limit()
+        return scope
+    except (StockRuntimeUnavailable, CostRuntimeUnavailable,
+            EvidenceConfigurationUnavailable) as error:
+        db.rollback(); raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        db.rollback(); raise translate(error) from error
+
+
+@ReceiptManifestRouter.post('/{key}/post', response_model=ReceiptPostingRead)
+def post_approved_receipt(key: UUID, payload: ReceiptPostingRequest,
+        db: Session = Depends(get_db),
+        context: OrgContext = Depends(get_org_context),
+        user=Depends(require_permission('Post_InventoryReceipt'))):
+    """Atomically consume both approvals and post physical/value history."""
+    try:
+        receipt_posting_access(context, user)
+        if not db.in_transaction():
+            db.begin()
+        scope = receipt_posting_scope(db, context, key)
+        stock_runtime = server_stock_runtime()
+        cost_runtime = server_cost_runtime()
+        stock_claim = stock_runtime.claim_for(
+            db, context, scope['branch_id'])
+        cost_claim = cost_runtime.claim_for(
+            db, context, scope['cost_pool_id'])
+        limit = evidence_size_limit()
+        factory = sessionmaker(bind=db.get_bind())
+        actor_id = user.id
+        db.rollback()
+
+        def authorize_stock(session):
+            current_receipt_actor(session, context, actor_id)
+            if stock_runtime.claim_for(
+                    session, context, scope['branch_id']) != stock_claim:
+                raise PermissionError('Receiving-store authority changed')
+
+        def authorize_cost(session):
+            current_receipt_actor(session, context, actor_id)
+            if cost_runtime.claim_for(
+                    session, context, scope['cost_pool_id']) != cost_claim:
+                raise PermissionError('Central cost authority changed')
+
+        result = prepare_and_post_reviewed_receipt(
+            factory, context, actor_id, payload.operation_key,
+            manifest_key=key,
+            classification_case_key=payload.classification_case_key,
+            cost_case_key=payload.cost_case_key,
+            expected_valuation_version=payload.expected_valuation_version,
+            reason=payload.reason,
+            stock_authority=stock_claim, cost_authority=cost_claim,
+            authorize_stock=authorize_stock, authorize_cost=authorize_cost,
+            storage=blob_storage, max_bytes=limit)
+        return ReceiptPostingRead(operation_key=result.operation_key,
+            replayed=result.replayed, **result.result)
+    except (StockRuntimeUnavailable, CostRuntimeUnavailable,
+            EvidenceConfigurationUnavailable) as error:
         db.rollback(); raise HTTPException(503, str(error)) from error
     except Exception as error:
         db.rollback(); raise translate(error) from error

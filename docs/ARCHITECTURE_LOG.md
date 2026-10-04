@@ -1,5 +1,21 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - Public reviewed receipt posting boundary
+
+- Added server-derived posting context plus an authenticated execution route that
+  composes the existing approved receipt classification, version-pinned cost
+  evidence, physical movements, weighted-average valuation and operation outbox in
+  one transaction.
+- The client supplies stable operation/case identities and an expected valuation
+  version, but cannot supply a branch, cost pool, authority claim or monetary value.
+  Missing exact mappings and disabled runtimes fail closed.
+- Separate stock and financial permissions, staff/company access, evidence policy,
+  store authority and central-pool authority rerun on every attempt, including
+  replays. Uncertain retries retain one business effect.
+- Fifty focused backend checks pass. Real runtime identities, object-retention
+  policy and accounting reconciliation remain external release gates; controlled
+  opening/import composition remains the last T08 code package.
+
 ## 2026-10-04 - Reviewed immutable cost-reconciliation checkpoints
 
 - Added product/pool checkpoints that bind one latest valuation head and every
