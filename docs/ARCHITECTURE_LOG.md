@@ -1,5 +1,17 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T17 immutable invoice artifacts and print queue
+
+- Added immutable ORIGINAL/COPY sales-invoice artifacts over the existing published
+  report-template renderer, with exact RustFS VersionId/size/SHA-256 fingerprints.
+- Added READY/UNCERTAIN/PRINTED/FAILED print jobs and append-only events. Handoff
+  becomes UNCERTAIN before bytes leave the API; only an explicit observed outcome
+  resolves it, and another artifact is blocked while a job remains unresolved.
+- Connected the existing posted-sale detail to a permission-aware invoice/print
+  panel with stable retry identities, paginated history and exact PDF handoff.
+- Fifty-two affected backend checks and fifteen focused frontend checks pass; the
+  production build passes with existing warnings. Browser and Epson gates remain.
+
 ## 2026-10-05 - T09 pilot reserved handover and cost issue
 
 - Added an internal one-transaction movement seam that consumes an exact owned

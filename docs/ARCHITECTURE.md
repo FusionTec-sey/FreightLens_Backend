@@ -19,8 +19,12 @@ and state events are append-only. A print job starts READY, becomes UNCERTAIN be
 bytes cross the authenticated boundary, and can become PRINTED or FAILED only by an
 explicit audited resolution. A repeated uncertain handoff is not silently delivered
 again. Reads are tenant-scoped, permission-checked, private/no-store and paginated.
-This foundation does not prove a physical Epson outcome; printer hardware acceptance
-and the existing sale-detail frontend consumer remain open T17 gates.
+The existing posted-sale detail now consumes this contract through a permission-aware
+invoice/print panel with stable create/handoff/resolve intents. It opens the exact
+handoff PDF in a pre-authorised browser window, reloads uncertain outcomes and never
+treats closing a browser print dialog as proof of printing. This foundation does not
+prove a physical Epson outcome; printer hardware and browser acceptance remain open
+T17 gates.
 
 ### Atomic reserved handover and weighted-average issue (2026-10-05)
 
