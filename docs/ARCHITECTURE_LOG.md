@@ -20,8 +20,8 @@
   A locked internal resolver revalidates exact versions for future T13 posting.
 - Added a permission-aware Sales configuration screen with retained uncertain saves,
   server pagination and explicit readiness inspection. No money is posted.
-- Synthetic tests introduce no real bank data. Browser, integrated CI, accounting
-  setup and pilot gates remain pending until the paired PRs are verified.
+- Synthetic tests introduce no real bank data. Paired backend PR #10 and frontend
+  PR #9 passed CI and merged. Browser, accounting setup and pilot gates remain pending.
 
 ## 2026-10-05 - Public reviewed receipt posting boundary
 
