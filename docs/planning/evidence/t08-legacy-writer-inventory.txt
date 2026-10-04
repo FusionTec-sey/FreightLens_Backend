@@ -1,0 +1,78 @@
+2026-10-04 — T08 legacy stock writer inventory, and the two C12 defects closed
+Status: T08 remains Blocked on T06/T07 for the replacement itself. This records the
+queue's stated next action ("Inventory every legacy writer before replacing it")
+and closes the two C12 acceptance items, which were pure safety defects and did
+not require the replacement ledger to exist.
+
+THE LEGACY TOTAL
+
+Product.current_stock, Numeric(12,2) on containermgmt.products, is the legacy
+per-product total. It has no location, batch, serial, unit policy, movement
+history, posting operation or authority claim. It is independent of the
+inventory_stock_balances ledger that T05/T06/T07 write through. Every item below
+reads or writes that column.
+
+WRITERS FOUND (complete inventory)
+
+W1. POST /inventory/products/{id}/adjust-stock  (InventoryRouter, adjust_stock)
+    Wrote prod.current_stock directly from a float delta, clamped at zero.
+    Bypasses: location, policy/unit conversion, batch/serial, movement record,
+    posting operation, authority claim.
+    FIXED 2026-10-04: exact Decimal arithmetic, and an adjustment that would drive
+    the quantity below zero is refused with 400 instead of clamping to zero. The
+    clamp previously absorbed a counting or process error silently, which is the
+    behaviour C12 recorded. Still a legacy writer; replacement remains T08 scope.
+
+W2. PUT /inventory/products/{id}  (InventoryRouter, update_product)
+    current_stock sat in the catalogue "updatable" field list, so a metadata save
+    could replace the held quantity outright.
+    FIXED 2026-10-04: removed from the updatable list AND the request is refused
+    with 422 when current_stock is supplied, rather than silently ignored, so a
+    caller cannot believe it changed stock when it did not.
+
+W3. POST /inventory/products  (InventoryRouter, create_product)
+    Sets current_stock=payload.current_stock or 0.0 at creation: an opening balance
+    through the catalogue, outside the reviewed opening-stock path that T05 uses.
+    NOT changed: refusing a non-zero opening here would break product creation
+    flows before a replacement exists. Replacement belongs to T08 proper.
+
+W4. Utils/import_inv_product_listing.py
+    Importer defaults current_stock to 0.0 on created rows. Benign today because
+    the value is always zero, but it is a write and must route through the
+    replacement boundary once one exists.
+
+NOT A STOCK WRITER (checked, no action)
+
+- Services/receiving_service.py maintains purchasing received totals only and says
+  so explicitly; it does not touch current_stock or the ledger.
+- No code outside Services/stock_ledger_service.py writes StockBalance.on_hand,
+  reserved, damaged or quarantined. The guarded ledger boundary is intact; the
+  legacy surface is confined to Product.current_stock.
+
+READERS THAT MAKE THE LEGACY TOTAL AUTHORITATIVE (migrate with the writers)
+
+InventoryRouter lines 677, 685, 730, 796, 878, 949, 985, 1057 read
+Product.current_stock for list payloads, low-stock flags, low-stock filters and
+CSV export. Until these read the ledger, the product screens will continue to show
+the legacy total even after the writers are replaced, so T08 must move the readers
+in the same change or the two numbers will visibly disagree.
+
+C12 ACCEPTANCE
+
+tests/test_pos_prerequisite_regressions.py carried two strict xfails:
+- "stock adjustment clamps excessive negative delta to zero"
+- "product metadata update permits direct stock replacement"
+Both defects are fixed, both xfail markers removed, and both tests now pass as
+ordinary assertions. Suite result: 37 passed. Related suites: 125 passed. Full
+backend suite: 431 passed, 1 failed — tests/test_reporting_worker.py
+::test_issued_copy_detection_uses_document_type_and_lifecycle, which belongs to
+the parallel reporting lane and is untouched by this change (diff is
+InventoryRouter.py and the regression test only).
+
+REMAINING FOR T08, STILL BLOCKED
+
+Replacing W1, W3 and W4 with ledger-backed movements needs the movement contracts
+from T09, and T08's dependencies are recorded as T06 and T07. Note the dependency
+cycle: T08 depends on T06/T07, T09 depends on T08, and T06's own remaining receipt
+costing depends on T09's movement ledger. That knot needs an owner decision to
+break; no further code resolves it.

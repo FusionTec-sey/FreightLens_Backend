@@ -328,7 +328,6 @@ def test_authorized_create_submitted_posts_once(harness):
     assert harness.db.commits == 1
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="C12: stock adjustment clamps excessive negative delta to zero")
 def test_stock_adjustment_rejects_insufficient_stock(harness):
     response = harness.client.post("/inventory/products/1/adjust-stock", json={"quantity_delta": -6, "reason": "test"})
     assert response.status_code == 400
@@ -336,7 +335,6 @@ def test_stock_adjustment_rejects_insufficient_stock(harness):
     assert harness.db.commits == 0
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="C12: product metadata update permits direct stock replacement")
 def test_product_edit_cannot_replace_stock(harness):
     response = harness.client.put("/inventory/products/1", json={"current_stock": 999})
     assert response.status_code in {400, 422}

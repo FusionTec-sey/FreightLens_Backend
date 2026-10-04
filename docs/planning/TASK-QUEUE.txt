@@ -417,7 +417,23 @@ T08 | Replace legacy stock writers
 Status: Blocked
 Dependencies: T06,T07
 Acceptance / evidence: All product opening/adjustment/receiving/import writers use Inventory; no direct totals or clamp; two C12 xfails pass.
-Next action: Inventory every legacy writer before replacing it.
+Legacy writer inventory completed 2026-10-04, the recorded next action. Four writers
+of Product.current_stock found (adjust-stock, product edit, product create, listing
+importer); no code outside stock_ledger_service writes StockBalance quantities, so
+the guarded ledger boundary is intact and the legacy surface is confined to that one
+column. Eight reader sites make the legacy total authoritative for list payloads,
+low-stock flags/filters and CSV export, and must move in the same change or the two
+numbers will visibly disagree.
+Both C12 acceptance items are now closed, since they were safety defects needing no
+replacement ledger: the stock adjustment no longer clamps an excessive negative
+delta to zero (refused with 400, exact Decimal arithmetic), and a product metadata
+save can no longer replace held stock (refused with 422 rather than silently
+ignored). Both xfail markers removed; 37 pass in the regression suite, 125 in
+related suites. Evidence: evidence/t08-legacy-writer-inventory.txt.
+Next action: replace the remaining writers (create, importer, adjust-stock) and move
+the eight readers onto the ledger. Blocked: T08 depends on T06/T07, T09 depends on
+T08, and T06's remaining receipt costing depends on T09's movement ledger. This
+cycle needs an owner decision to break; no further code resolves it.
 
 T09 | Complete transfers and stock movements
 Status: Blocked

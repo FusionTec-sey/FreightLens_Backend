@@ -2,6 +2,7 @@ import logging
 import csv
 import io
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -1161,8 +1162,17 @@ def adjust_stock(
     if not prod:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    prev_stock = float(prod.current_stock or 0.0)
-    new_stock = max(0.0, prev_stock + payload.quantity_delta)
+    # Exact decimal arithmetic, and no clamp: an adjustment that would drive the
+    # held quantity below zero is a counting or process error, so it is refused
+    # and recorded as such rather than silently absorbed into a zero balance.
+    prev_stock = Decimal(str(prod.current_stock or 0))
+    delta = Decimal(str(payload.quantity_delta))
+    new_stock = prev_stock + delta
+    if new_stock < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Adjustment of {delta} exceeds the held quantity of {prev_stock}. "
+                    "Reduce the adjustment or investigate the shortfall."))
     prod.current_stock = new_stock
     prod.updated_by = current_user.id
     prod.updated_at = datetime.utcnow()
@@ -1454,6 +1464,14 @@ def update_product(
     if not has_permission(current_user, "Edit_Product"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to edit products.")
 
+    # Refuse rather than quietly ignore: a caller that believes it set stock here
+    # would otherwise carry on thinking the held quantity had changed.
+    if getattr(payload, "current_stock", None) is not None:
+        raise HTTPException(
+            status_code=422,
+            detail=("Held stock cannot be set through a product edit. "
+                    "Use a reasoned stock adjustment or a stock movement."))
+
     from Services.policy_activation_service import require_catalogue_update_compatible
     from Services.inventory_posting_service import PostingConflict
     prod = apply_org_filter(
@@ -1495,7 +1513,9 @@ def update_product(
         "pallet_type", "cartons_per_layer", "layers_per_pallet", "total_cartons_per_pallet", "max_stacking_layers",
         "est_qty_20ft", "est_qty_40hc",
         "warehouse_location", "default_bin", "packaging_specs",
-        "current_stock", "min_stock_quantity", "max_stock_quantity",
+        # current_stock is deliberately NOT catalogue-editable: a held quantity may
+        # only change through a reasoned stock movement, never a metadata save.
+        "min_stock_quantity", "max_stock_quantity",
         "order_threshold_qty", "threshold_qty", "min_quantity_order", "lead_time_days",
         "default_supplier_id",
         "images", "videos", "attachment",
