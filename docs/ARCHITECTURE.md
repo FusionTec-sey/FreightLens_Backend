@@ -2,6 +2,24 @@
 
 ## Status
 
+### Reviewed opening/import composition (2026-10-05)
+
+One exact opening or staged import row now passes through the existing manager-case,
+stock-ledger and valuation services instead of writing a product total. The request
+binds a stable source identity, active product-policy version, company/branch/location,
+tracking identities, exact condition quantities, explicit branch cost pool, current
+valuation version and reviewed SCR goods/additional values. Request, independent
+review and execution use separate permissions; financial field access is mandatory.
+
+Execution resolves server-owned branch and cost-pool authority and atomically consumes
+the approval, appends the immutable opening movement, records its unreconciled
+weighted-average value and emits the existing durable operation events. A composite
+operation lock serializes replay before source inspection, so concurrent same-key
+attempts have one effect. Changed intent, stale policy/value, foreign ownership,
+missing mappings, invalid tracking identities and reused approvals fail closed.
+This is a row-level controlled opening boundary, not an inFlow parser, real opening
+balance import, reconciliation close or permission to activate financial posting.
+
 ### Cloud-derived central valuation authority (2026-10-04)
 
 Central cost execution now follows the cloud-authoritative stock pattern while

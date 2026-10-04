@@ -16,6 +16,20 @@
   policy and accounting reconciliation remain external release gates; controlled
   opening/import composition remains the last T08 code package.
 
+## 2026-10-05 - T08 reviewed opening/import composition
+
+- Added a public request/review/list/execute adapter for one exact opening or staged
+  import row. It reuses active inventory policies, manager cases, server-derived
+  stock/cost authority, the stock ledger and immutable pool valuation.
+- One caller-owned transaction consumes the exact approval and records physical
+  stock plus unreconciled SCR value. Product totals and selling prices are untouched.
+- Centralised the posting-operation advisory lock for composite coordinators so a
+  concurrent same-key retry cannot observe a half-finished source check.
+- Fourteen opening/API tests and 72 affected ledger/posting/valuation tests pass in
+  isolated PostgreSQL. After receipt-boundary integration, 134 combined T08/startup
+  checks pass. Browser, real import data, reconciliation and retention gates remain
+  open; this does not activate real financial posting.
+
 ## 2026-10-04 - Reviewed immutable cost-reconciliation checkpoints
 
 - Added product/pool checkpoints that bind one latest valuation head and every

@@ -28,6 +28,7 @@ from .Inventory.ManagerCaseRouter import ManagerCaseRouter
 from .Inventory.ReclassificationProposalRouter import ReclassificationProposalRouter
 from .Inventory.ReceiptManifestRouter import ReceiptManifestRouter
 from .Inventory.StockAdjustmentRouter import StockAdjustmentRouter
+from .Inventory.OpeningRouter import OpeningRouter
 from .Inventory.CostReconciliationRouter import CostReconciliationRouter
 from .Inventory.UnitBarcodeRouter import UnitBarcodeRouter
 from .Inventory.BarcodeRetirementRouter import BarcodeRetirementRouter
@@ -45,6 +46,7 @@ __all__ = [
     "ReclassificationProposalRouter",
     "ReceiptManifestRouter",
     "StockAdjustmentRouter",
+    "OpeningRouter",
     "CostReconciliationRouter",
     "UnitBarcodeRouter",
     "BarcodeRetirementRouter",

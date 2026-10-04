@@ -38,6 +38,29 @@ class PostingOutcome:
     replayed: bool
 
 
+def lock_operation_attempt(db: Session, context: OrgContext,
+                           operation_key: UUID) -> None:
+    """Serialize a composite attempt before it invokes nested posting writers.
+
+    Composite coordinators call this before reading replay/source state. Nested
+    ``execute_once`` calls may acquire the same transaction-scoped advisory lock
+    again safely. This is not a posting receipt and has no business effect.
+    """
+    if not db.in_transaction():
+        raise ValueError("Posting lock requires an active caller-owned transaction")
+    if context.org_id not in context.allowed_org_ids:
+        raise PermissionError("An allowed active organisation is required")
+    if not isinstance(operation_key, UUID) or operation_key.int == 0:
+        raise ValueError("A nonzero UUID operation key is required")
+    if db.execute(text("SHOW transaction_isolation")).scalar() != "read committed":
+        raise ValueError("Posting requires READ COMMITTED isolation")
+    lock_key = int.from_bytes(sha256(
+        f"posting-v1:{context.org_id}:{operation_key}".encode()).digest()[:8],
+        byteorder="big", signed=True)
+    db.execute(text("SET LOCAL lock_timeout = '5s'"))
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+
+
 def _json_snapshot(value: dict) -> tuple[dict, str]:
     """Explicit JSON contract: money/quantities are strings, never binary floats."""
     def validate(item, depth=0):
@@ -136,14 +159,9 @@ def _execute_in_transaction(db: Session, context: OrgContext, actor_id: int,
         raise ValueError("Posting request must be a JSON object")
     _, encoded = _json_snapshot({"kind": kind, "request": request})
     digest = sha256(encoded.encode("utf-8")).hexdigest()
-    # Collisions only serialize unrelated operations; full keys are always checked.
-    lock_key = int.from_bytes(sha256(f"posting-v1:{org_id}:{operation_key}".encode()).digest()[:8],
-                              byteorder="big", signed=True)
-    # READ COMMITTED sees a competing writer after advisory-lock waiting.
-    if db.execute(text("SHOW transaction_isolation")).scalar() != "read committed":
-        raise ValueError("Posting requires READ COMMITTED isolation")
-    db.execute(text("SET LOCAL lock_timeout = '5s'"))
-    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    # READ COMMITTED sees a competing writer after advisory-lock waiting. Hash
+    # collisions only serialize unrelated operations; full keys remain checked.
+    lock_operation_attempt(db, context, operation_key)
     authorize(db)
     query = db.query(PostingOperation).filter(
         PostingOperation.org_id == org_id,
