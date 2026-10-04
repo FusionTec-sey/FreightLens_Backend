@@ -280,7 +280,7 @@ Policy transitions need a separate reviewed workflow, never another opening.
 def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, reservation_key,
                   source_line_key, quantity: Decimal, review_at: datetime, reason, input_unit=None,
                   business_date: date | None = None, authorize=None, authority=None, sales_source=None, reallocation_parent=None,
-                  other_store_case_key=None, other_store_binding=None):
+                  other_store_case_key=None, other_store_binding=None, branch_settings_version=None):
     _uuid(reservation_key); _uuid(source_line_key); _positive(quantity); _reason(reason)
     if not isinstance(review_at, datetime) or review_at.utcoffset() is None:
         raise ValueError("Reservation review time must include a timezone")
@@ -290,6 +290,10 @@ def reserve_stock(factory, context, actor_id, operation_key, *, balance_id, rese
         "source_line_key": str(source_line_key), "quantity": str(quantity),
         "review_at": review_at.isoformat(), "reason": reason, "input_unit": input_unit,
         "business_date": business_date.isoformat() if business_date else None}
+    if branch_settings_version is not None:
+        if type(branch_settings_version) is not int or branch_settings_version <= 0 or business_date is None:
+            raise ValueError('Positive checked settings version and trusted business date required')
+        request['branch_settings_version'] = branch_settings_version
     if sales_source is not None:
         if not isinstance(sales_source, SalesDemandReference) or source_line_key != sales_source.stock_source_key():
             raise ValueError('Sales source identity must match the saved document and line')
@@ -454,7 +458,7 @@ def _release_amount(db, balance, hold, operation_key, actor_id, base_quantity, r
 
 
 def reallocate_reservation(factory, context, actor_id, operation_key, *, case_key, binding,
-                           business_date, reason, authority, authorize):
+                           business_date, reason, authority, authorize, branch_settings_version=None):
     """One transaction, approved source/target, two existing stock effects.
 
     The outer receipt/event groups the paired child movements; it is not a third
@@ -464,6 +468,11 @@ def reallocate_reservation(factory, context, actor_id, operation_key, *, case_ke
     if not isinstance(binding, CaseBinding) or binding.action != 'inventory.reservation.reallocate':
         raise ValueError('Exact reallocation approval required')
     if type(business_date) is not date: raise ValueError('Trusted branch business date required')
+    request = dict(case_key=str(case_key), binding=binding.snapshot(), business_date=business_date.isoformat(), reason=reason)
+    if branch_settings_version is not None:
+        if type(branch_settings_version) is not int or branch_settings_version <= 0:
+            raise ValueError('Positive checked branch settings version required')
+        request['branch_settings_version'] = branch_settings_version
     details = binding.details; source_key = UUID(binding.source_key)
     target = SalesDemandReference.model_validate(details['target'])
     quantity = Decimal(details['quantity']); _positive(quantity)
@@ -504,5 +513,5 @@ def reallocate_reservation(factory, context, actor_id, operation_key, *, case_ke
             dict(kind='stock.reservation.reallocated', source_reservation_key=str(source_key), target_reservation_key=str(target_key),
                 child_operations=[str(release_op), str(reserve_op)]))
     return _post_stock(factory, context, actor_id, operation_key, 'stock.reallocate.v1',
-        dict(case_key=str(case_key), binding=binding.snapshot(), business_date=business_date.isoformat(), reason=reason),
+        request,
         apply, authority=authority, authorize=guard, balance_id=balance_id)

@@ -23,11 +23,7 @@ def create_customer(factory, context, actor_id, operation_key, profile, *, expec
         dict(profile=snapshot, expected_version=expected_version), effect, authorize=authorize)
 
 
-def get_customer(db, context, customer_key, *, authorize):
-    if not callable(authorize): raise ValueError('Customer and personal-data permission guard required')
-    authorize(db)
-    if context.org_id not in context.allowed_org_ids: raise PermissionError('Customer company scope denied')
-    row = apply_org_filter(db.query(RetailCustomer).filter_by(org_id=context.org_id,
-        customer_key=customer_key, is_deleted=False), RetailCustomer, context).one_or_none()
-    if row is None: raise LookupError('Customer not found')
-    return CustomerIdentityRead(**row.initial_profile, customer_key=row.customer_key, version=1)
+def get_customer(db, context, customer_key, *, authorize, version=None, lock=False):
+    from Services.customer_profile_service import read_customer_profile
+    return read_customer_profile(db, context, customer_key, authorize=authorize,
+                                 version=version, lock=lock)

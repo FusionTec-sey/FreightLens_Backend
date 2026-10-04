@@ -1,11 +1,31 @@
 FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — 2026-10-03
-Decision revision: BD-20261003-06
+Decision revision: BD-20261004-03
+Phase map: PHASE-ROADMAP.txt; task status remains only in TASK-QUEUE.txt.
+Full roadmap review 2026-10-04: see roadmap review section for slice-level
+readiness and T06/T08 coordinated integration. T21 isolated packaging is Ready.
+T33A frontend located at 3260838; owner confirms backend is still in motion.
+Latest owner update: backend b6f888e (includes T33A b004536) is available;
+frontend head4b6705f includes T33A3260838. Owner explicitly assigned defect repair
+to integrator. Count-only files selectively integrated and repaired locally; no
+whole-branch merge, push or claim of verification. See TASK-QUEUE and review evidence.
+Wait for the collaborator's ready paired revisions before integration; do not
+repeatedly request or rebuild their in-progress backend. Preliminary review is in
+evidence/t33a-integration-review.txt; independent sales work continues.
+Do not rebuild count work or claim its remote absence from cached local refs.
 Queue: TASK-QUEUE.txt (only authoritative backlog).
 Latest development checkpoint: CHECKPOINT-20261004.txt (paired PRs; verify CI).
 Historical baseline: BASELINE-REVISIONS.txt; do not mix arbitrary HEADs.
 Checkpoint evidence: evidence/20261003-parallel-checkpoint.txt.
 
 READ FIRST
+Current UI priority: T14A design confirmation, then T14B sales register, T14C
+desktop split view and T14D tablet draft workspace. Three concepts were shown;
+visual direction was approved on 2026-10-04. T14 retains backend-gated checkout integration;
+T14E is deferred acceptance. Reuse existing sales/customer/case/recovery code.
+No inFlow code import, duplicate sales records or tab-triggered business writes.
+Integrator owns these changes; collaborator T33A and shared-file coordination
+remain unchanged. Local documentation update is not a published GitHub checkpoint.
+
 Read backend AGENTS.md, relevant .agents/rules, architecture and latest10 log entries,
 then this handoff, decisions and queue. Frontend AGENTS.md points here. Later dated
 decisions/current status supersede historical architecture narratives; historical
@@ -56,10 +76,31 @@ Screen entry points (permissions/modules still apply):
 Use current route constants/MainPage.js as authority; no fake menu buttons.
 
 WHAT REMAINS
+T10 profile/contact edits and paginated history now have API/frontend integration
+using stable customers and immutable revisions. Existing sales version references
+are preserved. Entire slice unverified (no tests/build/browser); duplicate review
+and durable search projection ordering remain. Integrator work, not T33A.
+T06 now has separate disabled-by-default local cost runtime and approved evidence
+posting context/API/UI. This is not operational enablement or final reconciliation.
+No tests/build/browser run: evidence/t06-local-cost-runtime.txt. Permission and
+storage acceptance gates remain, along with receipt costs and reconciliation.
+Approved reallocation now also has context/execute APIs and shared frontend
+confirmation, under separate Execute_ReservationReallocation. All latest runtime
+adapters remain unverified and disabled without operator configuration. See
+evidence/t07-reallocation-runtime.txt; older pending-adapter statements are historical.
+Other-store execution context/API and shared manager execution controls are now
+implemented locally but unverified (evidence/t07-other-store-runtime.txt). Exact
+case scope, runtime and target calendar remain mandatory. No role grants or
+runtime activation. Reallocation runtime integration remains next.
+Approved release execution now has a local runtime API and explicit frontend
+confirmation using the shared case/stock engine. Separate Execute_ReservationRelease
+permission is not auto-granted. Latest receipt UX and build checks are deferred at
+owner request; see evidence/t07-release-runtime.txt. Runtime stays disabled.
 Local-development runtime resolver and same-store allocation API now exist but
 remain disabled without explicit process configuration. This is not distributed
-enrollment/failover. Tablet allocation control and other-store/release runtime
-adapters remain pending. Evidence: t07-local-runtime-allocation-api.txt.
+enrollment/failover. Tablet allocation control now exists locally; reallocation
+runtime adapter remains pending. Evidence: t07-store-allocation-ui.txt and
+t07-local-runtime-allocation-api.txt. Browser/activation gates remain pending.
 Other-store fulfilment now has exact-source binding, protected request/list/review
 API, Sales drafts review queue and explicit request-entry stock picker. Internal
 approved execution reuses reserve_stock with atomic case consumption and target
@@ -79,6 +120,19 @@ not completion of checkout, invoices, returns, money or offline sync.
 T05 implementation in agreed scope is acceptance-pending, not physical conversion.
 
 T33A DELIVERABLE AND BOUNDARIES
+Owner confirmed 2026-10-04: T33A remains actively in development with collaborator.
+Integration awaits the ready paired revisions; do not rebuild or repeatedly request
+the unfinished backend. Continue independent integrator work.
+Frontend now located: commit32608383d7de0bb820bad82e4276632c0c6ba7ab on
+codex/pos-ui-theme. Matching count backend still needed. Before integration read
+evidence/t33a-integration-review.txt: authenticated userId, inventory-only warehouse
+selectors and pending-save recovery fixes are required. No whole-branch overwrite.
+Presentation alignment: after T14A visual confirmation, reuse the approved
+register/detail conventions for count lists and tablet-friendly blind entry.
+Adapt existing implementation rather than replace it. Integrator coordinates
+shared navigation/layout changes; this does not delay independent count/backend
+work or depend on full checkout. Preserve count-specific actions and all blind
+visibility restrictions below. No sales/payment features or stock writer added.
 Build company/branch/location-scoped annual count planning, due schedules, staff
 assignment, blind count entry with exact units, recount rounds, discrepancy review
 and auditable manager decisions. Reuse existing products/locations/policies, users,

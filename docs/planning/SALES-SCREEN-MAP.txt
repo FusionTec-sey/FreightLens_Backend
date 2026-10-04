@@ -1,0 +1,52 @@
+APPROVED SALES SCREEN CAPABILITY MAP — 2026-10-04
+Design authority BD-20261004-03. Task status lives only in TASK-QUEUE.txt.
+All recently added integration is unverified; no tests/build/browser acceptance.
+
+REGISTER (T14B)
+/sales/drafts -> SalesDraftsPage -> salesDraftsApi.list/read/save.
+View requires SALES plus sales/product/customer/personal-data access; create/edit
+adds Manage_SalesDraft. User identity comes from current /auth/me/access.user_id.
+Server paging, store filter and store-name labels implemented. Customer names use
+the exact saved profile version. Stable UUID reference remains visible; never
+fabricate an invoice/order number. Full-text register search is still pending;
+it must use the existing search service with scoped DB rehydration, not SQL LIKE.
+Local drafts and due/review deep links remain their existing routes, not fake tabs.
+
+DESKTOP DETAILS (T14C)
+Existing list alongside SalesDraftDetails; narrow screens focus details.
+Items show scoped catalogue names/images, exact units and reserved quantity.
+Customer label is historical; product/media labels are current, not invoice proof.
+Edit -> SalesDraftEditor; Reserved stock -> DraftReservations.
+Allocate -> DraftAllocation/T07; other-store request -> OtherStoreRequest/T07.
+Existing action-specific backend permissions, runtime and source checks remain.
+Tabs/navigation do not post. Payment/collection not recorded or authorised by draft.
+
+TABLET DRAFT (T14D)
+Same SalesDraftEditor/cart and T15A recovery, no second tablet store.
+Embedded DraftSourcePicker -> sales source API/Meilisearch product search.
+Customer selector -> existing CustomersPage with fresh scope/version reads.
+Barcode -> Inventory resolver then active policy; requires Inventory entitlement,
+preserves registered unit and leading zeros, no legacy/search fallback.
+Images -> existing scoped product rows + blob signer; no raw/external fallback.
+Save -> exact operation intent, source revalidation and recovery-before-request.
+Park -> current company/user local whitelist; no customer names/media/money stored.
+Uncertain save locks cart and barcode controls; policy conflict requires reopening.
+Exact selected-unit touch controls are implemented, unverified. A confirmed save
+with failed local cleanup retains its receipt and offers cleanup-only retry;
+uncertain/mismatched responses retain the original operation identity instead.
+Full responsive accessibility remains pending.
+
+LATER CONTROLS (do not simulate or activate early)
+Prices/tax/floors -> T11; money/accounts -> T12; review/post sale -> T13/T14.
+Copy -> T15 (new identity, source link, revalidation; no historical effects).
+Collection -> T16; print/COPY -> T17; returns -> T18; invoice delivery -> T25.
+Deposit/cheque -> T27; contract credit -> T28; confirmed quote/order -> T29.
+Offers -> T30; promotion returns -> T31. All use the same workspace as ready.
+Display backend blockers where relevant; no invented success or business seeds.
+
+ACCEPTANCE
+Resume automated checks only on owner instruction; browser approval separately.
+Verify scope/permissions, history labels, filter paging, image boundaries, barcode
+failure/staleness, user/company switches, dirty navigation, recovery/uncertain
+retries, portrait/landscape/light/dark, keyboard/scanner and fixed action placement.
+No business gate is satisfied merely by approving the three concept images.

@@ -1,0 +1,116 @@
+FREIGHTLENS PHASE ROADMAP
+Revision 4.2 | 2026-10-04 | Design authority BD-20261004-03
+
+AUTHORITY
+TASK-QUEUE.txt is the only task-status and execution ledger. This document maps
+the original Cxx phase packages to that queue; it is not another backlog.
+BUSINESS-DECISIONS.txt governs agreed requirements. The workspace's revision-3
+IMPLEMENTATION-PLAN.txt and generated PDF retain historical detail, not current
+statuses, branch names, test counts or permission to deploy.
+
+DELIVERY ORDER
+1. T14A: confirm the proposed register, desktop and tablet designs and map each
+   action to an existing capability or owning unfinished task. Visual direction
+   approved on 2026-10-04; remaining mapping is implementation preparation.
+2. T14B -> T14C -> T14D: implement approved register/navigation, desktop workspace
+   and tablet draft presentation using existing APIs, customer controls and draft
+   recovery. Reuse current functionality; do not build parallel sales records.
+3. Continue dependency-ready T06-T13 and other authorised foundations alongside
+   presentation. T14 integrates actual checkout only when its dependencies are
+   ready. Unavailable business actions show accurate blockers, not fake success.
+4. Connect physical collection, printing, returns and close through their owning
+   tasks. Add later deposits/credit/orders/offers into the same workspace.
+5. Complete runtime/sync/offline/paper recovery, import rehearsals and reporting
+   dependencies; retain T34 as the final supervised readiness/pilot gate.
+
+Phase numbers describe capabilities, not a waterfall requiring every earlier
+external acceptance gate to close before independent development can start.
+Design confirmation is recorded in BD-20261004-03; UI work may proceed.
+A screen, an implemented service and an accepted release are separate.
+
+ORIGINAL PHASE TO CURRENT TASK CROSSWALK
+Phase 0 | C00-C02 | T01/T01A tracking; T02 authority; prerequisite repairs and
+  historical baseline evidence. Later distributed recovery remains T21-T24.
+Phase 1 | C10-C12 | T05 policies; T06 valuation; T07 reservations; T08 legacy
+  writers; T09 transfers/movements. T03/T04 supply settings and approval services.
+Phase 2 | C20-C22 | T03/T04 settings/cases; T10/T10A customers; T11 prices/tax;
+  T12 money/account configuration; T13/T13A sales sources and atomic posting.
+Phase 3 | C30-C32 | T14A-D early screen delivery; T14 checkout; T15/T15A draft
+  recovery/copy; T16 collection; T17 invoices/printing; T14E screen acceptance.
+Phase 4 | C40-C42 | T18 returns/credit notes; T19 conditions/damage; T20 close
+  and accounting export, consuming T12 customer-money foundations.
+Phase 4A | C45-C47 | T21 runtimes; T22 sync; T23 offline eligibility; T24 paper
+  recovery; T25 consent-aware digital delivery using approved sandbox adapters.
+Phase 5 | C50-C51 | T26 imports/restore rehearsals; T34 supervised readiness.
+  T34 dependencies in the queue supersede the historical early-pilot sequence.
+Phase 6 | C60-C62 | T27 deposits/cheques; T28 contract credit; T29 orders,
+  quotations and follow-through. Development need not wait for a live pilot.
+Phase 7 | C70-C71 | T30 offers and T31 promotion-aware returns.
+Phase 8 | C80-C81 | T32 reports; T33 labels/count reconciliation; collaborator
+  T33A count planning/entry/review may proceed independently on existing contracts.
+
+SHARED UI CONTRACT, INCLUDING T33A
+Reuse FreightLens branding and shared layout primitives; no replacement catalogue,
+cart, manager-case engine or permission system. Register -> detail -> explicit
+action is the common pattern. Desktop may keep the register beside detail;
+tablet prioritises the active task with large controls and contained scrolling.
+Keep company/store context, clear loading/error/permission states, retained save
+results and safe uncertain retries. No KPI cards on operational work screens.
+Navigation and tabs are read-only; entering a view must never post a business effect.
+
+T33A adapts existing work if supplied: count register/filters/status, desktop
+detail and tablet blind-entry layout. Its task-specific controls are Submit count,
+Request recount and Review, not sales/cart/payment controls. Expected stock,
+prior counts and financial values remain absent from blind-counter responses
+and views; manager-only discrepancy details remain separately authorised.
+No stock adjustment, inventory freeze or automatic reconciliation is added.
+Shared navigation/component edits require integrator coordination. Backend/count
+work can continue independently of sales checkout. Visual direction is approved;
+no collaborator implementation or acceptance status is inferred from that approval.
+
+ACCEPTANCE AND RELEASE
+Design approval: BD-20261004-03 records the agreed three-screen direction.
+Implementation: connect only real contracts, preserve original records, exact
+units, store-wide selling, protected holds and separate payment/collection states.
+Verification: tests/builds remain deferred under the owner's current instruction;
+record new implementation as unverified. Once resumed, use affected tests and
+shared-boundary checks, then integration regression at the agreed checkpoint.
+Browser acceptance requires its own approval and desktop/tablet evidence.
+Hardware, accounting, provider, offline and pilot gates are not replaced by UI
+approval or automated checks. No deployment, real posting or customer messaging
+is authorised. Publish this revision through the normal paired Git handoff;
+local documentation changes do not notify or update the collaborator automatically.
+
+FULL ROADMAP REVIEW — 2026-10-04
+Read-only dependency audit: all 44 task IDs resolve; no dependency cycles found.
+This is a planning check, not an application test or verification of implemented code.
+All original capability groups remain mapped; no financial/offline scope is removed.
+
+Execution clarification:
+- Finish T14A's action map as part of starting T14B, then T14C/D. Do not ask for
+  design approval again. Implement only supported controls; backlog missing APIs.
+- T06 receipt valuation and T08 receiving must be developed as coordinated slices:
+  define/reuse the valuation contract, compose the Inventory writer, then complete
+  receipt integration. Do not wait for a public receipt writer to design valuation,
+  or duplicate valuation inside receiving. Whole-task acceptance stays dependent.
+- T11/T12 may start against existing stable customer identity/settings contracts;
+  customer-history delivery and search-repair gates do not prevent pure pricing
+  calculations or synthetic bank-configuration development. No posting is enabled.
+- T21 environment packaging is ready for isolated implementation using T02/T03;
+  browser acceptance of settings does not block it. Preserve preview and use
+  separate services/ports/databases. T22-T24 remain genuine sync/recovery work.
+- T15 safe-copy foundations and T29 quote-intent/read presentation may be built
+  against existing drafts before full checkout/credit. Their final capabilities
+  retain listed dependencies; do not confirm orders without deposit/credit rules.
+- T32 source-specific reports may extend available sources incrementally; complete
+  accounting/credit/order reports still wait for their authoritative source tasks.
+- T33A remains collaborator-owned. No matching count implementation was identified
+  in this local checkout or cached branch names during review. This is not proof
+  that no remote PR exists. Resolve paired PR/revisions before integration; do not
+  rebuild it or block unrelated work. Shared UI adaptation preserves blind counting.
+
+Persistent goal boundary: deliver all authorised local implementation plus explicit
+deferred-acceptance records. Do not equate that with a verified operational system.
+Do not keep reworking completed foundations to avoid an external gate. When only
+owner/provider/hardware/test-resumption gates remain, report the precise remaining
+requirements; never bypass them or mark T34/live readiness complete.

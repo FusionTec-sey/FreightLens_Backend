@@ -28,6 +28,35 @@ from auth.dependencies import get_org_context
 from auth.module_guard import require_module
 from auth.security_guards import require_permission, is_financial_user, can_view_supplier_user
 from Utils.blob_storage import blob_storage
+from Services.cost_runtime_service import local_cost_runtime, CostRuntimeUnavailable
+from Services.cost_charge_review_service import reviewed_charge_binding
+from Services.charge_posting_service import prepare_and_post_allocated_charge
+from Model.containermgmt.Inventory.Valuation import InventoryValuation
+from Schema.CostEvidenceApiSchema import ChargePostingRequest, ChargePostingContext, ChargePostingRead
+from auth.policy import get_access_policy
+from Model.Credentials.users import User
+from Model.Credentials.Organisation import Organisation
+from Services.staff_store_assignment_service import eligible_staff
+from Routes.MasterData.CustomerRouter import private_response
+
+
+def posting_access(context, user):
+    evidence_access(context, user)
+    for permission in ('View_Financials', 'Manage_Financials', 'View_Product',
+                       'View_Supplier', 'View_OrderDocument', 'Post_InventoryCost'):
+        require_permission(permission)(user, context)
+
+
+def current_posting_access(db, context, actor_id):
+    if db.query(Organisation.id).filter_by(id=context.org_id, is_active=True).first() is None:
+        raise PermissionError('Cost posting company is inactive')
+    if eligible_staff(db, context).filter(User.id == actor_id).first() is None:
+        raise PermissionError('Cost posting actor is unavailable in this company')
+    actor = db.query(User).filter_by(id=actor_id, is_deleted=False).one()
+    policy = get_access_policy(user=actor, org_context=context, db=db)
+    if not policy.is_platform_admin and not {'INVENTORY', 'ORDERS'}.issubset(policy.module_names):
+        raise PermissionError('Inventory and orders access required')
+    posting_access(context, actor)
 
 
 def evidence_access(context=Depends(get_org_context), user=Depends(require_permission('View_Financials'))):
@@ -39,7 +68,65 @@ def evidence_access(context=Depends(get_org_context), user=Depends(require_permi
 CostEvidenceRouter = APIRouter(prefix='/inventory/cost-evidence', tags=['Inventory cost evidence'], dependencies=[
     Depends(require_module('INVENTORY')), Depends(require_module('ORDERS')),
     Depends(require_permission('View_Product')), Depends(require_permission('View_Supplier')),
-    Depends(require_permission('View_OrderDocument')), Depends(evidence_access)])
+    Depends(require_permission('View_OrderDocument')), Depends(evidence_access), Depends(private_response)])
+
+
+@CostEvidenceRouter.get('/pools/{pool_id}/proposals/{key}/cases/{case_key}/posting-context', response_model=ChargePostingContext)
+def posting_context(pool_id: int, key: UUID, case_key: UUID, db: Session = Depends(get_db),
+                    context: OrgContext = Depends(get_org_context), user=Depends(require_permission('Post_InventoryCost'))):
+    try:
+        posting_access(context, user)
+        if not db.in_transaction(): db.begin()
+        local_cost_runtime().claim_for(db, context, pool_id)
+        evidence_limit()
+        binding = reviewed_charge_binding(db, context, case_key, key,
+            authorize=lambda session: posting_access(context, user),
+            load_allocation=lambda session: allocation_binding(session, context, pool_id, key),
+            replay_operation_key=None, replay_actor_id=None)
+        lines = binding.details['allocation']['details']['snapshot']['lines']
+        products = sorted({line['product_id'] for line in lines})
+        if not 1 <= len(products) <= 100: raise ValueError('Bounded allocation products required')
+        # The existing org/pool/product/version unique index serves latest-stream reads.
+        rows = apply_org_filter(db.query(InventoryValuation.product_id,
+            func.max(InventoryValuation.version).label('version')).filter(
+                InventoryValuation.org_id == context.org_id, InventoryValuation.cost_pool_id == pool_id,
+                InventoryValuation.product_id.in_(products), InventoryValuation.is_deleted.is_(False)),
+                InventoryValuation, context).group_by(InventoryValuation.product_id).order_by(InventoryValuation.product_id).all()
+        if len(rows) != len(products): raise PostingConflict('Allocation valuation streams unavailable')
+        return dict(case_key=case_key, proposal_key=key, pool_id=pool_id,
+            streams=[dict(product_id=row.product_id, version=row.version) for row in rows])
+    except CostRuntimeUnavailable as error:
+        raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        raise allocation_review_error(error) from error
+
+
+@CostEvidenceRouter.post('/pools/{pool_id}/proposals/{key}/cases/{case_key}/post', response_model=ChargePostingRead)
+def post_reviewed_charge(pool_id: int, key: UUID, case_key: UUID, payload: ChargePostingRequest,
+                         db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
+                         user=Depends(require_permission('Post_InventoryCost'))):
+    try:
+        posting_access(context, user)
+        if not db.in_transaction(): db.begin()
+        runtime = local_cost_runtime()
+        claim = runtime.claim_for(db, context, pool_id)
+        limit = evidence_limit()
+        factory = sessionmaker(bind=db.get_bind())
+        actor_id = user.id
+        # No request-session transaction may span evidence object storage I/O.
+        db.rollback()
+        result = prepare_and_post_allocated_charge(factory, context, actor_id, payload.operation_key,
+            proposal_key=key, case_key=case_key,
+            expected_versions={row.product_id: row.version for row in payload.streams},
+            authority_claim=claim, authorize=lambda session: current_posting_access(session, context, actor_id),
+            require_central_authority=lambda session: runtime.claim_for(session, context, pool_id),
+            load_allocation=lambda session: allocation_binding(session, context, pool_id, key),
+            storage=blob_storage, max_bytes=limit)
+        return dict(operation_key=result.operation_key, replayed=result.replayed, **result.result)
+    except CostRuntimeUnavailable as error:
+        db.rollback(); raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        db.rollback(); raise allocation_review_error(error) from error
 
 
 def document_choices(db, context):

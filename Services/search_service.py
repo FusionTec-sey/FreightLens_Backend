@@ -60,11 +60,23 @@ def sync_customer_document(customer_key, org_id, profile):
 
 def bulk_index_all_customers(db):
     from Model.containermgmt.MasterData.RetailCustomer import RetailCustomer
+    from Model.containermgmt.MasterData.CustomerProfileRevision import CustomerProfileRevision
+    from sqlalchemy import and_, func
     if not init_customers_index():
         return
     # Administrative startup repair; no user-facing cross-company endpoint.
-    for row in db.query(RetailCustomer).filter_by(is_deleted=False).yield_per(200):
-        if not sync_customer_document(row.customer_key, row.org_id, row.initial_profile):
+    latest = db.query(CustomerProfileRevision.org_id, CustomerProfileRevision.customer_key,
+        CustomerProfileRevision.profile).filter(CustomerProfileRevision.is_deleted.is_(False)
+        ).distinct(CustomerProfileRevision.org_id, CustomerProfileRevision.customer_key
+        ).order_by(CustomerProfileRevision.org_id, CustomerProfileRevision.customer_key,
+                   CustomerProfileRevision.version.desc()).subquery()
+    rows = db.query(RetailCustomer.customer_key, RetailCustomer.org_id,
+        func.coalesce(latest.c.profile, RetailCustomer.initial_profile).label('profile')
+        ).outerjoin(latest, and_(latest.c.org_id == RetailCustomer.org_id,
+            latest.c.customer_key == RetailCustomer.customer_key)
+        ).filter(RetailCustomer.is_deleted.is_(False)).yield_per(200)
+    for row in rows:
+        if not sync_customer_document(row.customer_key, row.org_id, row.profile):
             break
 
 

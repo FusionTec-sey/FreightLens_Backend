@@ -1,5 +1,5 @@
 FREIGHTLENS BUSINESS DECISIONS
-Revision: BD-20261003-06
+Revision: BD-20261004-03
 Canonical companion: TASK-QUEUE.txt. Recorded 2026-10-03 from owner instructions.
 These decisions preserve actionable requirements, not the full private chat.
 Do not publish customer records, legal PDFs, credentials or personal chat exports.
@@ -76,6 +76,43 @@ no company-boundary exception. Preserve batch/shade/calibre, exact source-demand
 caps, reservations and retries. Same-store compatible location splits are allowed.
 Initial automatic allocation must not silently replace/top up historical holds;
 their reviewed lifecycle remains protected. T33A remains collaborator-owned.
+
+BD-20261004-01 | Design-first sales queue revision | T07,T10,T13-T17,T25,T29
+Recorded 2026-10-04. Owner requested revising the queue after reviewing three
+proposed inFlow-inspired raster screens. This approves planning the redesign,
+not final visual approval or financial activation. T14A records confirmation;
+T14B-D bring register, desktop and tablet draft presentation forward, reusing
+existing services/components/recovery. T14 still owns full checkout integration;
+T14E records integrated acceptance. Existing task IDs and T33A ownership remain.
+Do not copy inFlow code or its business behavior. Tab navigation must be read-only,
+with explicit separate commands for reservations, payment and physical collection.
+Retain FreightLens branding, exact unit policies, tax-inclusive SCR configuration,
+independent store prices, protected holds and BD-20261003-06 store-wide selling.
+Mockup data/logos/statuses are illustrative. Unsupported actions stay unavailable
+with accurate reasons, never fake success. No duplicate sales/catalogue/cart store.
+Tests remain deferred under the owner's existing instruction; eventual verification,
+browser approval and release gates are unchanged. This revises presentation order,
+not any commercial rule. Design-dependent implementation awaits confirmation.
+
+BD-20261004-02 | Phase roadmap and count-screen alignment | All phases,T33A
+Owner authorised aligning the overall phase plan, not just the sales queue.
+PHASE-ROADMAP.txt maps historical Cxx packages to the canonical task IDs and
+separates early screen work, backend integration and acceptance. Existing work
+is retained; later capability development need not wait for a live pilot.
+T33A shares approved register/detail/tablet conventions without changing blind
+count protections or adding stock posting. Adapt existing collaborator screens,
+do not rebuild them. Visual approval remains pending; independent count services
+can proceed. No test resumption, deployment or collaborator completion is implied.
+
+BD-20261004-03 | Sales visual direction approved | T14A-E,T33A
+Owner explicitly approved the design on 2026-10-04: the three concepts shown
+for the sales register, desktop split-view workspace and tablet product/cart.
+This resolves BD-20261004-01/02's pending visual approval. Retain FreightLens
+branding and authoritative units/data; generated logos, example figures and
+sample records are not configuration. Adapt shared conventions to T33A, not
+its count workflow to a shopping cart. Implementation may proceed using existing
+contracts; final screen acceptance, test resumption and operational activation
+are separate and not authorised by this visual approval.
 
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record

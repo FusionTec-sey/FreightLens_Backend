@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from Model.db import Base
 from Model.mixins import OrgMixin, AuditMixin
 from Model.containermgmt.MasterData.RetailCustomer import RetailCustomer  # noqa: F401 - register referenced table for isolated imports
+from Model.containermgmt.MasterData.CustomerProfileRevision import CustomerProfileRevision
 
 
 class SalesIntent(OrgMixin, AuditMixin, Base):
@@ -26,7 +27,7 @@ class SalesIntentRevision(OrgMixin, AuditMixin, Base):
         ForeignKeyConstraint(['customer_key', 'org_id'], ['containermgmt.retail_customers.customer_key', 'containermgmt.retail_customers.org_id']),
         ForeignKeyConstraint(['branch_id', 'org_id'], ['containermgmt.inventory_branches.id', 'containermgmt.inventory_branches.org_id']),
         ForeignKeyConstraint(['org_id', 'operation_key'], ['containermgmt.inventory_posting_operations.org_id', 'containermgmt.inventory_posting_operations.operation_key'], deferrable=True, initially='DEFERRED'),
-        CheckConstraint("version > 0 AND customer_version = 1 AND status = 'DRAFT'", name='ck_sales_revision_state'),
+        CheckConstraint("version > 0 AND customer_version > 0 AND status = 'DRAFT'", name='ck_sales_revision_state'),
         CheckConstraint('created_by IS NOT NULL AND NOT is_deleted', name='ck_sales_revision_audit'),
         Index('ix_sales_revision_customer', 'org_id', 'customer_key'),
         Index('ix_sales_revision_branch', 'org_id', 'branch_id'),
@@ -81,3 +82,18 @@ def trigger(table):
 for table in TABLES:
     event.listen(table, 'after_create', DDL(FUNCTION))
     event.listen(table, 'after_create', DDL(trigger(table)))
+
+
+PROFILE_FUNCTION = """CREATE OR REPLACE FUNCTION containermgmt.guard_sales_customer_profile()
+RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+IF NEW.customer_version > 1 AND NOT EXISTS (
+  SELECT 1 FROM containermgmt.customer_profile_revisions WHERE org_id = NEW.org_id
+  AND customer_key = NEW.customer_key AND version = NEW.customer_version)
+THEN RAISE EXCEPTION 'Referenced customer profile version unavailable'; END IF;
+RETURN NEW; END; $$"""
+PROFILE_TRIGGER = """CREATE TRIGGER sales_customer_profile_guard BEFORE INSERT
+ON containermgmt.sales_intent_revisions FOR EACH ROW
+EXECUTE FUNCTION containermgmt.guard_sales_customer_profile()"""
+SalesIntentRevision.__table__.add_is_dependent_on(CustomerProfileRevision.__table__)
+event.listen(SalesIntentRevision.__table__, 'after_create', DDL(PROFILE_FUNCTION))
+event.listen(SalesIntentRevision.__table__, 'after_create', DDL(PROFILE_TRIGGER))

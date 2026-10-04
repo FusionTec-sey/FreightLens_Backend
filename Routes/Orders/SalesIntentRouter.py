@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from Model.db import get_db
 from Model.containermgmt.Orders.SalesIntent import SalesIntentRevision
-from Schema.SalesIntentSchema import SalesIntentSave, SalesIntentSaved, SalesIntentRead, SalesIntentSummary
+from Model.containermgmt.Inventory.Location import InventoryBranch
+from Schema.SalesIntentSchema import SalesIntentSave, SalesIntentSaved, SalesIntentRead, SalesIntentSummary, SalesIntentHistoryItem
 from Schema.InventoryLocationSchema import LocationPage
 from Services.sales_intent_service import save_sales_intent, get_sales_intent
+from Services.customer_profile_service import historical_names_for_page
 from Services.inventory_posting_service import PostingConflict
 from Routes.MasterData.CustomerRouter import customer_access, private_response
 from Utils.org_filter import OrgContext, apply_org_filter
@@ -29,17 +31,29 @@ SalesIntentRouter = APIRouter(prefix='/sales/drafts', tags=['Sales drafts'], dep
 
 @SalesIntentRouter.get('', response_model=LocationPage[SalesIntentSummary])
 def list_drafts(page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=100),
-                db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context)):
+                branch_id: int | None = Query(None, gt=0),
+                db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
+                policy: AccessPolicy = Depends(draft_access)):
     if context.org_id not in context.allowed_org_ids: raise HTTPException(403, 'Select an allowed company')
     model = SalesIntentRevision
     latest = apply_org_filter(db.query(model.document_key, func.max(model.version).label('version')).filter_by(
         org_id=context.org_id, is_deleted=False), model, context).group_by(model.document_key).subquery()
     query = db.query(model).join(latest, (model.document_key == latest.c.document_key) &
         (model.version == latest.c.version)).filter(model.org_id == context.org_id, model.is_deleted.is_(False))
+    if branch_id is not None:
+        query = query.filter(model.branch_id == branch_id)
     total = query.count()
     rows = query.order_by(model.created_at.desc(), model.document_key).offset((page - 1) * limit).limit(limit).all()
+    # Only project labels for this page; never load the full branch catalogue.
+    branches = apply_org_filter(db.query(InventoryBranch.id, InventoryBranch.name).filter(
+        InventoryBranch.org_id == context.org_id, InventoryBranch.is_deleted.is_(False),
+        InventoryBranch.id.in_({row.branch_id for row in rows})), InventoryBranch, context).all() if rows else []
+    names = {branch.id: branch.name for branch in branches}
+    customer_names = historical_names_for_page(db, context,
+        [(row.customer_key, row.customer_version) for row in rows], authorize=lambda session: draft_access(policy))
     return dict(items=[dict(document_key=row.document_key, version=row.version, status=row.status,
-        customer_key=row.customer_key, branch_id=row.branch_id) for row in rows], total=total,
+        customer_key=row.customer_key, customer_name=customer_names.get((row.customer_key, row.customer_version)),
+        branch_id=row.branch_id, branch_name=names.get(row.branch_id)) for row in rows], total=total,
         page=page, limit=limit, pages=max(1, (total + limit - 1) // limit))
 
 
@@ -50,6 +64,29 @@ def read_draft(key: UUID, db: Session = Depends(get_db), context: OrgContext = D
         return get_sales_intent(db, context, key, authorize=lambda session: draft_access(policy))
     except LookupError as error: raise HTTPException(404, 'Sales draft not found') from error
     except PermissionError as error: raise HTTPException(403, str(error)) from error
+
+
+@SalesIntentRouter.get('/{key}/history', response_model=LocationPage[SalesIntentHistoryItem])
+def draft_history(key: UUID, page: int = Query(1, ge=1), limit: int = Query(25, ge=1, le=100),
+                  db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
+                  policy: AccessPolicy = Depends(draft_access)):
+    if context.org_id not in context.allowed_org_ids:
+        raise HTTPException(403, 'Select an allowed company')
+    model = SalesIntentRevision
+    # Existing unique (org_id, document_key, version) index serves this history.
+    query = apply_org_filter(db.query(model).filter(model.org_id == context.org_id,
+        model.document_key == key, model.is_deleted.is_(False)), model, context)
+    total = query.count()
+    if not total:
+        raise HTTPException(404, 'Sales draft not found')
+    rows = query.order_by(model.version.desc()).offset((page - 1) * limit).limit(limit).all()
+    names = historical_names_for_page(db, context,
+        [(row.customer_key, row.customer_version) for row in rows], authorize=lambda session: draft_access(policy))
+    return dict(items=[dict(document_key=row.document_key, version=row.version, status=row.status,
+        customer_key=row.customer_key, customer_version=row.customer_version,
+        customer_name=names.get((row.customer_key, row.customer_version)), branch_id=row.branch_id,
+        created_at=row.created_at, created_by=row.created_by) for row in rows],
+        total=total, page=page, limit=limit, pages=max(1, (total + limit - 1) // limit))
 
 
 @SalesIntentRouter.put('/{key}', response_model=SalesIntentSaved)

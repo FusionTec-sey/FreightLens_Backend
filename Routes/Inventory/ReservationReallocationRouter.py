@@ -1,5 +1,5 @@
 """Scoped reallocation requests/decisions; no client-supplied stock authority."""
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -8,6 +8,12 @@ from sqlalchemy.orm import Session
 from Model.db import get_db
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase
 from Schema.ReservationReallocationSchema import ReallocationCaseRequest, ReallocationCaseRead
+from Schema.ReservationReallocationSchema import ReallocationExecutionRequest, ReallocationExecutionContext, ReallocationExecutionRead
+from Services.reviewed_stock_runtime_service import reviewed_stock_scope
+from Services.stock_runtime_service import StockRuntimeUnavailable
+from Services.stock_ledger_service import reallocate_reservation
+from Services.branch_action_context_service import require_stock_business_date
+from Routes.Inventory.BranchSettingsRouter import read_settings
 from Schema.SalesReservationSchema import SalesDemandReference
 from Schema.ManagerCaseSchema import PolicyCaseReview, CaseActionRead
 from Schema.InventoryLocationSchema import LocationPage
@@ -57,10 +63,11 @@ def list_reallocations(page: int = Query(1, ge=1), limit: int = Query(25, ge=1, 
                        policy: AccessPolicy = Depends(draft_access), user=Depends(get_current_user)):
     if context.org_id not in context.allowed_org_ids: raise HTTPException(403, 'Company denied')
     can_review = policy.has('Review_ReservationReallocation')
-    if not can_review and not policy.has('Request_ReservationReallocation'):
+    can_execute = policy.has('Execute_ReservationReallocation')
+    if not can_review and not can_execute and not policy.has('Request_ReservationReallocation'):
         raise HTTPException(403, 'Reservation review access required')
     query = owned(db, ManagerCase, context).filter_by(action='inventory.reservation.reallocate', source_type='sales.reservation')
-    if not can_review: query = query.filter(ManagerCase.created_by == user.id)
+    if not can_review and not can_execute: query = query.filter(ManagerCase.created_by == user.id)
     total, rows = case_page(db, query, user.id, view, page, limit)
     fields = ('document_key', 'line_key', 'quantity', 'base_unit', 'held_quantity', 'released_before', 'target', 'target_review_at')
     items = [dict(**case_metadata(case, decision, used), reservation_key=case.source_key,
@@ -86,5 +93,45 @@ def review_reallocation(key: UUID, payload: PolicyCaseReview, db: Session = Depe
             authorize=guard(policy, 'Review_ReservationReallocation'))
         db.commit()
         return dict(**result.result, replayed=result.replayed)
+    except Exception as error:
+        db.rollback(); raise translate(error) from error
+
+
+@ReservationReallocationRouter.get('/{key}/execution-context', response_model=ReallocationExecutionContext)
+def execution_context(key: UUID, db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
+                      user=Depends(require_permission('Execute_ReservationReallocation'))):
+    try:
+        _, balance, _ = reviewed_stock_scope(db, context, key,
+            action='inventory.reservation.reallocate', source_type='sales.reservation')
+        settings = read_settings(balance.branch_id, db, context, user)
+        if settings.status != 'CONFIGURED': raise ValueError('Complete branch trading settings before reallocation')
+        return dict(case_key=key, branch_id=balance.branch_id, branch_version=settings.version)
+    except StockRuntimeUnavailable as error:
+        raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        raise translate(error) from error
+
+
+@ReservationReallocationRouter.post('/{key}/execute', response_model=ReallocationExecutionRead)
+def execute_reallocation(key: UUID, payload: ReallocationExecutionRequest, db: Session = Depends(get_db),
+                         context: OrgContext = Depends(get_org_context), policy: AccessPolicy = Depends(draft_access),
+                         user=Depends(require_permission('Execute_ReservationReallocation'))):
+    try:
+        binding, balance, authority = reviewed_stock_scope(db, context, key,
+            action='inventory.reservation.reallocate', source_type='sales.reservation')
+        authorize = guard(policy, 'Execute_ReservationReallocation')
+        business_date = require_stock_business_date(db, context, branch_id=balance.branch_id,
+            branch_version=payload.branch_version, instant=datetime.now(timezone.utc), authorize=authorize)
+        result = reallocate_reservation(db, context, user.id, payload.operation_key,
+            case_key=key, binding=binding, business_date=business_date,
+            branch_settings_version=payload.branch_version, reason=f'Approved reservation reallocation {key}',
+            authority=authority, authorize=authorize)
+        db.commit()
+        return dict(operation_key=result.operation_key, case_key=key, status='CONSUMED',
+            replayed=result.replayed, base_unit=binding.details['base_unit'],
+            **{field: result.result[field] for field in ('source_reservation_key',
+                'target_reservation_key', 'source_remaining', 'target_remaining')})
+    except StockRuntimeUnavailable as error:
+        db.rollback(); raise HTTPException(503, str(error)) from error
     except Exception as error:
         db.rollback(); raise translate(error) from error

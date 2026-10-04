@@ -1,0 +1,33 @@
+T06 local central cost runtime / approved cost posting — 2026-10-04
+Status: Implemented—verification pending
+No automated tests, production build or browser checks run, per owner instruction.
+
+Backend changes:
+- Local cost runtime map explicitly binds company/pool/node/epoch; blank disables.
+  Separate from branch-stock claims. No config secrets or real identities seeded.
+- Posting context for exact scoped approved content-bound evidence case returns
+  bounded product stream versions; existing pool/version index supports lookup.
+- Posting accepts stable operation UUID and distinct expected product versions,
+  not amounts, authority, evidence fingerprints or client allocation snapshots.
+- Reuses prepare_and_post_allocated_charge; original file versions are reread
+  outside transactions and locked sources rechecked on entry to atomic posting.
+- Fresh-session checks reload active actor/company membership, modules, and
+  explicit Post_InventoryCost/Manage_Financials plus protected field permissions.
+- Existing case/charge dedup and valuation coordinator remain authoritative.
+  Outcomes stay UNRECONCILED; no price change or supplier payment.
+
+Frontend: Cost pools -> Valuation history -> Saved cost proposals -> Invoice and
+FX evidence -> View evidence reviews -> approved version-2 case -> explicit post.
+Separate permission hides action; runtime unavailable disables submission. Pinned
+versions and operation identity survive uncertain retry within the mounted panel.
+Result stays visible until dismissed. Page-reload durable financial recovery is
+not implemented by this control; inspect case/ledger after interrupted navigation.
+
+Pending verification: runtime parser malformed/duplicate/wrong pool claims;
+auth/field/module/tenant boundaries; permission revocation across file I/O; actual
+version-retention/storage limits; no request-session transaction during reads;
+latest streams and stale versions; concurrent duplicates and rollback; retry after
+commit; old metadata-only case denial; frontend errors/results and production build.
+PostgreSQL skill guided bounded indexed query and transaction separation. No query
+benchmark, migration, real posting, deployment or external push performed.
+Receipt costing, issued-stock late costs and central reconciliation remain unfinished.

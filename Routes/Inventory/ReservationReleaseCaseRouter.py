@@ -1,4 +1,4 @@
-"""Request/review only: approval is not an HTTP stock-writing entitlement."""
+"""Independent request, review and runtime-authorised release execution."""
 from decimal import Decimal
 from uuid import UUID
 from typing import Literal
@@ -6,6 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from Model.db import get_db
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase
+from Model.containermgmt.Inventory.StockLedger import StockBalance
+from Schema.ReservationReleaseCaseSchema import ReleaseExecutionRequest, ReleaseExecutionRead
+from Services.stock_runtime_service import local_stock_runtime, StockRuntimeUnavailable
+from Services.stock_ledger_service import release_stock
 from Schema.ReservationReleaseCaseSchema import ReleaseCaseRequest, ReleaseCaseRead, ReservationSourceRead
 from Services.reservation_source_read_service import reservation_sources_page
 from Schema.ManagerCaseSchema import PolicyCaseReview, CaseActionRead
@@ -48,8 +52,8 @@ def list_sources(key: UUID, page: int = Query(1, ge=1), limit: int = Query(25, g
                  db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
                  policy: AccessPolicy = Depends(draft_access)):
     if context.org_id not in context.allowed_org_ids: raise HTTPException(403, 'Company denied')
-    if not any(policy.has(p) for p in ('Request_ReservationRelease', 'Review_ReservationRelease',
-                                      'Request_ReservationReallocation', 'Review_ReservationReallocation',
+    if not any(policy.has(p) for p in ('Request_ReservationRelease', 'Review_ReservationRelease', 'Execute_ReservationRelease',
+                                      'Request_ReservationReallocation', 'Review_ReservationReallocation', 'Execute_ReservationReallocation',
                                       'Request_ReservationDeadline', 'Review_ReservationDeadline', 'Schedule_ReservationReview')):
         raise HTTPException(403, 'Reservation review access required')
     try: return reservation_sources_page(db, context, page=page, limit=limit, document_key=key)
@@ -81,9 +85,10 @@ def list_release_cases(page: int = Query(1, ge=1), limit: int = Query(25, ge=1, 
                        policy: AccessPolicy = Depends(draft_access), user=Depends(get_current_user)):
     if context.org_id not in context.allowed_org_ids: raise HTTPException(403, 'Company denied')
     can_review = policy.has('Review_ReservationRelease')
-    if not can_review and not policy.has('Request_ReservationRelease'): raise HTTPException(403, 'Reservation review access required')
+    can_execute = policy.has('Execute_ReservationRelease')
+    if not can_review and not can_execute and not policy.has('Request_ReservationRelease'): raise HTTPException(403, 'Reservation review access required')
     query = owned(db, ManagerCase, context).filter_by(action='inventory.reservation.release', source_type='sales.reservation')
-    if not can_review: query = query.filter(ManagerCase.created_by == user.id)
+    if not can_review and not can_execute: query = query.filter(ManagerCase.created_by == user.id)
     total, rows = case_page(db, query, user.id, view, page, limit)
     items = [dict(**case_metadata(case, decision, used), reservation_key=case.source_key,
         **{key: case.binding['details'][key] for key in ('document_key', 'line_key', 'release_quantity', 'base_unit', 'held_quantity', 'released_before')})
@@ -107,5 +112,34 @@ def review_release(key: UUID, payload: PolicyCaseReview, db: Session = Depends(g
             authorize=guard(policy, 'Review_ReservationRelease'))
         db.commit()
         return dict(**result.result, replayed=result.replayed)
+    except Exception as error:
+        db.rollback(); raise translate(error) from error
+
+
+@ReservationReleaseCaseRouter.post('/{key}/execute', response_model=ReleaseExecutionRead)
+def execute_release(key: UUID, payload: ReleaseExecutionRequest, db: Session = Depends(get_db),
+                    context: OrgContext = Depends(get_org_context), policy: AccessPolicy = Depends(draft_access),
+                    user=Depends(require_permission('Execute_ReservationRelease'))):
+    try:
+        case = owned(db, ManagerCase, context).filter_by(case_key=key,
+            action='inventory.reservation.release', source_type='sales.reservation').one_or_none()
+        if case is None: raise LookupError('Case not found')
+        binding = CaseBinding(**case.binding)
+        # Authority belongs to the held stock, not the selling branch in the case.
+        balance = owned(db, StockBalance, context).filter_by(id=binding.details['balance_id']).one_or_none()
+        if balance is None: raise LookupError('Stock not found')
+        authority = local_stock_runtime().claim_for(db, context, balance.branch_id)
+        result = release_stock(db, context, user.id, payload.operation_key,
+            balance_id=balance.id, reservation_key=UUID(case.source_key),
+            source_line_key=UUID(binding.details['source_line_key']),
+            quantity=Decimal(binding.details['release_quantity']), input_unit=binding.details['base_unit'],
+            reason=f'Approved reservation release {key}', authority=authority,
+            authorize=guard(policy, 'Execute_ReservationRelease'), case_key=key, release_binding=binding)
+        db.commit()
+        return dict(operation_key=result.operation_key, case_key=key, status='CONSUMED',
+            reservation_key=result.result['reservation_key'],
+            reservation_remaining=result.result['reservation_remaining'], replayed=result.replayed)
+    except StockRuntimeUnavailable as error:
+        db.rollback(); raise HTTPException(503, str(error)) from error
     except Exception as error:
         db.rollback(); raise translate(error) from error

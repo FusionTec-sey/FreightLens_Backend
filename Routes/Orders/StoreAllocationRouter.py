@@ -5,7 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from Model.db import get_db
 from Model.containermgmt.Orders.SalesIntent import SalesIntentRevision
-from Schema.StoreAllocationSchema import StoreAllocationRequest, StoreAllocationRead
+from Schema.StoreAllocationSchema import StoreAllocationRequest, StoreAllocationRead, StoreAllocationContextRead
+from Services.staff_store_assignment_service import latest_assignment, require_staff_store_assignment
+from Routes.Inventory.BranchSettingsRouter import read_settings
 from Services.sales_reservation_source_service import owned
 from Services.stock_runtime_service import local_stock_runtime, StockRuntimeUnavailable
 from Services.branch_action_context_service import require_branch_action_context
@@ -22,6 +24,27 @@ from Utils.org_filter import OrgContext
 StoreAllocationRouter = APIRouter(prefix='/sales/draft-allocations', tags=['Sales draft allocations'],
     dependencies=[Depends(require_module('SALES')), Depends(require_module('INVENTORY')),
         Depends(draft_access), Depends(private_response)])
+
+
+@StoreAllocationRouter.get('/context', response_model=StoreAllocationContextRead)
+def allocation_context(db: Session = Depends(get_db), context: OrgContext = Depends(get_org_context),
+                       user=Depends(require_permission('Allocate_SalesDraftStock'))):
+    try:
+        if not db.in_transaction(): db.begin()
+        runtime = local_stock_runtime()
+        assignment = latest_assignment(db, context, user.id)
+        if assignment is None: raise PermissionError('Working-store assignment required')
+        runtime.claim_for(db, context, assignment.branch_id)
+        assignment = require_staff_store_assignment(db, context, user.id,
+            branch_id=assignment.branch_id, expected_version=assignment.version)
+        settings = read_settings(assignment.branch_id, db, context, user)
+        if settings.status != 'CONFIGURED': raise ValueError('Complete branch trading settings before allocation')
+        return dict(branch_id=assignment.branch_id, branch_version=settings.version,
+            assignment_version=assignment.version, usual_counter_id=assignment.counter_id)
+    except StockRuntimeUnavailable as error:
+        raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        raise translate(error) from error
 
 
 @StoreAllocationRouter.post('', response_model=StoreAllocationRead)

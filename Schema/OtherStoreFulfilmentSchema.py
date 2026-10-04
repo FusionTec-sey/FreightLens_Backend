@@ -26,6 +26,30 @@ class OwnWorkingStoreRead(BaseModel):
     counter_id: int | None
 
 
+class OtherStoreExecutionRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    operation_key: UUID
+    branch_version: int = Field(gt=0, strict=True)
+
+
+class OtherStoreExecutionContext(BaseModel):
+    case_key: UUID
+    branch_id: int
+    branch_version: int
+
+
+class OtherStoreExecutionRead(BaseModel):
+    operation_key: UUID
+    case_key: UUID
+    reservation_key: UUID
+    branch_id: int
+    location_id: int
+    quantity: str
+    base_unit: str
+    status: Literal['CONSUMED']
+    replayed: bool
+
+
 class OtherStoreCaseRead(BaseModel):
     case_key: UUID
     version: int

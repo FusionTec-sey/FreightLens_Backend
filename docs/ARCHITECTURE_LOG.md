@@ -1,5 +1,305 @@
 # FreightLens Architecture Log
 
+## 2026-10-04 - Owner-authorised T33A integration and repairs
+
+- Selectively imported count implementation from backend b6f888e/frontend4b6705f;
+  retained current sales/runtime work and omitted unrelated notification changes.
+- Unified assignment/recount company validation; exact review retries retain the
+  immutable binding and return the existing receipt without a second review row.
+- Count UI uses authenticated userId, locks uncertain entries, warns on discard
+  and distinguishes confirmed save from failed sheet refresh. Warehouse selectors
+  use count permissions and shared catalogue projection, not Sales/PII guards.
+- Wired count migrations/router/permission catalogue/menu locally. Regression
+  coverage written; no tests/build/browser, push or whole-branch merge performed.
+
+## 2026-10-04 - Sales draft revision-history metadata
+
+- Added read-only /sales/drafts/{key}/history with existing module/read/privacy
+  guards, exact company scope and bounded newest-first paging. Reuses immutable
+  revisions and saved customer profile labels; exposes no operation or money data.
+- PostgreSQL skill informed reuse of the org/document/version unique index and
+  bounded customer projection. No schema migration or duplicate audit store.
+- Existing detail pane now opens cancellable, paginated history on explicit click.
+  Added API/UI regressions without execution; tests/build/browser remain deferred.
+
+## 2026-10-04 - Compact split-view draft register
+
+- Extracted presentation-only SalesDraftRows: full table without a selection,
+  stacked compact rows beside details. Same page, data and read callback; no
+  client filtering, duplicated fetch or writes on selection.
+- Preserved reference/customer/version/store/status/action in both modes; added
+  labelled touch targets and current selection semantics. Full table scrolls
+  within its existing container instead of compressing every column.
+- Tests written, not run. Responsive/browser and production build gates pending.
+
+## 2026-10-04 - Accessible draft validation
+
+- Shared exact quantity syntax between save validation and touch controls.
+  Invalid input is retained rather than parsed, rounded or coerced.
+- Field-linked errors identify missing sources/invalid quantities; failed local
+  validation opens the cart and focuses its first invalid quantity before any API
+  write. Server unit-policy validation remains authoritative.
+- Regression cases added without execution. Tests/build/browser remain deferred.
+
+## 2026-10-04 - Separate confirmed draft receipt from local cleanup
+
+- Editor retains validated server receipt when local recovery deletion fails.
+  Explicit cleanup retry never calls save again; mutations stay locked.
+- Original recovery is retained and deletion remains revision checked. Reload
+  can still replay its original idempotent operation; no new storage contract.
+- Mismatched receipts remain uncertain. Added regressions, not executed; no
+  tests/build/browser checks. T33A handoff records collaborator still developing.
+
+## 2026-10-04 - Exact tablet quantity controls
+
+- Added selected-unit +/- controls to existing cart using scaled integer arithmetic,
+  preserving six-place quantities and bounds. No implicit removal or stock effect.
+- Invalid partial input and pending/conflicted saves disable nudges. Functional
+  updates avoid lost rapid taps; server unit validation remains authoritative.
+- Added arithmetic edge coverage, not run. No build/browser verification.
+
+## 2026-10-04 - Sales capability map and T33A remote review
+
+- Completed T14A documentation map against routes/components; design approved.
+  This is not UI implementation acceptance or an automated test claim.
+- Live remote review located frontend T33A commit3260838. Backend counterpart
+  remains unidentified; recorded count identity, warehouse-selector and pending
+  save issues in evidence/t33a-integration-review.txt. No merge/overwrite.
+- Independent sales work remains ready. No tests/build/browser or deployment.
+
+## 2026-10-04 - Correct recovery and review actor identity
+
+- Found login supplies username string while draft recovery consumed user.id.
+  Added policy-derived user_id to access response and resolved-context userId
+  to frontend, retaining legacy display user. Updated sales/customer/inventory props.
+- Missing numeric identity blocks sales instead of guessing a local recovery scope.
+  Server permissions unchanged. Added regression and adjusted sales auth fixture.
+- No tests/build/browser run. This repairs a concrete integration gap, not a claim
+  that browser recovery or self-review acceptance has passed.
+
+## 2026-10-04 - Signed thumbnails across the sales workspace
+
+- Reused blob signing for bounded scoped catalogue/draft reads; only product-image
+  keys yield URLs. No private storage keys or external-document fallbacks.
+- Added shared lazy picker/cart/detail image component with missing-image fallback.
+  Recovery remains a whitelist without URLs or customer names.
+- Added signer boundary tests without execution. No build/browser/provider
+  verification, uploads or business changes; T14B-D acceptance remains pending.
+
+## 2026-10-04 - Barcode entry in shared draft editor
+
+- Reused Inventory barcode resolver and active-policy read for explicit scanned
+  unit selection. No new endpoint, barcode catalogue or stock/payment writer.
+- Preserved leading zeros, exact retry/recovery boundaries and disabled-cart
+  guards. No legacy fallback; unresolved scans add nothing.
+- Added frontend coverage without execution. No tests/build/browser or hardware
+  checks run; images and T14D acceptance remain unfinished.
+
+## 2026-10-04 - Shared product/cart draft workspace
+
+- Embedded the existing paginated product picker into SalesDraftEditor beside
+  the current cart; narrow layouts switch views while retaining mounted state.
+- Reused recovery, exact save intents and locks; no second cart or fake checkout.
+  Product controls respect uncertain saves, conflicts and line limits.
+- Added embedded-picker coverage, not run. Images/scanning and acceptance remain;
+  no build/browser checks or business records created. T14D is in progress.
+
+## 2026-10-04 - Version-pinned customer display names
+
+- Added bounded historical-name projection shared by sales list/detail, reusing
+  customer identity/profile revisions and exact company/permission guards.
+- PostgreSQL guidance informed batching and indexed identity/version probes;
+  no N+1 customer reads or contact/balance data loaded for labels.
+- Frontend register/detail show saved customer names without rewriting source
+  versions. Added historical-name regression coverage, not run. No build/browser.
+
+## 2026-10-04 - Scoped sales store filtering
+
+- Added exact branch filtering before register count/page and a bounded store-name
+  projection. Reused company guards and existing org/branch index; no migration.
+- Frontend reuses branch picker and current client; clears page on filter changes.
+  PostgreSQL guidance informed bounded reads and existing-index inspection.
+- Added API filter/pagination/foreign-company coverage, not run. No tests/build,
+  browser verification or real business effects. T14B remains in progress.
+
+## 2026-10-04 - Approved sales register/detail composition
+
+- Frontend now composes the existing paginated sales register with an extracted
+  read-only detail pane, responsive focus and fixed explicit action footer.
+- Reused all permission-gated allocation/reservation/edit callbacks; no new API,
+  posting, mock data or inferred commercial status. Preserved exact unit details.
+- Route guard preserves an opened overdue-inbox draft. Component tests added,
+  not executed; tests/build/browser remain deferred. T14B/C remain in progress.
+
+## 2026-10-04 - Full roadmap review and persistent execution boundary
+
+- Read all phase groups and audited 44 queue IDs: no missing dependencies/cycles.
+  This is a read-only planning audit, not a backend/frontend verification run.
+- Clarified independent slices versus full acceptance, coordinated T06/T08 receipt
+  integration, and T21 readiness. Removed remaining pending-design roadmap wording.
+- Retained T33A ownership and unresolved reported remote revisions, no rebuild.
+  Goal covers authorised local implementation with deferred gates, not live release.
+- Documentation only; tests remain deferred, no application changes or deployment.
+
+## 2026-10-04 - Owner approved sales visual direction
+
+- Recorded BD-20261004-03 for all three proposed layouts. Resolved the visual
+  gate in queue/roadmap/handoff and made T14B Ready; T14A mapping continues.
+- Inspected existing sales routes/client and recorded available controls versus
+  later payment, collection, print and copy capabilities. Register list currently
+  supports page/limit, so richer filters need backend support rather than fake UI.
+- Documentation only; no application change, tests, browser checks or deployment.
+
+## 2026-10-04 - Align phase roadmap and T33A presentation
+
+- Added versioned PHASE-ROADMAP.txt mapping historical Cxx phases to current
+  Txx tasks; canonical queue remains the only status ledger. Historical workspace
+  plan points to it and corrects obsolete allocation and early-pilot sequencing.
+- BD-20261004-02 aligns T33A register/detail/tablet presentation without changing
+  count protections, ownership or adding stock posting. Existing work is reused.
+- Documentation only; designs still await approval. No tests, code changes,
+  browser checks, collaborator notification, Git push or deployment performed.
+
+## 2026-10-04 - Design-first sales queue revision (documentation only)
+
+- Owner requested adapting the queue to three proposed inFlow-inspired screens.
+  Added T14A confirmation/action mapping, T14B register, T14C desktop workspace,
+  T14D tablet draft presentation and T14E integrated acceptance; T14 retains full
+  backend-gated checkout. Preserved task IDs, existing work and T33A ownership.
+- Recorded BD-20261004-01 and aligned collaborator handoff; reconciled T10's
+  obsolete duplicate-review-next wording with its implemented unverified screens.
+- Concepts are not approved UI or working features. Reuse current APIs/components,
+  keep tab navigation read-only and retain business/permission/recovery contracts.
+- No application edits, tests/build/browser actions, posting or push performed.
+  Design approval and deferred verification remain explicit gates.
+
+## 2026-10-04 - Restore earlier sales UI without reverting functionality
+
+- Owner requested matching earlier sales design. Reused frontend RegisterShell
+  from03678ed and restored route-based Sales sidebar including newer other-store
+  reviews. Updated register/editor surfaces and Super Admin menu eligibility.
+- Preserved current source, allocation, case execution and recovery contracts.
+  No backend business changes, tests/build/browser run or external deployment.
+
+## 2026-10-04 - Owner-authorised local demo entry
+
+- Added opt-in passwordless entry for the existing demo-t05-reviewer only, with
+  development environment, exact preview database, loopback host and frontend
+  origin guards. User must remain non-platform and limited to one DEMO ONLY org.
+- Reused normal token/refresh/session-audit issuance and all backend permissions.
+  No administrator bypass or role grant. Local compose keeps API bound to loopback.
+- Login offers an explicit demo button only on a development loopback frontend
+  after backend capability confirmation. Production builds hide the button.
+- Enabled only in the local runtime compose and recreated its API container;
+  no databases deleted, no external deployment. Automated tests remain deferred.
+
+## 2026-10-04 - Duplicate customer request and review screens
+
+- Reused customer selection and shared ManagerCases instead of a second register
+  or approval engine. Exact historical profile comparison precedes decisions.
+- Added explicit assessment/reason, scoped permissions, retained receipts and
+  frozen uncertain intents. No balance merging, identity retirement or execution.
+- No tests/build/browser run at owner request; full T10 is not marked complete.
+
+## 2026-10-04 - Protected duplicate assessment endpoints
+
+- Added request, paginated list and independent review to the existing customer
+  router with separate action permissions plus personal-data scope enforcement.
+- Reused manager-case page/metadata and exact-profile binding; request-only users
+  see their own requests. Approval has no merge, account or stock side effect.
+- Customer frontend client now exposes these endpoints. Screen integration next.
+  No tests/build/browser run; all new work remains verification pending.
+
+## 2026-10-04 - Duplicate customer assessment foundation
+
+- Added a typed exact-version pair request and scoped binding loader with stable
+  lock ordering. Reused manager-case request/review and replay protection.
+- Approval means agreement with an assessment, never merging or reassignment of
+  identities, historical sales, contacts or money. No execution path exists.
+- Public permissions, case list/API and frontend next. No tests/build/browser run;
+  this internal implementation is verification pending and T10 remains in progress.
+
+## 2026-10-04 - Customer profile API, search and UI integration
+
+- Connected scoped profile/history endpoints, current paginated projections and
+  historical reads. Sales draft creation pins the current customer version under
+  lock; existing references remain immutable.
+- Registered migration and shared sales reference guard; startup search repair
+  uses current profiles, and replay projection avoids restoring the initial one.
+- Reused customer form for versioned edits with a required reason; added paginated
+  history from View details. Stale edits block resubmission until reopened.
+- No tests/build/browser or explicit migration execution. Deferred checks include
+  auth/tenant isolation, concurrent edits/retries, rollback, old sales snapshots,
+  migration replay, UI recovery and search projection ordering. T10 not complete.
+
+## 2026-10-04 - Customer profile revision service foundation
+
+- Extended the existing customer identity with an internal append-only edit service,
+  exact/current profile reads and paginated history. Original identity is unchanged.
+- Reused operation receipts and scoped parent locks, with stale-version rejection
+  and permission checks on retries. No automatic customer or balance merging.
+- PostgreSQL guidance informed indexed version queries and short transactions;
+  no network calls occur inside this service.
+- Incomplete integration: migration startup, API/search/sales and frontend next.
+  No tests/build run at owner request; no release-readiness claim.
+
+## 2026-10-04 - Disabled-by-default central cost execution adapter
+
+- Added explicit local central claim configuration, separate from stock branch
+  runtime, with pinned company/pool/node/epoch and no automatic activation.
+- Connected existing persisted-case/evidence preparation and atomic charge posting
+  through protected typed APIs. Fresh permissions checked after storage I/O.
+- PostgreSQL skill informed bounded indexed product-version lookup and short DB
+  transactions; no schema/index migration or storage configuration change needed.
+- Evidence review frontend now has separate confirmation/retry/result UI for
+  version-pinned approved costs. No price, payment or final-account effects.
+- No tests/build/browser checks run per owner request. Entire slice unverified:
+  planning/evidence/t06-local-cost-runtime.txt. Receipt costing/reconciliation remain.
+
+## 2026-10-04 - Approved reallocation runtime and frontend
+
+- Reused atomic paired release/reserve with a distinct execution permission and
+  exact case-derived scope. Shared reviewed-stock runtime lookup avoids duplicating
+  authority selection. Settings version now binds the parent posting fingerprint.
+- Reused frontend context/confirmation and retained result, including execute-only
+  case access. No physical transfer or paid-hold eligibility introduced.
+- No tests/build/browser checks run per owner instruction. Entire slice unverified;
+  evidence: planning/evidence/t07-reallocation-runtime.txt. T33A unchanged.
+
+## 2026-10-04 - Other-store execution adapter and control
+
+- Added separately permitted context/execute endpoints using approved immutable
+  scope and the existing reserve_stock transaction; no client authority or stock choice.
+- Target-calendar resolver reuses existing date rules and locks versioned settings;
+  receipt includes settings version. No real runtime configuration or data changed.
+- Shared manager confirmation now handles exact other-store execution with retained
+  results, company-pinned access and stable retry intent.
+- Owner requested no tests: this entire slice is unverified; build/browser and
+  existing other-store no-execution UI assertions need follow-up when tests resume.
+  Evidence: planning/evidence/t07-other-store-runtime.txt. Continue reallocation.
+
+## 2026-10-04 - Public approved release connection
+
+- Reused release_stock and configured local runtime behind separate execution
+  permission and exact scoped approval. Client supplies only operation identity.
+- Reused ManagerCases/PolicyActivation for explicit confirmation, execute-only
+  inspection and a retained release receipt; no financial or handover effect.
+- Before owner stopped tests: 21 affected backend and 35 frontend tests passed.
+  Subsequent receipt/default-view refinements are untested; no build run. Further
+  tests are deferred by owner request, not waived for eventual completion.
+- Evidence: planning/evidence/t07-release-runtime.txt. Runtime stays disabled;
+  other-store execution/reallocation adapters remain next. T33A untouched.
+
+## 2026-10-04 - Same-store allocation screen
+
+- Added self runtime/assignment context read and usable saved-draft allocation
+  screen using existing counter picker, exact strings and operation intents.
+- No authority/date overrides, user-directory access or operational activation.
+  Unknown retries stay identical; stale changes block replacement; dirty exit warns.
+- Backend31/frontend15 focused tests and build main.dfa28a45.js pass with existing
+  warnings. Browser acceptance pending. Evidence: planning/evidence/t07-store-allocation-ui.txt.
+- T33A still awaits the collaborator's exact PR/branch; no unrelated branch merged.
+
 ## 2026-10-04 - Paired GitHub checkpoint
 
 - Reviewed changed/untracked files; no private documents, runtime credentials,

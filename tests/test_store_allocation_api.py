@@ -79,3 +79,23 @@ def test_foreign_source_module_and_anonymous_denied(api):
     assert f.client.post(f.url, json=f.body).status_code == 403
     f.app.dependency_overrides.pop(get_current_user)
     assert f.client.post(f.url, json=f.body).status_code == 401
+
+
+def test_context_projects_only_own_assignment_without_user_directory_access(api, monkeypatch):
+    f = api
+    response = f.client.get(f.url+'/context')
+    assert response.status_code == 200, response.text
+    assert response.json() == dict(branch_id=f.branches[0], branch_version=1,
+        assignment_version=1, usual_counter_id=f.counter.id)
+    monkeypatch.delenv('FREIGHTLENS_LOCAL_STOCK_RUNTIME_JSON')
+    assert f.client.get(f.url+'/context').status_code == 503
+
+
+def test_context_enforces_permissions_scope_and_authentication(api):
+    f = api; f.context.current_org_id = f.orgs[1]
+    assert f.client.get(f.url+'/context').status_code == 403
+    f.context.current_org_id = f.orgs[0]
+    f.user.access_policy = replace(f.user.access_policy, permission_names=frozenset(f.permissions-{'Allocate_SalesDraftStock'}))
+    assert f.client.get(f.url+'/context').status_code == 403
+    f.app.dependency_overrides.pop(get_current_user)
+    assert f.client.get(f.url+'/context').status_code == 401

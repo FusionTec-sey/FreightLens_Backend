@@ -196,6 +196,8 @@ async def startup_event():
     ensure_policy_activation_schema()
     from Utils.migrate_20261003_sales_intents import ensure_sales_intents_schema
     ensure_sales_intents_schema()
+    from Utils.migrate_20261004_customer_profiles import ensure_customer_profiles_schema
+    ensure_customer_profiles_schema()
     from Utils.migrate_20261003_sales_reservation_sources import ensure_sales_reservation_sources_schema
     ensure_sales_reservation_sources_schema()
     from Utils.migrate_20261003_reservation_deadlines import ensure_reservation_deadlines_schema
@@ -204,6 +206,10 @@ async def startup_event():
     ensure_reservation_reallocations_schema()
     from Utils.migrate_20261003_reservation_segments import ensure_reservation_segments_schema
     ensure_reservation_segments_schema()
+    from Utils.migrate_20261004_cycle_counts import ensure_cycle_counts_schema
+    ensure_cycle_counts_schema()
+    from Utils.migrate_20261004_count_permissions import ensure_count_permissions
+    ensure_count_permissions()
     from Utils.migrate_20261002_unit_barcodes import ensure_unit_barcodes_schema
     ensure_unit_barcodes_schema()
     from Utils.migrate_20261002_barcode_retirements import ensure_barcode_retirements_schema
@@ -356,6 +362,8 @@ from Routes.Orders.StoreAllocationRouter import StoreAllocationRouter
 app.include_router(StoreAllocationRouter)
 from Routes.Inventory.ReservationDeadlineRouter import ReservationDeadlineRouter
 app.include_router(ReservationDeadlineRouter)
+from Routes.Inventory.CycleCountRouter import CycleCountRouter
+app.include_router(CycleCountRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
 

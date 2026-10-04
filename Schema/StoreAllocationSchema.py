@@ -32,3 +32,10 @@ class StoreAllocationRead(BaseModel):
     base_unit: str
     reservations: list[AllocatedHoldRead]
     replayed: bool
+
+
+class StoreAllocationContextRead(BaseModel):
+    branch_id: int
+    branch_version: int
+    assignment_version: int
+    usual_counter_id: int | None

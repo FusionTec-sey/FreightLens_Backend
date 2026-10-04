@@ -2,6 +2,199 @@
 
 ## Status
 
+### T33A local repair integration (2026-10-04; unverified)
+
+Collaborator count models/services/router/migrations are selectively integrated,
+with identical assignment/recount company validation and replay-safe immutable
+discrepancy decisions. Counter projections remain blind; reviews post no stock.
+Inventory count-authorised source routes include warehouses and reuse the shared
+product_choice_service also consumed by Sales under its existing privacy guards.
+No new catalogue or bypass of caller permissions. Runtime/test/browser acceptance
+is pending; unrelated collaborator notification/runtime changes are not imported.
+
+### Draft revision-history metadata (2026-10-04; unverified)
+
+GET /sales/drafts/{key}/history returns paginated immutable revision headers,
+newest first, under the same SALES/customer/product/personal-data access guards.
+Exact active-company filtering remains even for root; missing/foreign keys return
+404. It includes actor references, timestamps and version-pinned customer labels,
+not operation IDs, balances, payments or contacts. Existing org/document/version
+unique index serves the read; no new ledger or migration. UI history is read-only.
+Tests written, not run; full historical line inspection and visual gates remain.
+
+### Authenticated UI actor identity (2026-10-04; unverified)
+
+/auth/me/access now includes user_id from the authenticated policy user. Frontend
+keeps legacy username display separate and exposes numeric userId only while the
+access response matches the current token/company request. Sales recovery and
+customer/inventory review screens consume that ID rather than user.id on a string.
+Missing identity blocks sales entry instead of using a shared/default recovery
+scope. Backend permissions/self-review checks are unchanged. No identity guessed
+from localStorage or token payload. Regression added, no tests/build/browser run.
+
+### Signed sales thumbnails (2026-10-04; unverified)
+
+Sales source choices and draft lines project optional image_signed_url from
+already-scoped product rows using the existing blob signer. Only product-image
+keys are accepted; no raw paths, external URLs, documents or supplier data are
+returned. Missing/invalid/unsigned media yields null without changing eligibility.
+Current catalogue images are display aids, not historical invoice snapshots.
+No media catalogue, uploads or migration. Frontend shares a lazy thumbnail with
+a broken/missing-image placeholder; signed URLs are excluded from draft recovery.
+Tests written, not run; provider/browser acceptance remains pending.
+
+### Saved customer labels on sales drafts (2026-10-04; unverified)
+
+Register/detail responses add customer_name from each draft's exact saved
+customer/profile version. The shared historical_names_for_page helper requires
+an authorization callback and exact active-company scope, caps input at100,
+and projects names only in at most two queries across original/revised profiles.
+Missing/deleted versions yield no name, never a latest-profile or tenant fallback.
+No contact/balance projection, schema migration or historical record rewrite.
+Frontend shows names plus original references/version in details. Tests written
+for profile changes and missing versions, not run; broader UI/API checks deferred.
+
+### Sales register store filter (2026-10-04; unverified)
+
+GET /sales/drafts accepts an optional positive branch_id, filtering current
+revisions before count/pagination within the exact active company. Existing
+org/branch index remains available. A bounded page-only query projects current
+non-deleted store names; absent labels fall back to explicit IDs, not other tenants.
+Frontend reuses the paginated branch selector, resets page on filter changes
+and aborts stale loads. No full-text SQL fallback, schema migration or posting.
+Customer labels and broader search remain future register work. Tests added but
+not run; build/browser deferred under owner instruction.
+
+### Duplicate customer screens (2026-10-04; unverified)
+
+Customer register exposes request and review controls under distinct permissions.
+Pair selection reuses CustomersPage selection mode; exact company/profile versions
+are submitted with an explicit assessment/reason. Review extends ManagerCases and
+loads both historical profiles through permission-checked version reads. Review
+controls require successful profile loading; backend still rechecks current source
+versions and rejects self-review. Unknown requests retain the same intent; receipts
+remain visible. There is no merge or execution control. Tests/build/browser pending.
+
+### Duplicate assessment public API (2026-10-04; unverified)
+
+The existing customer router now provides /duplicates/cases request/list/review
+under customer/personal-data access and separate Request_CustomerDuplicate and
+Review_CustomerDuplicate permissions. No role grants are seeded. Request-only
+users see their own cases; independent reviewers see company-scoped cases through
+the shared paginated manager-case reader. Responses expose exact customer-version
+references and assessment, not a merge instruction. No consumption endpoint exists.
+The frontend customer client is connected; request/inspection/review screen work
+remains pending. No tests/build/browser run and no cases created.
+
+### Duplicate customer assessment foundation (2026-10-04; unverified)
+
+customer_duplicate_service binds two exact same-company customer profile versions
+and an explicit SAME_CUSTOMER or DISTINCT_CUSTOMERS assessment to the existing
+manager-case engine. Sorted identity locks protect overlapping pairs; changed
+profiles invalidate review and retries. Independent review records approval or
+rejection of the assessment only. No consumption/merge, contact copying, identity
+retirement, sales redirection or balance effect is provided. Bindings contain only
+identifiers/versions and assessment, not contact values. Public permission adapter,
+paginated case register and frontend request/review remain next. No tests run.
+
+### Customer profile API and screens (2026-10-04; unverified)
+
+Customer master now exposes protected PUT profile and paginated GET history.
+Existing list/search/detail project current versions; explicit version reads retain
+the original history. New sales drafts lock the customer and pin the selected
+current version. Old drafts/references are never rewritten. Startup registers the
+profile migration after sales tables, and metadata creation shares the reference
+guard. The migration widens the old version-one constraint only when necessary.
+Search repair projects latest profiles; post-commit retries no longer intentionally
+index the initial profile after later edits. Concurrent external projection ordering
+and durable repair still need T22; search may lag, never authorizes customer access.
+Customers -> View now offers Edit profile and Profile history, reusing the contact
+form with required reason, expected version, retained result and exact retry intent.
+No tests/build/browser or explicit migration run; all integration is verification
+pending. Controlled duplicate review remains unfinished. No balance changes.
+
+### Customer profile version foundation (2026-10-04; incomplete/unverified)
+
+customer_profile_service now provides scoped current/exact-version reads,
+append-only edits through execute_once, and bounded newest-first history including
+the original version one. Parent identity locks serialize competing edits; expected
+versions reject stale edits. Replay checks permission/scope before returning its
+original receipt. Generic events contain identifiers only, not contacts or reasons.
+This is an internal foundation, not an enabled profile-edit screen: startup
+migration registration, sales snapshot integration, search projection, protected
+API and frontend remain pending. Existing customer reads still use initial_profile.
+No tests, build, migration execution or business posting performed.
+
+### Public reviewed cost posting adapter (2026-10-04; unverified, disabled)
+
+FREIGHTLENS_LOCAL_COST_RUNTIME_JSON is a separate opt-in local-development identity
+map keyed by exact company/cost pool and pinned central node/epoch. It never adopts
+branch authority or latest epochs; blank configuration disables execution.
+Cost evidence cases now expose posting-context and post endpoints under independent
+Post_InventoryCost plus financial management, supplier/document and module access.
+Context returns only bounded product stream versions, using the existing scoped
+version index. Clients cannot supply authority, amounts, allocation or file hashes.
+The existing preparation/coordinator rechecks persisted evidence and original blob
+versions outside transactions, then atomically consumes charge/case and appends
+UNRECONCILED valuation. Request DB transaction closes before file I/O; fresh session
+guards reload actor membership, modules and financial/supplier permissions.
+Frontend evidence review adds explicit cost confirmation and retained outcome.
+No settings/data were enabled or posted. Tests/build/browser remain deferred.
+Evidence: planning/evidence/t06-local-cost-runtime.txt.
+
+### Reallocation execution (2026-10-04; unverified)
+
+Execute_ReservationReallocation separately permits context lookup and execution
+of an exact approved reallocation. The stock runtime scope loader is shared with
+other-store execution, not a second authority or approval engine. Existing atomic
+reallocate_reservation handles both child movements, case consumption and history.
+Checked branch settings version now binds the parent receipt. The frontend reuses
+the runtime-confirmation control and retains source/new-hold quantities afterward.
+Older cases without a destination-history snapshot cannot execute from the UI.
+No tests/build/browser run, runtime activation or paid-source support. Evidence:
+planning/evidence/t07-reallocation-runtime.txt. T07 remains in progress.
+
+### Other-store public execution (2026-10-04; unverified)
+
+Approved cases now expose a runtime-context read and explicit execution endpoint
+under Execute_OtherStoreFulfilment, SALES/INVENTORY and draft access. The client
+sends only operation ID and observed target settings version; exact source,
+location, quantity, unit and follow-up come from the immutable case. Target stock
+authority is pinned by operator configuration. Server-derived target business date
+uses existing calendars under a shared branch lock; missing/changed settings or
+closed trading dates deny allocation. No artificial checkout counter is needed
+for a reviewed warehouse hold. Settings version joins the existing stock receipt
+fingerprint. reserve_stock remains the sole stock effect/case-consumption engine.
+Case-derived hold identity and exact operation receipts protect retries; original
+requestor assignment, stock version and compatible demand remain rechecked.
+Frontend reuses manager cases and confirmation, disables missing-runtime execution
+and retains its result. No tests/build/browser checks run at owner request.
+Evidence: planning/evidence/t07-other-store-runtime.txt. Runtime not activated.
+
+### Approved release runtime adapter (2026-10-04; verification pending)
+
+POST /inventory/reservation-release-cases/{key}/execute accepts only a stable
+operation UUID. Execute_ReservationRelease is distinct from request/review rights;
+execute-only users may inspect company-scoped cases. The exact immutable binding
+supplies quantity, unit and source. Runtime authority resolves from the held stock
+branch, never the selling branch. Existing release_stock rechecks demand and case
+eligibility and atomically consumes approval with stock, movement and receipt.
+No client authority, paid-order adapter, settings seed or runtime activation.
+Sales drafts release reviews offers explicit execution confirmation and a retained
+result. Unknown responses keep the same retry identity. Further checks/build are
+deferred at owner request; evidence: planning/evidence/t07-release-runtime.txt.
+
+### Same-store allocation screen (2026-10-04)
+
+Saved Sales draft details now offers Allocate same-store stock. A protected
+/sales/draft-allocations/context read returns only self assignment and branch
+settings versions after checking operator-pinned runtime authority; no View_User
+or client authority is needed. UI reuses paginated counter selection and exact
+operation intents, allows unset picking preference and shows holds by location.
+Unknown outcomes freeze edits for identical retries. Stale state blocks replacement.
+Runtime remains disabled in the preview. Evidence:
+planning/evidence/t07-store-allocation-ui.txt. Browser acceptance pending.
+
 ### Opt-in local runtime and same-store allocation API (2026-10-04)
 
 stock_runtime_service reads only operator process configuration from

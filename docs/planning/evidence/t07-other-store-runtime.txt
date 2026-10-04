@@ -1,0 +1,28 @@
+T07 other-store runtime adapter — 2026-10-04
+Status: Implemented—verification pending (entire slice untested)
+Decision revision: BD-20261003-06. T33A untouched.
+
+New Execute_OtherStoreFulfilment permission, no automatic role grants.
+GET /inventory/other-store-fulfilment-cases/{key}/execution-context returns only
+case/target branch/settings version after runtime ownership check.
+POST .../{key}/execute takes operation UUID and branch_version only. Stock target,
+source, quantity, units and follow-up are server-derived from the reviewed case.
+require_stock_business_date reuses versioned branch calendars and date overrides;
+missing, stale or closed target calendar blocks. No client-supplied dates/node.
+reserve_stock adds optional checked-settings version to its request fingerprint,
+retaining existing approval/source/stock/version/authority/quantity protections.
+Hold UUID is deterministic per case; no duplicate ledger or source record.
+
+Sales drafts -> Other-store reviews -> approved case: shared confirmation UI
+loads target context and offers explicit execution to separately permitted users.
+Missing runtime disables action; same operation retries remain fixed; result stays
+visible until dismissed. Stock remains at the selected location; no goods transfer,
+physical collection, payment or customer confirmation is claimed.
+
+No tests, production build or browser checks run per owner instruction. This is
+implementation evidence only, not correctness/acceptance evidence. Pending checks:
+auth/tenant/module boundaries; execute-only list scope; no approval/self-review
+bypass; wrong/stale runtime; concurrent and uncertain retry; settings changes;
+closed calendar/expiry; rollback after case consumption; UI context/receipt/error
+states; update prior no-execution assertion for approved other-store cases.
+No real data, environment configuration, deployment, push or merge changed.

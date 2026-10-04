@@ -7,6 +7,8 @@ from Model.containermgmt.Orders.Product import Product
 from Schema.SalesIntentSchema import SalesIntentInput
 from Services.inventory_posting_service import execute_once, PostingEffect, PostingConflict
 from Services.sales_intent_source_service import prepare_sales_intent
+from Services.customer_profile_service import historical_names_for_page
+from Services.sales_product_media import sales_thumbnail
 from Services.sales_reservation_source_service import protect_held_draft, active_demand_holds
 from Utils.org_filter import apply_org_filter
 
@@ -81,17 +83,21 @@ def get_sales_intent(db, context, document_key, *, authorize):
         version=revision.version).order_by(SalesIntentLineRevision.position).limit(100).all()
     # Current display labels are not a historical invoice snapshot. Never load
     # supplier relationships or costs merely to label the existing catalogue IDs.
-    labels = {row.id: row for row in apply_org_filter(db.query(Product.id, Product.name, Product.sku).filter(
+    labels = {row.id: row for row in apply_org_filter(db.query(Product.id, Product.name, Product.sku, Product.images).filter(
         Product.org_id == context.org_id, Product.is_deleted.is_(False),
         Product.id.in_([line.product_id for line in lines])), Product, context).all()}
     holds = active_demand_holds(db, context, document_key)
+    customer_names = historical_names_for_page(db, context,
+        [(revision.customer_key, revision.customer_version)], authorize=authorize)
     return dict(document_key=str(document_key), version=revision.version, status=revision.status,
         customer_key=str(revision.customer_key), expected_customer_version=revision.customer_version,
+        customer_name=customer_names.get((revision.customer_key, revision.customer_version)),
         branch_id=revision.branch_id, lines=[dict(line_key=str(line.line_key),
             product_id=line.product_id, expected_policy_version=line.policy_version,
             quantity=format(line.quantity, 'f'), unit=line.unit,
             base_quantity=format(line.base_quantity, 'f'), base_unit=line.base_unit,
             product_name=labels[line.product_id].name if line.product_id in labels else None,
             sku=labels[line.product_id].sku if line.product_id in labels else None,
+            image_signed_url=sales_thumbnail(labels[line.product_id].images) if line.product_id in labels else None,
             reserved_quantity=format(holds.get(line.line_key, Decimal(0)), 'f'),
             units=[line.policy['base_unit']] + [unit['unit'] for unit in line.policy['conversions']]) for line in lines])

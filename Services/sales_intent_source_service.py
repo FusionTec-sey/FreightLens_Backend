@@ -31,7 +31,7 @@ def prepare_sales_intent(db, context, payload, *, authorize):
         kind='STORE'), InventoryBranch, context).with_for_update(read=True).populate_existing().one_or_none()
     if branch is None:
         raise LookupError('Selling branch not found')
-    customer = get_customer(db, context, payload.customer_key, authorize=authorize)
+    customer = get_customer(db, context, payload.customer_key, authorize=authorize, lock=True)
     if customer.version != payload.expected_customer_version:
         raise PostingConflict('Customer profile changed')
     ids = sorted({line.product_id for line in payload.lines})

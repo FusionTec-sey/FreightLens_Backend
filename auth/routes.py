@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import os
 from datetime import datetime, timedelta
 
 import jwt
@@ -33,6 +34,7 @@ REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 def get_my_access(policy: AccessPolicy = Depends(get_request_policy)):
     """Return the active organisation authorization policy for the UI."""
     return {
+        "user_id": policy.user.id,
         "org_ids": list(policy.org_ids),
         "modules": sorted(policy.module_names),
         "permissions": sorted(policy.permission_names),
@@ -86,7 +88,11 @@ async def login(
         db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # ── Build token with actual DB roles and org info ──────────────────────────────
+    return issue_login_session(request, db, user)
+
+
+def issue_login_session(request, db, user):
+    # Shared by password login and the explicitly isolated local demo adapter.
     user_roles = [role.name for role in user.roles]
     org = user.organisation
     if not org or user.org_id is None or not org.is_active:
@@ -131,7 +137,7 @@ async def login(
         db.query(Permission.name)
         .join(Role.permissions)
         .join(Role.users)
-        .filter(User.username == form_data.username)
+        .filter(User.id == user.id)
         .distinct()
         .all()
     )
@@ -162,6 +168,45 @@ async def login(
         "is_platform_admin": is_platform_admin,
         "permissions": [p[0] for p in permissions],
     }
+
+
+def local_demo_user(request, db):
+    """Fail closed outside the explicit loopback-bound synthetic preview."""
+    from Model.db import engine
+    if (os.getenv('ENVIRONMENT') != 'development'
+        or os.getenv('FREIGHTLENS_LOCAL_DEMO_LOGIN') != '1'
+        or engine.url.database != 'freightlens_pos_preview'
+        or request.headers.get('host') not in ('127.0.0.1:9000', 'localhost:9000')
+        or request.headers.get('origin') not in ('http://127.0.0.1:3000', 'http://localhost:3000')):
+        raise HTTPException(404, 'Not found')
+    user = db.query(User).filter_by(username='demo-t05-reviewer', is_deleted=False).one_or_none()
+    if (user is None or user.org_id is None or user.allowed_org_ids != [user.org_id]
+        or not user.organisation or not user.organisation.is_active
+        or not user.organisation.name.startswith('DEMO ONLY - ')
+        or is_platform_admin_user(user)):
+        raise HTTPException(404, 'Not found')
+    return user
+
+
+@router.get('/auth/local-demo')
+def local_demo_status(request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    try:
+        local_demo_user(request, db)
+        enabled = True
+    except HTTPException:
+        enabled = False
+    return JSONResponse({'enabled': enabled}, headers={'Cache-Control': 'no-store'})
+
+
+@router.post('/auth/local-demo')
+@limiter.limit('10/minute')
+def local_demo_login(request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    user = local_demo_user(request, db)
+    result = issue_login_session(request, db, user)
+    result['username'] = user.username
+    return JSONResponse(result, headers={'Cache-Control': 'no-store'})
 
 
 

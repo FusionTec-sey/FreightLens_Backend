@@ -49,6 +49,7 @@ def test_permissions_enforced_on_all_requests(api, missing):
     expected = 200 if missing == 'Manage_SalesDraft' else 403
     assert f.client.get(f.url).status_code == expected
     assert f.client.get('/sales/drafts').status_code == expected
+    assert f.client.get(f'{f.url}/history').status_code == expected
 
 
 def test_module_and_personal_field_guards(api):
@@ -57,6 +58,7 @@ def test_module_and_personal_field_guards(api):
         f.user.access_policy = replace(policy, **changes)
         assert f.client.put(f.url, json=f.payload).status_code == 403
         assert f.client.get('/sales/drafts').status_code == 403
+        assert f.client.get(f'{f.url}/history').status_code == 403
 
 
 def test_anonymous_denied(api):
@@ -66,6 +68,7 @@ def test_anonymous_denied(api):
     f.app.dependency_overrides.pop(get_request_policy, None)
     assert f.client.get('/sales/drafts').status_code == 401
     assert f.client.get(f.url).status_code == 401
+    assert f.client.get(f'{f.url}/history').status_code == 401
     assert f.client.put(f.url, json=f.payload).status_code == 401
 
 
@@ -73,6 +76,7 @@ def test_foreign_company_denied_including_replay(api):
     f = api; assert f.client.put(f.url, json=f.payload).status_code == 200
     f.context.current_org_id = f.org_b; f.context.allowed_org_ids = [f.org_a, f.org_b]; f.context.is_root = True
     assert f.client.get(f.url).status_code == 404
+    assert f.client.get(f'{f.url}/history').status_code == 404
     assert f.client.get('/sales/drafts').json()['items'] == []
     assert f.client.put(f.url, json=f.payload).status_code == 404
 
@@ -83,3 +87,65 @@ def test_stale_version_and_unsafe_extra_fields(api):
     assert f.client.put(f.url, json=f.payload).status_code == 409
     f.payload['draft']['payment_received'] = True
     assert f.client.put(f.url, json=f.payload).status_code == 422
+
+
+def test_history_is_paginated_immutable_revision_metadata(api):
+    f = api
+    assert f.client.get(f'{f.url}/history').status_code == 404
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    f.payload.update(operation_key=str(uuid4()), expected_version=1)
+    f.payload['draft']['lines'][0]['quantity'] = '4'
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    response = f.client.get(f'{f.url}/history?limit=1')
+    assert response.status_code == 200, response.text
+    assert response.headers['cache-control'] == 'no-store'
+    data = response.json()
+    assert data['total'] == 2 and data['pages'] == 2
+    row = data['items'][0]
+    assert row['version'] == 2 and row['created_by'] == f.user.id
+    assert row['customer_version'] == f.payload['draft']['expected_customer_version']
+    assert row['created_at'] and row['status'] == 'DRAFT'
+    assert 'operation_key' not in row and 'payments' not in row and 'contacts' not in row
+    assert f.client.get(f'{f.url}/history?limit=1&page=2').json()['items'][0]['version'] == 1
+    assert f.client.get(f'{f.url}/history?limit=1&page=3').json()['items'] == []
+    assert f.client.get(f'{f.url}/history?limit=101').status_code == 422
+    assert f.client.get(f'{f.url}/history?page=0').status_code == 422
+
+
+def test_store_filter_is_scoped_and_applied_before_pagination(api):
+    f = api
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    branch = f.payload['draft']['branch_id']
+    matching = f.client.get('/sales/drafts', params={'branch_id': branch, 'limit': 1})
+    assert matching.status_code == 200
+    assert matching.json()['total'] == 1
+    assert matching.json()['items'][0]['branch_id'] == branch
+    assert 'branch_name' in matching.json()['items'][0]
+    assert f.client.get('/sales/drafts', params={'branch_id': branch, 'page': 2, 'limit': 1}).json()['items'] == []
+    assert f.client.get('/sales/drafts?branch_id=0').status_code == 422
+    f.context.current_org_id = f.org_b
+    f.context.allowed_org_ids = [f.org_a, f.org_b]
+    f.context.is_root = True
+    foreign = f.client.get('/sales/drafts', params={'branch_id': branch}).json()
+    assert foreign['items'] == [] and foreign['total'] == 0
+
+
+def test_customer_name_uses_saved_profile_not_latest(api):
+    from tests.test_customer_identity import profile
+    from Schema.CustomerSchema import CustomerProfileUpdate
+    from Services.customer_profile_service import update_customer_profile, historical_names_for_page
+    f = api
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    original_name = profile().name
+    changed = profile().model_copy(update={'name': 'Synthetic revised name'})
+    update_customer_profile(f.db, f.context, f.user.id, f.customer_key,
+        CustomerProfileUpdate(operation_key=uuid4(), expected_version=1,
+            profile=changed, reason='Synthetic name correction'), authorize=lambda db: None)
+    f.db.commit()
+    assert f.client.get(f.url).json()['customer_name'] == original_name
+    assert f.client.get('/sales/drafts').json()['items'][0]['customer_name'] == original_name
+    names = historical_names_for_page(f.db, f.context,
+        [(f.customer_key, 1), (f.customer_key, 2), (f.customer_key, 99)], authorize=lambda db: None)
+    assert names[(f.customer_key, 1)] == original_name
+    assert names[(f.customer_key, 2)] == 'Synthetic revised name'
+    assert (f.customer_key, 99) not in names
