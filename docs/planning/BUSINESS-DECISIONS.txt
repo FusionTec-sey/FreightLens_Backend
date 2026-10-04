@@ -142,6 +142,14 @@ development packaging slice, bounded in PROGRAMMER-T21-HANDOFF.txt. This superse
 the old T33A assignment for the new package; integrated count work is retained.
 No deployment, real-node enrollment, financial activation or automatic merge.
 
+BD-20261004-08 | T33A lessons applied to collaborator assignment | T21
+Owner requested revising the assignment to prevent recurrence of T33A cleanup.
+PROGRAMMER-T21-HANDOFF.txt revision 2 requires a real-contract inventory, complete
+revision pairing, scoped permissions/resources, partial-success/retry recovery,
+negative isolation tests, minimal diffs and a reproducible PR manifest. T21 scope
+is unchanged; no new business APIs, enrollment or sync authorised. This tightens
+BD-20261004-07 delivery gates rather than reopening completed T33A implementation.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration

@@ -22,11 +22,13 @@ Owner resumed full testing on 2026-10-04 (BD-20261004-04). Neither mockups nor
 coding nor a suite pass alone imply whole-task Verified status.
 Historical "Next" statements below do not override this priority or current status.
 
-PARALLEL OWNERSHIP — BD-20261004-07
+PARALLEL OWNERSHIP — BD-20261004-08
 Read BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt before work.
 Integrator retains inventory/allocation/valuation/reservations/sales foundations.
 Next collaborator package is T21 isolated development packaging; see
 PROGRAMMER-T21-HANDOFF.txt. T33A is integrated; retain existing customer/count work.
+Assignment revision 2 requires contract inventory, negative isolation/retry checks
+and complete revision/evidence manifest before integration; T21 scope unchanged.
 No shared-file changes without interface coordination; linked PRs to integration.
 
 LATEST VERIFICATION

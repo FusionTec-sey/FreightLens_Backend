@@ -1,6 +1,7 @@
 FREIGHTLENS - OTHER PROGRAMMER ASSIGNMENT
 Package: T21 isolated development packaging (not full offline operation)
-Authority: BD-20261004-07. Status: Ready; not started by the integrator.
+Authority: BD-20261004-08 (tightens BD-20261004-07). Assignment revision 2.
+Status: Ready; not started by the integrator.
 Starting revisions: CHECKPOINT-20261004-UI.txt. Both repositories required.
 
 COPYABLE START PROMPT
@@ -9,6 +10,62 @@ TASK-QUEUE.txt, BUSINESS-DECISIONS.txt, COLLABORATION-HANDOFF.txt and this file.
 Confirm your backend/frontend SHAs match the paired checkpoint before editing.
 Inspect existing Dockerfiles, Compose files and stock/cost runtime services.
 Extend those foundations; do not rebuild stock authority, count or Sales services.
+
+MANDATORY LESSONS FROM T33A INTEGRATION
+Read evidence/t33a-integration-review.txt as historical findings; the fixes are
+already in the paired checkpoint. Do not restore the collaborator's older branch.
+These are submission gates for this package, not permission to expand its scope.
+
+1. ONE COMPLETE, IDENTIFIED DELIVERY
+   Supply repository URL, branch, full SHA, PR and companion revision for every
+   changed repository. A frontend push alone is not a complete backend feature.
+   If frontend is unchanged, say so and pin its exact SHA. Never claim an endpoint,
+   runtime adapter or migration exists based only on UI references or comments.
+   A blocked or partial implementation stays Draft with an explicit missing list.
+
+2. INSPECT REAL CONTRACTS BEFORE WRITING ADAPTERS
+   Inventory the actual auth identity, organisation context, node configuration,
+   authority epochs, database settings and scheduler/runtime switches. Name the
+   source files/functions and show how packaging supplies their existing inputs.
+   T33A incorrectly treated the username as user.id; authenticated userId is the
+   established contract. Do not infer identity from display names, browser storage,
+   node labels or development defaults. Do not create another identity registry.
+
+3. NO UNRELATED PERMISSION OR RESOURCE FALLBACKS
+   T33A used Sales selectors for Inventory work, excluding warehouses and requiring
+   customer-data access. T21 must not use sales/customer permissions or a superadmin
+   shortcut to make health/configuration checks pass. Preserve existing auth and
+   organisation checks. Same-company branches are not separate legal companies.
+   Separate process/database ownership from organisation, branch and node identity.
+   Missing configuration must fail visibly, never fall back to cloud/preview DB,
+   another store, shared volumes, public services or permissive credentials.
+
+4. RETRIES AND PARTIAL SUCCESS ARE NOT NEW OPERATIONS
+   T33A allowed edits during uncertain saves and confused a committed save with a
+   failed refresh. For setup scripts, make repeat execution safe: retain generated
+   secrets/identities and existing data; do not regenerate or recreate on timeout.
+   Report separately: not started, partially created, running but unhealthy, and
+   healthy. A failed health probe does not mean creation failed or justify deletion.
+   Recovery must inspect the exact scoped resources before retrying. Do not use
+   destructive rollback against pre-existing or unrecognised containers/volumes.
+   No business-write retry automation belongs in this packaging task.
+
+5. ISOLATION AND REPLAY MUST BE TESTED AT THE REAL BOUNDARY
+   Include negative checks for wrong node/database/organisation configuration,
+   occupied ports, missing secrets and unavailable dependencies. Verify that a
+   second start and a restart preserve each node's identities, secrets and data.
+   Verify that stopping one project leaves both other nodes and the preview alone.
+   Do not weaken backend guards, remove regression assertions, add xfails/skips,
+   or grant broad roles merely to make smoke tests pass. Report discovered failures.
+
+6. MINIMAL DIFF, CURRENT BASELINE, REPRODUCIBLE EVIDENCE
+   T33A shared branches contained unrelated older Sales changes. Submit only the
+   assigned file set and explicitly approved shared changes, not a branch overwrite.
+   Fetch/check decisions before starting and before delivery. Report intervening
+   shared-contract changes; coordinate updates rather than resolving conflicts by
+   choosing all of your branch. Include the diff against the pinned checkpoint.
+   Record exact commands, exit codes, tested SHAs, isolated environment and failures.
+   Self-reported passes on a different branch are not integration verification.
 
 DELIVERABLE
 Provide an opt-in, reproducible LOCAL development topology for one synthetic cloud
@@ -42,6 +99,16 @@ redemption. Existing authority and runtime checks stay fail-closed. Secure
 enrollment, job ownership integration and later T22/T23 sync/offline eligibility
 remain explicit follow-ups. Do not mark the whole T21 task Verified after packaging.
 
+CHECKPOINTS BEFORE IMPLEMENTATION AND DELIVERY
+A. Before implementation, provide a contract/source inventory, intended file list,
+   port/project/volume naming, secret handling and a dependency/failure test plan.
+   Shared-interface changes need explicit integrator agreement before coding.
+B. First implementation slice: one isolated node plus repeat-start/health checks.
+   Verify it before expanding to three nodes; do not implement sync or enrollment.
+C. Delivery: provide the manifest below. The integrator reproduces setup on a clean
+   isolated environment and checks the combined diff before accepting or merging.
+   Do not describe packaging success as full T21/offline/pilot readiness.
+
 WORKFLOW
 Use independent clones, an individual Git identity and task branch
 feature/t21-isolated-dev-packaging. Do not share the integrator's checkout,
@@ -59,7 +126,22 @@ ACCEPTANCE EVIDENCE
 - Restart retains each node's own data; teardown instructions are project-scoped.
 - No committed secrets or provider connections; no real data or public exposure.
 - Reproducible setup and focused test/smoke results, limitations and recovery notes.
-- PR lists starting SHAs, BD-20261004-07, changed files, dependencies and next gates.
+- PR lists starting SHAs, BD-20261004-08, changed files, dependencies and next gates.
+
+REQUIRED PR HANDOFF MANIFEST
+Assignment revision / decision ID:
+Starting backend SHA / frontend SHA:
+Delivered backend SHA / frontend SHA (or unchanged pinned revision):
+PR links and dependency PRs:
+Changed files / approved shared changes:
+Existing contracts reused (source paths and functions):
+Setup, health, restart and scoped-stop commands:
+Tested revisions, exact commands, exit codes and sanitised evidence:
+Negative/isolation/retry results:
+Preview coexistence evidence:
+Known failures, unavailable dependencies and unverified claims:
+Recovery instructions without destructive reset:
+Remaining full-T21/T22/T23 gates:
 
 Begin with a read-only inventory and a short implementation proposal. Work through
 the authorised packaging slice; flag shared-interface changes before implementing.

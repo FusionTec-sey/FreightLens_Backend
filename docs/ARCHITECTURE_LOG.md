@@ -1,5 +1,13 @@
 # FreightLens Architecture Log
 
+## 2026-10-04 - T33A integration safeguards for next assignment
+
+- Owner requested applying the cleaned-up T33A failure patterns to T21 handoff.
+- Assignment revision 2 requires source-contract inspection, exact revision pairing,
+  scoped resource/permission tests, retry/partial-success recovery and minimal diffs.
+- Added staged implementation checkpoints and mandatory reproducible PR manifest.
+- No runtime/code changes or new tests required for this documentation-only change.
+
 ## 2026-10-04 - Reconciled plan and paired GitHub UI checkpoint
 
 - Replaced stale T14B-D next actions with current implementation, test evidence

@@ -1,5 +1,8 @@
 FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-04
-Decision revision: BD-20261004-07
+Decision revision: BD-20261004-08
+Assignment revision 2 adds mandatory T33A-derived integration safeguards; read
+PROGRAMMER-T21-HANDOFF.txt before implementation. Application starting revisions
+remain CHECKPOINT-20261004-UI.txt; this is a documentation-only tightening.
 Current collaborator assignment: PROGRAMMER-T21-HANDOFF.txt (isolated packaging).
 This supersedes the historical T33A assignment below; retain its integrated work.
 Current publication manifest: CHECKPOINT-20261004-UI.txt.
@@ -131,14 +134,12 @@ T11–T34 are later packages subject to queue dependencies; T13A/T15A are founda
 not completion of checkout, invoices, returns, money or offline sync.
 T05 implementation in agreed scope is acceptance-pending, not physical conversion.
 
-T33A DELIVERABLE AND BOUNDARIES
-Owner confirmed 2026-10-04: T33A remains actively in development with collaborator.
-Integration awaits the ready paired revisions; do not rebuild or repeatedly request
-the unfinished backend. Continue independent integrator work.
-Frontend now located: commit32608383d7de0bb820bad82e4276632c0c6ba7ab on
-codex/pos-ui-theme. Matching count backend still needed. Before integration read
-evidence/t33a-integration-review.txt: authenticated userId, inventory-only warehouse
-selectors and pending-save recovery fixes are required. No whole-branch overwrite.
+T33A HISTORICAL DELIVERABLE AND RETAINED BOUNDARIES
+T33A backend/frontend were selectively integrated and repaired in the current
+paired checkpoint. Earlier missing-backend notes are historical, not current
+instructions. Preserve authenticated userId, Inventory-only warehouse selectors,
+company-scope checks and safe pending/confirmed-save recovery. The review evidence
+records the defects; do not reintroduce them from older collaborator branches.
 Presentation alignment: after T14A visual confirmation, reuse the approved
 register/detail conventions for count lists and tablet-friendly blind entry.
 Adapt existing implementation rather than replace it. Integrator coordinates
