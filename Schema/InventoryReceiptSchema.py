@@ -126,3 +126,57 @@ class ReceiptManifestReviewCase(BaseModel):
     review_reason: str | None = None
     requested_at: datetime
     physical_posting_enabled: Literal[False] = False
+
+
+class ReceiptPostingRequest(BaseModel):
+    """Stable execution intent; all cost and stock scope remains server-derived."""
+    model_config = ConfigDict(extra='forbid', frozen=True, str_strip_whitespace=True)
+    operation_key: UUID
+    classification_case_key: UUID
+    cost_case_key: UUID
+    expected_valuation_version: int = Field(ge=0, strict=True)
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator('operation_key', 'classification_case_key', 'cost_case_key')
+    @classmethod
+    def nonzero_posting_key(cls, value):
+        if not value.int:
+            raise ValueError('Posting and reviewed-case keys must be nonzero')
+        return value
+
+
+class ReceiptPostingContext(BaseModel):
+    manifest_key: UUID
+    branch_id: int
+    product_id: int
+    cost_pool_id: int
+    valuation_version: int
+    physical_posting_enabled: Literal[True] = True
+
+
+class ReceiptPostedMovement(BaseModel):
+    balance_id: int
+    version: int
+    on_hand: str
+    reserved: str
+    available: str
+    damaged: str
+    quarantined: str
+    batch_key: str | None = None
+
+
+class ReceiptPostingRead(BaseModel):
+    operation_key: UUID
+    replayed: bool
+    manifest_key: UUID
+    classification_case_key: UUID
+    cost_case_key: UUID
+    status: Literal['POSTED_UNRECONCILED']
+    valuation_ids: list[int]
+    cost_pool_id: int
+    product_id: int
+    version: int
+    pool_quantity: str
+    pool_value_scr: str
+    average_cost_scr: str
+    movements: list[ReceiptPostedMovement]

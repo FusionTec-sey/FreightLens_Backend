@@ -3,12 +3,15 @@ from uuid import uuid4
 import pytest
 from auth.policy import AccessPolicy
 from Model.Credentials.users import User
+from Model.containermgmt.Inventory.CostPool import InventoryCostPool, BranchCostPool
 from Model.containermgmt.Inventory.ManagerCase import ManagerCaseUse
 from Model.containermgmt.Inventory.StockLedger import StockMovement
 from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from Model.containermgmt.Orders.OrderDocument import OrderDocument
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Services.inventory_receipt_manifest_store import save_receipt_manifest
+from Services.inventory_posting_service import PostingConflict, PostingOutcome
+from Services.posting_authority_service import AuthorityClaim, CostPoolAuthorityClaim
 from tests.test_inventory_receipt_manifest import manifest
 from tests.test_inventory_receipt_source import receipt  # noqa: F401
 from tests.test_sales_intent_sources import source  # noqa: F401
@@ -58,7 +61,7 @@ def test_historical_receipt_read_paging_and_no_posting_contract(api):
     assert detail.status_code == 200
     assert detail.json()['historical_snapshot'] and not detail.json()['condition_review_required']
     assert 'supplier_id' not in detail.text and 'unit_price' not in detail.text
-    assert f.client.post(f'{BASE}/{f.key}/post', json={}).status_code == 404
+    assert f.client.post(f'{BASE}/{f.key}/post', json={}).status_code == 403
 
 
 @pytest.mark.parametrize('missing', ['View_Product', 'View_GoodsReceipt'])
@@ -100,6 +103,119 @@ def test_anonymous_receipt_read_denied(api):
 def permissions(f, *extra):
     f.user.access_policy = replace(f.user.access_policy,
         permission_names=f.user.access_policy.permission_names | frozenset(extra))
+
+
+def posting_permissions(f):
+    permissions(f, 'Verify_Receipt', 'Post_InventoryReceipt',
+        'View_Financials', 'Manage_Financials', 'View_Supplier',
+        'View_OrderDocument', 'Post_InventoryCost')
+    f.user.access_policy = replace(f.user.access_policy,
+        field_permissions={'FINANCIAL': 'View_Financials',
+            'SUPPLIER_IDENTITY': 'View_Supplier'})
+
+
+def posting_scope(f, monkeypatch):
+    from Routes.Inventory import ReceiptManifestRouter as router
+    pool = InventoryCostPool(org_id=f.org_a, code='RECEIPT',
+        name='Synthetic receipt pool', created_by=f.user.id)
+    f.db.add(pool); f.db.flush()
+    f.db.add(BranchCostPool(org_id=f.org_a, branch_id=f.own,
+        cost_pool_id=pool.id, created_by=f.user.id))
+    f.db.commit()
+    node_key = uuid4()
+    stock_claim = AuthorityClaim(f.org_a, f.own, node_key, 1)
+    cost_claim = CostPoolAuthorityClaim(f.org_a, pool.id, node_key, 1)
+
+    class Runtime:
+        def __init__(self, claim, expected):
+            self.claim = claim
+            self.expected = expected
+
+        def claim_for(self, db, context, scope_id):
+            assert context.org_id == f.org_a and scope_id == self.expected
+            return self.claim
+
+    monkeypatch.setattr(router, 'server_stock_runtime',
+        lambda: Runtime(stock_claim, f.own))
+    monkeypatch.setattr(router, 'server_cost_runtime',
+        lambda: Runtime(cost_claim, pool.id))
+    monkeypatch.setattr(router, 'evidence_size_limit', lambda: 100)
+    return pool
+
+
+def test_receipt_posting_context_requires_exact_mapping_and_permissions(api, monkeypatch):
+    f = api
+    assert f.client.get(f'{BASE}/{f.key}/posting-context').status_code == 403
+    posting_permissions(f)
+    missing = f.client.get(f'{BASE}/{f.key}/posting-context')
+    assert missing.status_code == 422
+    pool = posting_scope(f, monkeypatch)
+    response = f.client.get(f'{BASE}/{f.key}/posting-context')
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        'manifest_key': str(f.key), 'branch_id': f.own,
+        'product_id': f.product.id, 'cost_pool_id': pool.id,
+        'valuation_version': 0, 'physical_posting_enabled': True,
+    }
+
+
+def test_receipt_post_route_passes_only_server_derived_authority(api, monkeypatch):
+    from Routes.Inventory import ReceiptManifestRouter as router
+    f = api; posting_permissions(f); pool = posting_scope(f, monkeypatch)
+    classification_case, cost_case, operation = uuid4(), uuid4(), uuid4()
+    captured = {}
+
+    def post(factory, context, actor_id, operation_key, **kwargs):
+        if kwargs['expected_valuation_version'] != 0:
+            raise PostingConflict('Valuation version changed; refresh before posting')
+        captured.update(kwargs)
+        assert operation_key == operation and actor_id == f.user.id
+        assert callable(kwargs['authorize_stock'])
+        assert callable(kwargs['authorize_cost'])
+        return PostingOutcome(operation, {
+            'manifest_key': str(f.key),
+            'classification_case_key': str(classification_case),
+            'cost_case_key': str(cost_case),
+            'status': 'POSTED_UNRECONCILED', 'valuation_ids': [71],
+            'cost_pool_id': pool.id, 'product_id': f.product.id,
+            'version': 1, 'pool_quantity': '24.000000',
+            'pool_value_scr': '240.000000',
+            'average_cost_scr': '10.000000',
+            'movements': [{'balance_id': 19, 'version': 1,
+                'on_hand': '24.000000', 'reserved': '0.000000',
+                'available': '24.000000', 'damaged': '0.000000',
+                'quarantined': '0.000000', 'batch_key': None}],
+        }, False)
+
+    monkeypatch.setattr(router, 'prepare_and_post_reviewed_receipt', post)
+    body = {'operation_key': str(operation),
+        'classification_case_key': str(classification_case),
+        'cost_case_key': str(cost_case), 'expected_valuation_version': 0,
+        'reason': 'Post independently approved synthetic receipt'}
+    response = f.client.post(f'{BASE}/{f.key}/post', json=body)
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'POSTED_UNRECONCILED'
+    assert response.json()['operation_key'] == str(operation)
+    assert captured['stock_authority'].branch_id == f.own
+    assert captured['cost_authority'].cost_pool_id == pool.id
+    assert captured['max_bytes'] == 100
+    changed = {**body, 'operation_key': str(uuid4()),
+        'expected_valuation_version': 1}
+    assert f.client.post(f'{BASE}/{f.key}/post', json=changed).status_code == 409
+
+
+def test_receipt_posting_foreign_scope_and_disabled_runtime_fail_closed(api, monkeypatch):
+    from Routes.Inventory import ReceiptManifestRouter as router
+    from Services.stock_runtime_service import StockRuntimeUnavailable
+    f = api; posting_permissions(f); posting_scope(f, monkeypatch)
+    monkeypatch.setattr(router, 'server_stock_runtime',
+        lambda: (_ for _ in ()).throw(
+            StockRuntimeUnavailable('Stock execution is disabled')))
+    assert f.client.get(f'{BASE}/{f.key}/posting-context').status_code == 503
+    f.context.current_org_id = f.org_b
+    f.context.allowed_org_ids = [f.org_a, f.org_b]
+    f.context.is_root = True
+    assert f.client.get(f'{BASE}/{f.key}/posting-context').status_code == 404
 
 
 @pytest.fixture

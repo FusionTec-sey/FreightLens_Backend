@@ -680,6 +680,16 @@ The public receipt-cost evidence request/review workflow is now usable and verif
 but the final physical/valuation execute route remains intentionally absent until
 RustFS retention and runtime acceptance are satisfied. Evidence:
 evidence/20261004-receipt-cost-public-review.txt. Opening/import composition remains.
+The authenticated receipt execution boundary now exposes server-derived posting
+context and atomically consumes the exact approved classification and cost cases,
+appends source-bound physical movements and immutable valuation, and returns a
+replay-safe un-reconciled result. Separate stock/cost permissions, current staff
+access, exact branch/pool runtime authority and evidence-size/version checks rerun
+for every attempt. Missing mappings/runtime/evidence configuration fail closed.
+Fifty focused backend tests pass; evidence:
+evidence/20261005-receipt-posting-boundary.txt. External object-retention and real
+runtime acceptance remain release gates rather than code blockers. T08 stays In
+progress for controlled opening/import composition.
 
 T09 | Complete transfers and stock movements
 Status: Blocked
