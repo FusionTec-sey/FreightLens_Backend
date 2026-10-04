@@ -138,6 +138,7 @@ def test_customer_name_uses_saved_profile_not_latest(api):
     assert f.client.put(f.url, json=f.payload).status_code == 200
     original_name = profile().name
     changed = profile().model_copy(update={'name': 'Synthetic revised name'})
+    f.db.connection()  # This service deliberately requires a caller-owned transaction.
     update_customer_profile(f.db, f.context, f.user.id, f.customer_key,
         CustomerProfileUpdate(operation_key=uuid4(), expected_version=1,
             profile=changed, reason='Synthetic name correction'), authorize=lambda db: None)

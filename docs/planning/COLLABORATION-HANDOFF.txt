@@ -1,5 +1,17 @@
-FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — 2026-10-03
-Decision revision: BD-20261004-03
+FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-04
+Decision revision: BD-20261004-07
+Current collaborator assignment: PROGRAMMER-T21-HANDOFF.txt (isolated packaging).
+This supersedes the historical T33A assignment below; retain its integrated work.
+Current publication manifest: CHECKPOINT-20261004-UI.txt.
+Current task summaries T14B-D supersede historical untested/next-action notes.
+Local demo now contains populated Sales/Counts examples; run the explicitly guarded
+Utils.seed_workflow_demo CLI only in approved local preview, never on startup.
+Read its source/setup guards before reuse. No roles, real stock or money changed.
+Latest verification: CHECKPOINT-20261004-UI.txt. Backend 1329 passed/2 legacy
+xfailed; frontend 278 passed/52 suites; build passes with warnings. Earlier fresh
+isolated startup/replay passed; provider and write-workflow acceptance remain.
+Publication state and paired revisions are recorded in the current manifest;
+verify remote SHAs before starting work. Historical report hashes are not latest.
 Phase map: PHASE-ROADMAP.txt; task status remains only in TASK-QUEUE.txt.
 Full roadmap review 2026-10-04: see roadmap review section for slice-level
 readiness and T06/T08 coordinated integration. T21 isolated packaging is Ready.
@@ -7,9 +19,8 @@ T33A frontend located at 3260838; owner confirms backend is still in motion.
 Latest owner update: backend b6f888e (includes T33A b004536) is available;
 frontend head4b6705f includes T33A3260838. Owner explicitly assigned defect repair
 to integrator. Count-only files selectively integrated and repaired locally; no
-whole-branch merge, push or claim of verification. See TASK-QUEUE and review evidence.
-Wait for the collaborator's ready paired revisions before integration; do not
-repeatedly request or rebuild their in-progress backend. Preliminary review is in
+whole-branch merge. Paired checkpoint was pushed; subsequent full verification is
+recorded above. Do not rebuild the integrated backend. Preliminary review is in
 evidence/t33a-integration-review.txt; independent sales work continues.
 Do not rebuild count work or claim its remote absence from cached local refs.
 Queue: TASK-QUEUE.txt (only authoritative backlog).
@@ -18,13 +29,14 @@ Historical baseline: BASELINE-REVISIONS.txt; do not mix arbitrary HEADs.
 Checkpoint evidence: evidence/20261003-parallel-checkpoint.txt.
 
 READ FIRST
-Current UI priority: T14A design confirmation, then T14B sales register, T14C
-desktop split view and T14D tablet draft workspace. Three concepts were shown;
+Current UI priority: remaining T14B sales register, T14C desktop split view and
+T14D tablet draft workspace; T14A approval and capability mapping are complete.
+Three concepts were shown;
 visual direction was approved on 2026-10-04. T14 retains backend-gated checkout integration;
 T14E is deferred acceptance. Reuse existing sales/customer/case/recovery code.
 No inFlow code import, duplicate sales records or tab-triggered business writes.
-Integrator owns these changes; collaborator T33A and shared-file coordination
-remain unchanged. Local documentation update is not a published GitHub checkpoint.
+Integrator owns Sales/shared interfaces; collaborator now owns the bounded T21
+packaging slice. Prior T33A assignment paragraphs below are historical context.
 
 Read backend AGENTS.md, relevant .agents/rules, architecture and latest10 log entries,
 then this handoff, decisions and queue. Frontend AGENTS.md points here. Later dated
@@ -210,6 +222,11 @@ without accessing real company records. Report evidence in the first PR/task.
 Do not claim the collaborator's environment has been verified by this checkpoint.
 
 ACCEPTANCE / RELEASE GATES
+Navigation update BD-20261004-06: integrator reorganised the shared Menu component.
+Customers route remains unchanged but appears under Sales. Counts remain the same
+routes under Inventory; count deep links now restore their accordion. Do not
+reinsert count links under Procurement. No backend contract or permission change.
+
 New browser checks require specific approval; current browser acceptance remains
 pending. Actual Epson printing, provider/storage retention, accounting review,
 real mappings/imports, offline/paper recovery and supervised pilot are separate.
@@ -218,7 +235,7 @@ No deployment, pilot, real money posting, external messaging or purchases author
 Repository hooks/workflows are checked for this push; unknown external polling
 integrations cannot be ruled out merely by reading workflow files.
 
-COPYABLE COLLABORATOR PROMPT
+HISTORICAL T33A COLLABORATOR PROMPT (superseded by PROGRAMMER-T21-HANDOFF.txt)
 You are developing FreightLens alongside an integration owner. Read AGENTS.md,
 the paired baseline, architecture, task queue, BUSINESS-DECISIONS.txt and this
 handoff before editing. Your assignment is T33A cycle-count planning and blind-

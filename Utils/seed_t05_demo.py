@@ -8,6 +8,7 @@ from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 import argparse
+import os
 import secrets
 from sqlalchemy import text
 from Model.db import engine, SessionLocal
@@ -38,7 +39,9 @@ CODE = "DEMO-T05-V1"
 
 
 def seed_demo(db, viewer_ids):
-    if db.bind.url.database not in {"freightlens_pos_preview", "containermgmt_test"}:
+    database = db.bind.url.database or ''
+    isolated_test = os.getenv('ENVIRONMENT') == 'test' and database.endswith('_test')
+    if database not in {"freightlens_pos_preview", "containermgmt_test"} and not isolated_test:
         raise ValueError("T05 demo requires the dedicated local preview or isolated test database")
     db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('freightlens-demo-t05-v1', 0))"))
     existing = db.query(Organisation).filter_by(name=NAME).one_or_none()

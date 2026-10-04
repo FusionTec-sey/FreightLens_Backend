@@ -2,6 +2,27 @@
 
 ## Status
 
+### Explicit populated demo workflows (2026-10-04)
+
+Utils/seed_workflow_demo.py extends only the existing identified T05 demo company.
+It creates two synthetic customers, three versioned sales drafts, three count
+plans, an admin-assigned blind round and a submitted round with pending discrepancy
+reviews through existing services. Adds SALES only to that demo's modules; no role,
+credential, stock, price, payment or runtime-authority changes. Stable namespaced
+keys, an advisory transaction lock and an atomic marker preserve repeat runs/user
+edits. Search projection runs after commit. Never a startup seed or migration.
+CLI requires explicit confirmation, viewer ID and exact local preview host/database.
+Focused tests prove scope, replay, rollback, blind projection and unchanged stock.
+
+### Full-build verification checkpoint (2026-10-04)
+
+Owner resumed testing: 1325 backend tests passed, 2 known legacy stock-writer
+expected failures; 273 frontend tests passed, production build passes with warnings.
+Fresh isolated startup/replay passed with search/storage intentionally unavailable.
+Read-only Sales/Counts tablet navigation checked; populated workflows and release
+gates remain. See planning/evidence/20261004-full-build-verification.txt. Earlier
+unverified headings describe historical slice status, not a current test pause.
+
 ### T33A local repair integration (2026-10-04; unverified)
 
 Collaborator count models/services/router/migrations are selectively integrated,

@@ -1,5 +1,52 @@
 # FreightLens Architecture Log
 
+## 2026-10-04 - Reconciled plan and paired GitHub UI checkpoint
+
+- Replaced stale T14B-D next actions with current implementation, test evidence
+  and remaining acceptance. Roadmap revision 4.3 and screen map now reflect
+  resumed tests, integrated T33A and the approved module navigation.
+- New collaborator package: bounded T21 isolated local packaging, with separate
+  ports/volumes and no shared-runtime/posting/permission changes without review.
+- CHECKPOINT-20261004-UI.txt pins matching repositories; historical manifests
+  retain historical revisions. No merge, deployment or real posting authorised.
+
+## 2026-10-04 - Owner-approved module navigation arrangement
+
+- Reorganised existing sidebar without new routes or backend permission changes.
+- Sales/Customers and Inventory/Counts precede Procurement, Logistics, Reports
+  and Administration. Reservation reviews grouped; policy approvals disambiguated.
+- Preserved Orders access on packing lists after moving its link to Logistics.
+- Customer/count deep links restore their own accordions. Template Studio is an
+  administration link, leaving Overview directly accessible.
+- Focused menu regressions cover grouping, permissions and route restoration.
+  Browser acceptance for the revised whole menu remains pending.
+
+
+## 2026-10-04 - Owner-requested populated Sales and Counts demo
+
+- Added explicit local-only workflow seed reusing customer, draft, count and case
+  services inside one transaction. No duplicate business engines or direct ledger
+  inserts. PostgreSQL guidance informed scoped lookups/transaction lock and moving
+  search indexing outside the transaction.
+- Four focused tests pass: repeatability, rollback, scope, blind sheets, unchanged
+  stock and rejected database destinations. Local preview seed applied twice;
+  second run created nothing. Two synthetic customers indexed successfully.
+- Existing demo company only: 3 drafts (one with revision history), 3 plans,
+  2 rounds and 2 pending discrepancy reviews. No real financial posting enabled.
+
+## 2026-10-04 - Full verification resumed and build repairs
+
+- Owner resumed full tests and read-only Sales/Counts tablet checks. Backend:
+  1325 passed/2 legacy xfailed; frontend: 273 passed/52 suites; build passed with
+  existing warnings. Isolated empty-database startup and replay passed, providers
+  intentionally unavailable. See planning/evidence/20261004-full-build-verification.txt.
+- Declared BigInt to CRA lint without changing arithmetic; aligned test mocks,
+  route assertions, thumbnail contract and caller-owned transaction setup.
+- Isolated _test database names supported by demo seed only in test environment;
+  added negative guard cases. No production authentication or posting changes.
+- Browser checked empty Sales/Counts and unsaved draft layout; populated/hardware
+  gates remain. Local repairs not pushed; no whole-task acceptance claimed.
+
 ## 2026-10-04 - Owner-authorised T33A integration and repairs
 
 - Selectively imported count implementation from backend b6f888e/frontend4b6705f;

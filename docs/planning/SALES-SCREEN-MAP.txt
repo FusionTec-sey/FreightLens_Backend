@@ -1,6 +1,10 @@
 APPROVED SALES SCREEN CAPABILITY MAP — 2026-10-04
 Design authority BD-20261004-03. Task status lives only in TASK-QUEUE.txt.
-All recently added integration is unverified; no tests/build/browser acceptance.
+Current evidence: full checkpoint 1325 backend passes / 2 known legacy xfails;
+273 frontend tests at that checkpoint. Later Sales layout: 30 focused passes;
+menu: 13 passes; production build passes with existing warnings. Read-only
+1280px desktop/1024px tablet checks are not full responsive/business acceptance.
+See evidence/20261004-sales-layout-refinement.txt and TASK-QUEUE.txt.
 
 REGISTER (T14B)
 /sales/drafts -> SalesDraftsPage -> salesDraftsApi.list/read/save.
@@ -31,7 +35,7 @@ Images -> existing scoped product rows + blob signer; no raw/external fallback.
 Save -> exact operation intent, source revalidation and recovery-before-request.
 Park -> current company/user local whitelist; no customer names/media/money stored.
 Uncertain save locks cart and barcode controls; policy conflict requires reopening.
-Exact selected-unit touch controls are implemented, unverified. A confirmed save
+Exact selected-unit touch controls are implemented and covered by automated tests. A confirmed save
 with failed local cleanup retains its receipt and offers cleanup-only retry;
 uncertain/mismatched responses retain the original operation identity instead.
 Full responsive accessibility remains pending.
@@ -45,8 +49,11 @@ Offers -> T30; promotion returns -> T31. All use the same workspace as ready.
 Display backend blockers where relevant; no invented success or business seeds.
 
 ACCEPTANCE
-Resume automated checks only on owner instruction; browser approval separately.
+Automated checks resumed under BD-20261004-04. Additional browser scope still
+requires approval; existing read-only Sales/Counts checks are recorded separately.
 Verify scope/permissions, history labels, filter paging, image boundaries, barcode
 failure/staleness, user/company switches, dirty navigation, recovery/uncertain
 retries, portrait/landscape/light/dark, keyboard/scanner and fixed action placement.
 No business gate is satisfied merely by approving the three concept images.
+Latest layout includes product cards/persistent tablet cart, desktop draft sidebar,
+read-only totals and separate register statuses. Pricing/payment remain unavailable.

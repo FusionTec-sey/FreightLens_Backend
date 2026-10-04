@@ -1,0 +1,37 @@
+PAIRED CHECKPOINT - Sales UI, menu and reconciled plan - 2026-10-04
+Decision revision: BD-20261004-07. Roadmap revision: 4.3.
+Both repositories use codex/local-area-scope; PR target codex/pos-development.
+This supersedes CHECKPOINT-20261004.txt as latest pairing, not its historical facts.
+
+Frontend: FusionTec-sey/FreightLens_Frontend
+Revision: c35ee6a29dac539fba9f8d07036c77750ce0fa73
+PR: https://github.com/FusionTec-sey/FreightLens_Frontend/pull/7
+Backend: FusionTec-sey/FreightLens_Backend
+Revision: the commit FIRST ADDING this manifest (self-reference avoided).
+Resolve with git log --diff-filter=A --format=%H -1 -- docs/planning/CHECKPOINT-20261004-UI.txt
+PR: https://github.com/FusionTec-sey/FreightLens_Backend/pull/6
+PR descriptions give both resolved immutable SHAs. Do not use unrelated HEADs.
+
+LOCAL VERIFICATION
+Backend full isolated suite: 1329 passed, 2 known legacy xfailed, 23 warnings,
+169.44s. REQUIRE_TEST_DATABASE=1; freightlens_full_20261004_test only.
+Frontend full suite: 278 passed, 52 suites, 19.236s. CI=true, CRA --runInBand.
+Production build: passed with existing warnings; runtime/menu-build-20261004.log.
+Earlier isolated fresh-install/replay result is in full-build-verification evidence;
+not rerun here, no schema/startup changes in this checkpoint.
+GitHub CI is independent: inspect the above PRs for current run outcomes.
+Browser menu acceptance, full responsive/recovery workflow, hardware, provider,
+accounting and live readiness gates remain; no full phase completion claimed.
+
+PUBLICATION SAFETY
+Reviewed changed/new source, tests and planning files; no credentials/private
+documents/databases/generated output included. Secret-pattern scan found no flags.
+Both GitHub repositories report zero webhooks. Checked-in Actions are tests/build
+and isolated fresh-install only; no deployment steps. No local active Git hooks.
+Unknown external polling cannot be ruled out; no deployment requested or performed.
+No force-push or automatic merge. Existing preview remains running.
+
+COLLABORATOR
+Give the other programmer PROGRAMMER-T21-HANDOFF.txt and this paired checkpoint.
+Task is new isolated local store/cloud packaging, not rebuilding T33A or Sales.
+Use independent clones/branches/databases/ports; integrator reviews shared changes.

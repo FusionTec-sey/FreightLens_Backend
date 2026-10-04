@@ -16,18 +16,46 @@ Immediate sequence: T14A design confirmation -> T14B register -> T14C desktop
 workspace -> T14D tablet draft workspace. T14 remains full checkout integration
 after its backend dependencies; T14E records integrated acceptance separately.
 Reuse T13A/T15A and existing T07/T10 screens/services, not a second sales system.
-The visual confirmation gate is resolved; continue capability mapping and the
-approved UI work. Existing T01-T34 IDs, ownership and evidence remain.
-Tests remain deferred at owner request; neither mockups nor coding imply Verified.
+The visual confirmation and capability-map gates are resolved; continue the
+remaining T14B-D work and acceptance described in their current summaries. Existing T01-T34 IDs, ownership and evidence remain.
+Owner resumed full testing on 2026-10-04 (BD-20261004-04). Neither mockups nor
+coding nor a suite pass alone imply whole-task Verified status.
 Historical "Next" statements below do not override this priority or current status.
 
-PARALLEL OWNERSHIP — BD-20261003-05
+PARALLEL OWNERSHIP — BD-20261004-07
 Read BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt before work.
 Integrator retains inventory/allocation/valuation/reservations/sales foundations.
-Collaborator owns new T33A cycle-count workspace, not existing T10 customer work.
+Next collaborator package is T21 isolated development packaging; see
+PROGRAMMER-T21-HANDOFF.txt. T33A is integrated; retain existing customer/count work.
 No shared-file changes without interface coordination; linked PRs to integration.
 
 LATEST VERIFICATION
+2026-10-04 reconciled GitHub checkpoint: full isolated backend 1329 passed /
+2 known legacy xfailed; full frontend 278 passed / 52 suites; production build
+passed with existing warnings. Pairing: CHECKPOINT-20261004-UI.txt. GitHub CI
+status remains separate from local results. T14B-D stay In progress.
+
+2026-10-04 menu arrangement (BD-20261004-06): existing destinations regrouped
+by module; Customers under Sales, Counts under Inventory, grouped sales reviews.
+13 focused menu tests pass. Whole-menu browser acceptance remains pending;
+no change to task completion, posting authority or backend permission contracts.
+
+2026-10-04 populated demo: Utils/seed_workflow_demo.py applied to existing T05
+demo company only. Two customers, three drafts (one revised), three count plans,
+one admin-assigned open round and one submitted round/two discrepancy reviews.
+Four focused seed tests pass; repeat preview run creates nothing. No stock/money
+posting or full-phase completion. Populated list/detail/history and blind-sheet
+inspection passed; submission/decision E2E remains pending. Evidence:
+evidence/20261004-populated-workflows.txt.
+
+2026-10-04: backend 1325 passed / 2 known legacy xfailed; frontend 273 passed
+across 52 suites; production build passed with warnings. Fresh isolated install
+and second startup passed, with providers deliberately isolated. Sales/Counts
+read-only tablet navigation checked; populated workflows remain pending.
+See evidence/20261004-full-build-verification.txt for fixes, commands and exclusions.
+Local fixes are not pushed. Deferred statements below are historical chronology,
+not current instructions to stop testing or present verification status.
+
 T10 duplicate screens now connected: customer register pair selection, exact-version
 comparison, shared paginated manager reviews and retained request/decision results.
 Uncertain requests retain identities. No merging/execution controls. Entire slice
@@ -571,8 +599,8 @@ Register list/detail/save -> salesDraftsApi list/read/save at /sales/drafts;
 existing View_SalesDraft/Manage_SalesDraft plus customer/product access remain.
 Local recovery -> LocalSalesDrafts/T15A; stock allocation -> DraftAllocation/T07;
 reservation reviews -> shared ManagerCases/T07; customer profile/history -> T10.
-List API currently offers page/limit only: search/filter/reference enrichments
-need scoped backend work, not filtering only the visible page or fake SO numbers.
+List API supports server page/limit and store filtering with bounded labels.
+Full-text search remains scoped backend work, not visible-page filtering.
 Payments/posting -> T12/T13; collection -> T16; print -> T17; copy -> T15;
 digital delivery -> T25. Those mockup actions are not working draft capabilities.
 Next action: Maintain SALES-SCREEN-MAP.txt as owning capabilities become available;
@@ -588,17 +616,12 @@ Only display statuses backed by authoritative data; draft is not confirmed/paid.
 Loading, empty, denied and failed states remain explicit. No fake active tabs
 or numbered invoices inferred from UUIDs. Missing read contracts are recorded
 against their owning task, not replaced with client-side full-dataset filtering.
-Next action: Refactor existing register/navigation using approved design; preserve
-current backend access and avoid wholesale import of the older sales branch.
-2026-10-04: existing register now shares a desktop split view with a read-only
-detail panel; smaller screens focus detail. Existing paging/actions remain.
-Filters/readable labels still need scoped API work. Unverified; no tests/build.
-Follow-up: exact server-side store filter and page-bounded current store labels
-now implemented; frontend reuses paginated branch picker. Added API coverage,
-not run. Customer labels and full search still pending, no false filter controls.
-Follow-up: customer labels now use exact saved profile versions in list/detail
-through a bounded shared projection; no current-name fallback or extra contact
-data. Historical-name regression written, not run. Full search remains pending.
+Current implementation (reconciled 2026-10-04): server paging/store filter,
+saved-profile customer labels, separate amount/payment/collection columns, and
+module navigation BD-20261004-06. No fabricated invoice numbers or paid states.
+Next: scoped full-text register search, remaining approved-design fidelity and
+whole-menu/role-based browser acceptance. 30 focused Sales tests and 13 menu
+tests pass; build passes with existing warnings. See sales-layout evidence.
 
 T14C | Desktop split-view sales workspace
 Status: In progress
@@ -613,24 +636,13 @@ printing, copy and delivery join via T12-T18/T25 as ready, not simulated actions
 Tab selection is read-only: it must never start picking, reserve, pay or hand over.
 Show backend eligibility/permission reasons; advanced review/authority details
 stay contextual, not a mandatory technical form for ordinary selling.
-Next action: Compose the existing panels into the approved desktop layout.
-2026-10-04: initial detail composition implemented alongside T14B using existing
-contracts. Extracted SalesDraftDetails keeps explicit action callbacks, exact units
-and separate draft/payment/collection descriptions. Header/actions stay outside
-scrollable items. Fixed route guard retaining overdue-inbox selected detail.
-Not full T14C: customer labels, media and wider workspace integration remain.
-Component tests written, not run; no build/browser acceptance claimed.
-Follow-up: selected-detail layout now uses a compact stacked register preserving
-all six field/action meanings, rather than squeezing the full table into 38% width.
-Full register keeps its table with contained horizontal scrolling. Both consume
-the same server page and explicit read callback, with labelled 44px actions and
-current selection semantics. Component tests added, not run; visual gate pending.
-Revision-history metadata is now exposed through the existing draft router and
-detail screen: newest-first server paging, saved customer profile names, actor
-reference and timestamp. Uses immutable revisions, exact company/read permissions
-and no-store responses, not a new audit ledger. No historical restore/write actions.
-Endpoint isolation/permission/paging and UI failure/cancellation tests added but
-not run. Full historical line inspection and browser acceptance remain pending.
+Current implementation (reconciled 2026-10-04): compact register beside detail,
+customer labels, scoped product media, revision metadata, and saved-draft sidebar
+beside editor at desktop width. Draft switching is disabled while editing to
+preserve unsaved/pending data. Existing reservation actions remain explicit.
+Next: remaining desktop design fidelity, historical line inspection, safe task
+navigation and final visual acceptance. Read-only desktop check at 1280px;
+30 focused Sales tests pass. This is not full checkout or final owner acceptance.
 
 T14D | Tablet product-and-cart draft workspace
 Status: In progress
@@ -644,41 +656,18 @@ reachable without whole-page overflow. No duplicate tablet catalogue or cart.
 Store-wide selling remains BD-20261003-06: optional preferred picking area,
 compatible same-store stock, explicit approved other-store choices. No counters
 restricting product access. Draft UI does not grant offline posting authority.
-Next action: Adapt shared desktop components; pricing/payment actions stay gated
-until authoritative contracts are integrated by T14, not invented for the mockup.
-2026-10-04: editor now embeds the existing paginated product picker alongside
-the same cart on wide layouts; narrow screens toggle Products/Cart without
-replacing recovery/save state. Locked/100-line carts cannot accept new products.
-No duplicate catalogue/cart, pricing or payment effects. Images/scanning and
-layout acceptance remain; test written but not run, no build/browser checks.
-Follow-up: keyboard-wedge/manual barcode entry now reuses Inventory resolver
-and active policy, adding the registered unit without guessed legacy fallback.
-Locked/full carts block scans; stale responses abort. Tests added, not run.
-Product images, scanner hardware and complete responsive acceptance remain.
-Touch quantity controls now change one selected unit with exact six-place integer
-arithmetic, never rounding fractions or removing a line at zero. Locked/invalid/
-overflow states disable controls; tests written, not run. Hardware/browser pending.
-Confirmed draft receipts now survive local cleanup failure in the editor; cleanup
-retry cannot issue another API save. Cart remains locked and original recovery
-stays available until revision-checked deletion succeeds. Receipt mismatch still
-means uncertain save. Regression cases written, not run; reload/browser gate open.
-Draft validation now shares exact quantity syntax with touch controls, shows
-field-level customer/store/quantity errors, returns the tablet to its cart and
-focuses the first invalid quantity without coercing or discarding typed input.
-Invalid drafts issue no save request. Regression coverage written, not run.
-Recovery integration correction: login user is a username, not an ID object.
-Access API now supplies authenticated user_id; current-context userId feeds sales
-recovery and manager screens. Missing identity blocks sales. No tests run; access
-refresh, user-switch and recovery acceptance remain pending.
-Follow-up: signed product thumbnails now connect source picker, cart and saved
-detail through existing scoped catalogue reads/blob signer. No raw/external keys
-or recovery persistence. Missing-image fallback implemented. Tests written but
-not run; scanner hardware, media provider and responsive acceptance still pending.
+Current implementation (reconciled 2026-10-04): product cards, exact quantity
+controls, reviewed-unit barcode entry, product images/fallbacks, shared recovery,
+confirmed-save cleanup retry and persistent product/cart panes at 768px+.
+Read-only tablet check at 1024px passed; 30 focused Sales tests pass. Totals say
+Not calculated until T11 supplies authoritative prices/tax. No payment enabled.
+Next: portrait/phone/dark-mode and recovery/navigation acceptance, scanner/media
+provider gates and further visual refinement. Reuse current editor; no rebuild.
 
 T14E | Integrated sales-screen acceptance
 Status: Blocked
 Dependencies: T14,T15,T16,T17
-Acceptance / evidence: Once owner resumes checks, verify affected frontend/backend
+Acceptance / evidence: Testing resumed BD-20261004-04; verify affected frontend/backend
 contracts and build, plus separately approved desktop/tablet browser checks.
 Cover button permissions, deep links/back/refresh, dirty navigation, failed saves,
 uncertain retries, unit/scanning behavior, tenant/store changes, split statuses
@@ -729,7 +718,9 @@ T21 | Package store/cloud runtimes
 Status: Ready
 Dependencies: T02,T03
 Acceptance / evidence: Isolated development nodes, secure enrollment/local assets/search/node-owned jobs; preserve preview.
-Next action: Create synthetic development runtimes only.
+Owner: Other programmer, bounded T21 packaging slice; see PROGRAMMER-T21-HANDOFF.txt.
+Next action: Inventory existing Compose/runtime setup and build isolated synthetic
+packaging only. Secure enrollment/full T21 remain separate integration gates.
 T02/T03 foundations are available; deferred browser acceptance does not block
 isolated packaging. No real-node enrollment or preview replacement authorised.
 

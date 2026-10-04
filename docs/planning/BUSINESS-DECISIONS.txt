@@ -114,6 +114,34 @@ its count workflow to a shopping cart. Implementation may proceed using existing
 contracts; final screen acceptance, test resumption and operational activation
 are separate and not authorised by this visual approval.
 
+BD-20261004-04 | Full verification resumed | All implemented tasks
+Owner requested a full test of the build so far and approved read-only local Sales
+and Stock Counts checks including tablet layout. This supersedes the earlier
+test pause for this checkpoint. Use isolated synthetic databases; do not deploy,
+enable real posting or write preview business records. Record expected failures
+and acceptance gates, not blanket phase completion.
+
+BD-20261004-05 | Populate sample workflows | T13A,T14,T33A
+Owner requested populating workflows after the empty-state build verification.
+Use the existing clearly labelled local demo company for synthetic Sales drafts,
+customers, count plans/rounds/discrepancies. This permits sample record creation,
+not real inventory, money posting, external delivery or production activation.
+
+BD-20261004-06 | Module navigation arrangement | Shared frontend,T14,T33A
+Owner approved the reviewed menu arrangement: Sales and Inventory separated
+from Procurement; Customers under Sales; count workflows under Inventory;
+reservation reviews grouped; policy approvals explicitly named; Reports separate;
+Template Studio under Administration; packing lists under Logistics with existing
+Orders access retained. Preserve all routes and permissions. Organisation settings
+and tenant administration remain distinct destinations with explicit labels.
+
+BD-20261004-07 | Reconciled checkpoint and new collaborator package | T14,T21
+Owner requested updating the plan, pushing latest work and providing development
+work for another programmer. Integrator selected the dependency-ready T21 isolated
+development packaging slice, bounded in PROGRAMMER-T21-HANDOFF.txt. This supersedes
+the old T33A assignment for the new package; integrated count work is retained.
+No deployment, real-node enrollment, financial activation or automatic merge.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration

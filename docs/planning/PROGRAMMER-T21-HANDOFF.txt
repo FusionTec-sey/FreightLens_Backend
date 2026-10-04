@@ -1,0 +1,65 @@
+FREIGHTLENS - OTHER PROGRAMMER ASSIGNMENT
+Package: T21 isolated development packaging (not full offline operation)
+Authority: BD-20261004-07. Status: Ready; not started by the integrator.
+Starting revisions: CHECKPOINT-20261004-UI.txt. Both repositories required.
+
+COPYABLE START PROMPT
+Read AGENTS.md, relevant .agents/rules, architecture/latest ten log entries,
+TASK-QUEUE.txt, BUSINESS-DECISIONS.txt, COLLABORATION-HANDOFF.txt and this file.
+Confirm your backend/frontend SHAs match the paired checkpoint before editing.
+Inspect existing Dockerfiles, Compose files and stock/cost runtime services.
+Extend those foundations; do not rebuild stock authority, count or Sales services.
+
+DELIVERABLE
+Provide an opt-in, reproducible LOCAL development topology for one synthetic cloud
+node and two synthetic store nodes. Separate database volumes, Docker project
+names, node configuration and localhost ports must prevent cross-instance writes
+and coexist with the owner's existing preview on ports 3000/9000. Bind published
+ports to 127.0.0.1, never expose services publicly. Use configurable unused ports
+and perform conflict checks rather than assuming a particular port is free.
+
+Include role-specific configuration examples containing no secrets, explicit
+synthetic identities, startup/health diagnostics, safe start/stop commands and a
+README. Generate development secrets locally; do not commit actual .env files,
+databases, dumps, private documents, customer records or runtime logs.
+Reuse built frontend assets locally and document existing search dependencies;
+do not claim offline search/recovery works until independently demonstrated.
+Provide a small smoke-verification script for health, database/node isolation,
+restart persistence and coexistence with preview. Use only synthetic data.
+Never run a destructive Docker command against the owner's running project.
+
+BOUNDARIES
+Own new files under dev/store-cloud/ plus focused packaging tests/docs. Propose
+the exact file list before editing shared Dockerfiles, startup registrations or
+dependencies. Do not change existing Compose/staging deployment configuration,
+Menu.js, Sales screens, shared permission catalogues, migrations or business APIs
+without integration-owner coordination. A separate frontend feature is not
+required merely to produce a frontend PR; consume the pinned frontend revision.
+
+No automatic node enrollment or invented trust protocol. No production enrolment,
+stock writer activation, sync, financial posting or cross-store customer-credit
+redemption. Existing authority and runtime checks stay fail-closed. Secure
+enrollment, job ownership integration and later T22/T23 sync/offline eligibility
+remain explicit follow-ups. Do not mark the whole T21 task Verified after packaging.
+
+WORKFLOW
+Use independent clones, an individual Git identity and task branch
+feature/t21-isolated-dev-packaging. Do not share the integrator's checkout,
+database, port bindings or Docker project. Do not force-push or merge yourself.
+Baseline is codex/local-area-scope; PRs target codex/pos-development. Since the
+baseline PRs are not yet merged, declare them as dependencies and compare your
+own diff against the exact checkpoint. Integrator handles merge ordering.
+Check published business decisions before starting and before PR submission.
+Request integration decisions through PR comments; chat history does not sync.
+
+ACCEPTANCE EVIDENCE
+- Three separate synthetic nodes and database volumes; company/node labels clear.
+- No request can silently select another node/database when configuration missing.
+- Existing local preview remains running and unchanged.
+- Restart retains each node's own data; teardown instructions are project-scoped.
+- No committed secrets or provider connections; no real data or public exposure.
+- Reproducible setup and focused test/smoke results, limitations and recovery notes.
+- PR lists starting SHAs, BD-20261004-07, changed files, dependencies and next gates.
+
+Begin with a read-only inventory and a short implementation proposal. Work through
+the authorised packaging slice; flag shared-interface changes before implementing.

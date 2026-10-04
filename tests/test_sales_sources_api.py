@@ -22,7 +22,8 @@ def test_browse_scoped_branches_and_reviewed_units(choices):
     assert branches['total'] == 1 and branches['items'][0]['id'] == f.own
     products = f.client.get('/sales/draft-sources/products?limit=1').json()
     assert products['total'] == 1 and products['items'][0]['units'] == ['PCS', 'BOX']
-    assert set(products['items'][0]) == {'id', 'sku', 'name', 'policy_version', 'base_unit', 'units', 'quantity_step'}
+    assert set(products['items'][0]) == {'id', 'sku', 'name', 'policy_version', 'base_unit', 'units', 'quantity_step', 'image_signed_url'}
+    assert products['items'][0]['image_signed_url'] is None
     assert f.client.get('/sales/draft-sources/products?page=2&limit=1').json()['items'] == []
     assert f.client.get('/sales/draft-sources/products?limit=101').status_code == 422
 

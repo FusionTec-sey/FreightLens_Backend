@@ -1,5 +1,5 @@
 FREIGHTLENS PHASE ROADMAP
-Revision 4.2 | 2026-10-04 | Design authority BD-20261004-03
+Revision 4.3 | 2026-10-04 | Design authority BD-20261004-03; navigation BD-20261004-06
 
 AUTHORITY
 TASK-QUEUE.txt is the only task-status and execution ledger. This document maps
@@ -8,10 +8,17 @@ BUSINESS-DECISIONS.txt governs agreed requirements. The workspace's revision-3
 IMPLEMENTATION-PLAN.txt and generated PDF retain historical detail, not current
 statuses, branch names, test counts or permission to deploy.
 
+CURRENT CHECKPOINT
+T14B-D are partially implemented and tested, not complete: register/store filters,
+desktop detail/editor composition and tablet product/cart are present. Remaining
+search, visual fidelity and acceptance are in the canonical queue. T33A is locally
+integrated; do not rebuild it. T21 isolated packaging is the next collaborator
+assignment, with shared interface changes reserved to integration review.
+
 DELIVERY ORDER
 1. T14A: confirm the proposed register, desktop and tablet designs and map each
    action to an existing capability or owning unfinished task. Visual direction
-   approved on 2026-10-04; remaining mapping is implementation preparation.
+   approved and mapped on 2026-10-04. T14A is documentation-verified.
 2. T14B -> T14C -> T14D: implement approved register/navigation, desktop workspace
    and tablet draft presentation using existing APIs, customer controls and draft
    recovery. Reuse current functionality; do not build parallel sales records.
@@ -58,7 +65,7 @@ Keep company/store context, clear loading/error/permission states, retained save
 results and safe uncertain retries. No KPI cards on operational work screens.
 Navigation and tabs are read-only; entering a view must never post a business effect.
 
-T33A adapts existing work if supplied: count register/filters/status, desktop
+T33A adapts the integrated count work: count register/filters/status, desktop
 detail and tablet blind-entry layout. Its task-specific controls are Submit count,
 Request recount and Review, not sales/cart/payment controls. Expected stock,
 prior counts and financial values remain absent from blind-counter responses
@@ -72,9 +79,9 @@ ACCEPTANCE AND RELEASE
 Design approval: BD-20261004-03 records the agreed three-screen direction.
 Implementation: connect only real contracts, preserve original records, exact
 units, store-wide selling, protected holds and separate payment/collection states.
-Verification: tests/builds remain deferred under the owner's current instruction;
-record new implementation as unverified. Once resumed, use affected tests and
+Verification: tests/builds resumed under BD-20261004-04. Use affected tests and
 shared-boundary checks, then integration regression at the agreed checkpoint.
+Record current results separately from historical verification evidence.
 Browser acceptance requires its own approval and desktop/tablet evidence.
 Hardware, accounting, provider, offline and pilot gates are not replaced by UI
 approval or automated checks. No deployment, real posting or customer messaging
@@ -87,7 +94,7 @@ This is a planning check, not an application test or verification of implemented
 All original capability groups remain mapped; no financial/offline scope is removed.
 
 Execution clarification:
-- Finish T14A's action map as part of starting T14B, then T14C/D. Do not ask for
+- T14A's action map is complete; continue remaining T14B/C/D. Do not ask for
   design approval again. Implement only supported controls; backlog missing APIs.
 - T06 receipt valuation and T08 receiving must be developed as coordinated slices:
   define/reuse the valuation contract, compose the Inventory writer, then complete
@@ -104,13 +111,13 @@ Execution clarification:
   retain listed dependencies; do not confirm orders without deposit/credit rules.
 - T32 source-specific reports may extend available sources incrementally; complete
   accounting/credit/order reports still wait for their authoritative source tasks.
-- T33A remains collaborator-owned. No matching count implementation was identified
-  in this local checkout or cached branch names during review. This is not proof
-  that no remote PR exists. Resolve paired PR/revisions before integration; do not
-  rebuild it or block unrelated work. Shared UI adaptation preserves blind counting.
+- T33A was selectively integrated and repaired; retain it, do not rebuild it.
+  Populated read-only checks exist; submission/review E2E remains pending.
+  The next collaborator package is T21 isolated packaging (BD-20261004-07).
+  Shared UI adaptation preserves blind counting.
 
 Persistent goal boundary: deliver all authorised local implementation plus explicit
 deferred-acceptance records. Do not equate that with a verified operational system.
 Do not keep reworking completed foundations to avoid an external gate. When only
-owner/provider/hardware/test-resumption gates remain, report the precise remaining
+owner/provider/hardware/acceptance gates remain, report the precise remaining
 requirements; never bypass them or mark T34/live readiness complete.
