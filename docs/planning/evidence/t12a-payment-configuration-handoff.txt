@@ -1,0 +1,85 @@
+T12A WAVE 1 INTEGRATION MANIFEST — BD-20261005-01
+
+Scope: synthetic, cloud-only payment-method and exact selling-branch receiving-
+account configuration. No monetary state, posting path, provider call or real bank
+detail is introduced. Tests use SYNTH_ references, while the production contract
+accepts a bounded opaque accounting identifier. Method kinds are CASH
+and externally confirmed CARD; this configuration does not confirm a card payment.
+
+Backend new files:
+- Model/containermgmt/Orders/PaymentConfiguration.py
+- Schema/PaymentConfigurationSchema.py
+- Services/payment_configuration_service.py
+- Routes/Orders/PaymentConfigurationRouter.py
+- Utils/migrate_20261005_payment_methods.py
+- Utils/migrate_20261005_branch_receiving_accounts.py
+- tests/test_payment_configuration.py
+- tests/test_payment_configuration_api.py
+
+Integrator-owned backend registration, in exact dependency order:
+1. Model/containermgmt/__init__.py: import PaymentMethod,
+   PaymentMethodRevision, BranchReceivingAccount and
+   BranchReceivingAccountRevision from .Orders.PaymentConfiguration.
+2. containerMgmt.py startup_event: after existing inventory posting-operation,
+   inventory branch and T11 sales-pricing migrations, call
+   ensure_payment_methods_schema() from
+   Utils.migrate_20261005_payment_methods, then
+   ensure_branch_receiving_accounts_schema() from
+   Utils.migrate_20261005_branch_receiving_accounts. The second migration has
+   foreign keys to the first. Run both on every startup; both are replay-safe.
+3. containerMgmt.py router registration: import PaymentConfigurationRouter from
+   Routes.Orders.PaymentConfigurationRouter and include it once. The router owns
+   SALES module, View_Financials and Manage_Financials guards; no new permission
+   catalogue entry or role grant is needed. There is no sales-posting integration.
+
+Backend API contract (all private/no-store; JWT and active org required):
+- GET /sales/payment-configuration/branches?page=&limit= returns paginated
+  active and inactive branch options for financial configuration only.
+- GET /sales/payment-configuration/methods?page=&limit= returns latest revisions.
+- PUT /sales/payment-configuration/methods/{method_key} takes operation_key,
+  expected_version, immutable code, config {label, kind, is_enabled}, reason.
+- GET /sales/payment-configuration/receiving-accounts?page=&limit=&branch_id=
+  returns latest mapping revisions; foreign branch filter returns 404.
+- PUT /sales/payment-configuration/receiving-accounts/{mapping_key} takes
+  operation_key, expected_version, immutable branch_id and method_key,
+  config {account_ref, label, is_enabled}, reason.
+- GET /sales/payment-configuration/receiving-account-lookup?branch_id=&method_key=
+  returns READY plus exact mapping key/version/reference or BLOCKED with
+  BRANCH_DISABLED, METHOD_DISABLED, MAPPING_MISSING, MAPPING_DISABLED. Foreign
+  branch/method returns 404. T13 must call this from its own trusted transaction
+  and revalidate under its posting authority; this slice does not wire it.
+
+Frontend new files in paired frontend branch:
+- src/services/paymentConfigurationApi.js
+- src/component/Pages/Setting/PaymentConfigurationPage.js
+- src/component/Pages/Setting/PaymentConfigurationPage.test.js
+
+Integrator-owned frontend registration:
+1. MainPage.js: import PaymentConfigurationPage from
+   ./Pages/Setting/PaymentConfigurationPage; add route
+   /sales/payment-configuration under PrivateRoute with requiredModules=[SALES]
+   and requiredPermissions=[View_Financials]. The screen itself checks access.
+2. MenuPanel/Menu.js: add a Sales accordion sublink at that exact path, visible
+   with SALES plus View_Financials (or super-admin), and add it to Sales active-
+   route detection. Optionally link it from SettingsOverview.js for discoverability.
+   No other route or menu behavior needs to change.
+3. Keep the frontend API client in its new feature file; no shared client edit.
+
+Verification in the isolated synthetic phase-zero PostgreSQL database:
+the combined payment-configuration, permission-catalogue, startup and fresh-install
+selection passed 15 tests. Covers migration replay,
+versioning, exact replay, changed-intent conflict, concurrent expected-version
+conflict, immutable SQL history, permissions, tenant/branch isolation, missing and
+disabled lookup, HTTP cache policy and anonymous denial.
+Frontend focused PaymentConfigurationPage.test.js and Menu.test.js: 18 tests in
+2 suites passed (failed save retains the same operation identity for retry; exact
+blocked lookup is visible; route visibility is permission guarded). Production
+build passed with the existing compiler and bundle-size warnings. Browser
+acceptance requires separate approval.
+
+Integrator registration is included on this branch. A locked
+`require_receiving_account` boundary revalidates the exact method/mapping versions
+for T13 without choosing a fallback. Remaining gates: combined CI, paired merge,
+browser/layout acceptance, real financial/accounting setup and explicit owner pilot
+approval. No real mapping, payment, customer balance, cheque, deposit, refund,
+invoice, journal or stock effect has been created.

@@ -200,6 +200,10 @@ async def startup_event():
     ensure_customer_profiles_schema()
     from Utils.migrate_20261004_sales_pricing import ensure_sales_pricing_schema
     ensure_sales_pricing_schema()
+    from Utils.migrate_20261005_payment_methods import ensure_payment_methods_schema
+    ensure_payment_methods_schema()
+    from Utils.migrate_20261005_branch_receiving_accounts import ensure_branch_receiving_accounts_schema
+    ensure_branch_receiving_accounts_schema()
     from Utils.migrate_20261003_sales_reservation_sources import ensure_sales_reservation_sources_schema
     ensure_sales_reservation_sources_schema()
     from Utils.migrate_20261003_reservation_deadlines import ensure_reservation_deadlines_schema
@@ -379,6 +383,8 @@ from Routes.Orders.SalesIntentRouter import SalesIntentRouter
 app.include_router(SalesIntentRouter)
 from Routes.Orders.SalesPricingRouter import SalesPricingRouter
 app.include_router(SalesPricingRouter)
+from Routes.Orders.PaymentConfigurationRouter import PaymentConfigurationRouter
+app.include_router(PaymentConfigurationRouter)
 from Routes.Orders.SalesSourceRouter import SalesSourceRouter
 app.include_router(SalesSourceRouter)
 from Routes.Inventory.ReservationReleaseCaseRouter import ReservationReleaseCaseRouter

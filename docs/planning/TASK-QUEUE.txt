@@ -762,7 +762,7 @@ configuration acceptance remain. T13 must select the exact snapshot and atomical
 consume any matching approval; do not let a price list change tax treatment.
 
 T12 | Implement customer-money and bank configuration
-Status: Ready
+Status: In progress
 Dependencies: T03,T10
 Acceptance / evidence: Payment method/account/credit liability separate; missing mappings block; credit never expires.
 Owner: Other programmer for bounded T12A configuration only; see
@@ -770,6 +770,14 @@ PROGRAMMER-T12A-HANDOFF.txt and BD-20261004-10. Stable T03/T10 identities permit
 this independent slice. Build versioned payment-method and branch receiving-account
 configuration plus fail-closed lookup using synthetic data. Customer-credit balances,
 payment posting, deposits, cheques and real bank/account seeds remain later T12/T27.
+T12A implementation is now on paired branches: immutable versioned CASH/externally-
+confirmed-CARD methods, exact selling-branch receiving-account mappings, a fail-closed
+read lookup and a locked exact-version resolver for T13. The usable Sales screen
+retains stable retry identities and exposes no money-post action. Focused backend,
+frontend and production-build checks pass; integrated CI and browser acceptance are
+pending. Evidence: evidence/t12a-payment-configuration-handoff.txt. T12 remains In
+progress because customer-credit liability and actual payment posting are not part
+of T12A; they cannot block the pilot cash/card configuration contract after merge.
 
 T13 | Complete atomic sales posting
 Status: Blocked
