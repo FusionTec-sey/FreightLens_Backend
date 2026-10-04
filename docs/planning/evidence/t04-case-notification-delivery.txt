@@ -1,0 +1,44 @@
+2026-10-04 — T04 durable manager-case notification delivery
+Status: closes the recorded T04 "Remaining: manager-profile notification
+integration" item. Browser acceptance remains pending and is not claimed.
+
+The notification store, list and mark-read API already existed and were already
+used by receiving, defect and store-request flows. Manager cases never wrote to
+them, which is what the queue recorded as outstanding durable recipient/unread
+delivery. No second inbox, queue, scheduler or delivery channel was introduced.
+
+Services/case_notification_service.py resolves recipients from the permission
+each review endpoint actually requires, and writes notification rows inside the
+caller's case transaction. A committed request or decision therefore always has
+its recipients recorded: there is no best-effort side channel that can silently
+drop, and no separate queue that can drift from the case history. Hooked into
+manager_case_service.request_case and review_case only, so every existing case
+type gains delivery without touching its own router.
+
+Recipients: a new request goes to every other user holding the review permission
+for that action in the company, resolved through users, user_roles, roles,
+role_permissions and permissions, scoped by the user's own company plus any
+explicit allowed company. The requester is excluded. A decision goes to the
+requester alone, and never to the reviewer who made it. Platform-admin roles are
+not treated as routine recipients.
+
+Privacy: a notification carries the case subject and link only. No customer name,
+contact, quantity, amount or reason text is included, so delivery cannot become a
+way around the personal-data or financial field gates. The recipient's own
+permissions are re-checked by the case screens when the link is opened.
+
+Action mapping was verified against the permission each review endpoint requires,
+not assumed. Three first attempts were wrong and corrected: the charge-evidence
+action is inventory.cost.verify-charge, reclassification proposals are reviewed
+under Review_InventoryPolicy, and other-area reservations use
+Review_OtherAreaReservation. An unmapped future action logs a warning and
+notifies nobody rather than failing a committed case write.
+
+Verified against the live development database on the synthetic demo company
+(org 4): a reservation follow-up request by user 19 delivered CASE_REVIEW_REQUESTED
+to users 1 and 17, the two eligible reviewers; the APPROVED decision by user 20
+delivered CASE_REVIEW_DECIDED to user 19; all three rows unread and linked to
+manager case 22. Notification count 0 -> 3 in one transaction.
+
+Not included: email, push or SMS delivery, read-state analytics, digesting,
+per-user preferences, and browser acceptance. No task signoff claimed.

@@ -1,0 +1,71 @@
+2026-10-04 — T06/T07 runtime identity and storage retention gates
+Status: both local gates cleared and verified. T06 and T07 are NOT complete; their
+remaining blockers are recorded below. Production enrollment is not claimed.
+
+1. Central runtime identity (recorded against both T06 and T07)
+
+The gate was configuration, not a code gap. sales_local_reservation_service
+.runtime_claim reads STOCK_RUNTIME_NODE_KEY from the process environment and
+matches it against an enrolled StoreNode holding an ACTIVE BranchAuthorityEpoch
+for the store. The demo company was already enrolled by the T05 fixture
+(node 822b2ab2-3f2d-459d-ae6d-48e8ea1d6455, branch 1, epoch 1 ACTIVE), but no
+runtime had ever been given the key, so every claim raised "Stock posting runtime
+is not configured" and the work-area preview reported reservation_ready false.
+
+Set in Backend/.env, which is git-ignored; docker-compose.yml already referenced
+${STOCK_RUNTIME_NODE_KEY:-}. The key is a process identity and is never accepted
+from a browser request. Verified on org 4, 2026-10-04:
+- runtime_claim resolved AuthorityClaim(org 4, branch 1, node 822b2ab2..., epoch 1)
+- work-area preview reservation_ready false -> true
+- a real local reservation executed through the claim: reservation_key
+  4fed123c-3804-5302-8a3e-68f37031e82e on balance 3, balance version 4
+- preview after the hold: remaining demand 5.000000 -> 0, local unreserved
+  8.000000 -> 3.000000, shortfall 0
+
+This is T07's "default-area automatic allocation" path working against a real
+authority claim, not merely a readiness flag. Branch authority still does not
+stand in for central shared-pool financial authority; that distinction is
+unchanged.
+
+Scope limit: only the demo company is enrolled. Orgs 1, 2 and 3 have no StoreNode
+rows, so their runtime claims still fail by design. A real deployment needs its
+own node enrolled per company with its own key; no enrollment utility exists yet.
+
+2. RustFS object version retention (recorded against T06)
+
+The queue required validating actual RustFS version retention and configuration
+before enabling reviewed evidence capture. Validated rather than assumed:
+versioning was OFF on bucket containermgmt-blobs, and this RustFS build does not
+support object lock (GetObjectLockConfiguration returns
+ObjectLockConfigurationNotFoundError), so immutability by retention period is not
+available from the provider.
+
+Versioning enabled and retention proven empirically: one probe key written twice
+returned two distinct version ids, both versions remained listed after the
+overwrite, and the superseded version's bytes were read back intact. That is the
+property the version-pinned evidence fingerprint depends on. The probe was
+deleted afterwards.
+
+Made durable instead of a one-off API call: blob_storage.ensure_versioning_enabled
+is idempotent, runs at startup after the bucket check, confirms the provider
+accepted the setting, and logs an error rather than continuing silently if a
+provider cannot retain versions, so capture is never trusted on storage that
+cannot hold the evidence. Startup log confirms: "RustFS bucket
+'containermgmt-blobs' already retains object versions."
+
+Scope limit: object lock and a defined retention period are still unavailable from
+this provider, and bounded evidence capture itself remains disabled. Version
+retention is necessary for capture, not sufficient for it.
+
+3. Remaining blockers, unchanged
+
+T06: receipt and freight costing still needs a real movement ledger from T09;
+existing purchasing totals are not that ledger. Central reconciliation and
+provisional-versus-reconciled visibility follow it. Public financial posting
+remains off.
+
+T07: explicit other-area and multi-location exception work was in active
+development in the parallel lane on 2026-10-04 (OtherAreaReservationRouter.py,
+sales_other_area_service.py, both uncommitted at the time of writing). That is
+ownership, not a technical blocker. Protected paid holds, no automatic expiry and
+no automatic other-store allocation remain in force.

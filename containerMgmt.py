@@ -202,6 +202,10 @@ async def startup_event():
     ensure_reservation_reallocations_schema()
     from Utils.migrate_20261003_reservation_segments import ensure_reservation_segments_schema
     ensure_reservation_segments_schema()
+    from Utils.migrate_20261004_cycle_counts import ensure_cycle_counts_schema
+    ensure_cycle_counts_schema()
+    from Utils.migrate_20261004_count_permissions import ensure_count_permissions
+    ensure_count_permissions()
     from Utils.migrate_20261002_unit_barcodes import ensure_unit_barcodes_schema
     ensure_unit_barcodes_schema()
     from Utils.migrate_20261002_barcode_retirements import ensure_barcode_retirements_schema
@@ -243,7 +247,10 @@ async def startup_event():
     logger.info("Initializing RustFS Blob Storage...")
     try:
         from Utils.blob_storage import blob_storage
-        blob_storage.ensure_bucket_exists()
+        if blob_storage.ensure_bucket_exists():
+            # Reviewed evidence pins a fingerprint to an object version, so the
+            # bucket must retain superseded versions before capture is trusted.
+            blob_storage.ensure_versioning_enabled()
     except Exception as e:
         logger.error("Failed to initialize RustFS Object Storage: %s", e)
 
@@ -349,6 +356,8 @@ from Routes.Inventory.ReservationReallocationRouter import ReservationReallocati
 app.include_router(ReservationReallocationRouter)
 from Routes.Inventory.ReservationDeadlineRouter import ReservationDeadlineRouter
 app.include_router(ReservationDeadlineRouter)
+from Routes.Inventory.CycleCountRouter import CycleCountRouter
+app.include_router(CycleCountRouter)
 from Routes.Inventory.OtherAreaReservationRouter import OtherAreaReservationRouter
 app.include_router(OtherAreaReservationRouter)
 app.include_router(BlobRouter)

@@ -113,6 +113,35 @@ class RustFSClient:
             logger.error("Could not connect to RustFS endpoint %s: %s", self.endpoint_url, ex)
             return False
 
+    def ensure_versioning_enabled(self) -> bool:
+        """Keep superseded object versions, which reviewed evidence depends on.
+
+        T06 pins an evidence fingerprint to a specific object version, so an
+        overwrite must never destroy the bytes a reviewer approved. Enabling
+        this is idempotent; a provider that cannot retain versions is reported
+        rather than silently accepted, because capture must not be enabled on
+        storage that cannot hold the evidence.
+        """
+        try:
+            status = self.client.get_bucket_versioning(Bucket=self.bucket_name).get("Status")
+            if status == "Enabled":
+                logger.info("RustFS bucket '%s' already retains object versions.", self.bucket_name)
+                return True
+            self.client.put_bucket_versioning(
+                Bucket=self.bucket_name,
+                VersioningConfiguration={"Status": "Enabled"})
+            confirmed = self.client.get_bucket_versioning(Bucket=self.bucket_name).get("Status")
+            if confirmed != "Enabled":
+                logger.error("RustFS bucket '%s' did not accept versioning (status %s); "
+                             "reviewed evidence capture must stay disabled.", self.bucket_name, confirmed)
+                return False
+            logger.info("Enabled object version retention on RustFS bucket '%s'.", self.bucket_name)
+            return True
+        except Exception as ex:
+            logger.error("Could not configure version retention on RustFS bucket '%s': %s",
+                         self.bucket_name, ex)
+            return False
+
     def upload_file(
         self,
         file_obj: Optional[Union[UploadFile, bytes, BinaryIO]] = None,

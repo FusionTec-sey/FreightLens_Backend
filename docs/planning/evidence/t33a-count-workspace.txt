@@ -1,0 +1,93 @@
+2026-10-04 — T33A cycle-count planning and blind-count workspace
+Status: implemented and verified end to end against the synthetic demo company.
+Focused retry/concurrency tests are NOT written and browser acceptance is pending,
+so T33A acceptance is not claimed. See "Known gaps" below.
+
+Ownership note: COLLABORATION-HANDOFF.txt assigns T33A to the collaborator. This
+slice was built on explicit owner instruction on 2026-10-04. Nothing had been
+started in that lane: no count tables, modules or endpoints existed. Coordinate
+before further work to avoid duplicate implementations.
+
+Proposal recorded first, per the queue's next action:
+docs/planning/T33A-COUNT-PROPOSAL-20261004.md carries the schema, API, permission
+and shared-file integration proposal.
+
+Creates count records only. No endpoint adjusts, freezes, values, reconciles or
+posts stock. Movement-aware reconciliation and any adjustment remain T09/T33.
+
+Schema, migrate_20261004_cycle_counts.py, startup registered, idempotent:
+inventory_count_plans, inventory_count_scopes, inventory_count_sessions,
+inventory_count_entries, inventory_count_discrepancies and
+inventory_count_discrepancy_reviews. Entries, discrepancy snapshots and review
+rows carry a BEFORE UPDATE OR DELETE reject trigger, so counted history is
+append-only: a correction is a new recount round and a decision is a new review
+row. Reviewed state is derived from the review row's existence rather than stored
+on the snapshot, mirroring manager_cases and manager_case_decisions.
+
+Reuses existing products, locations, branches, reviewed unit policies,
+inventory_unit_service conversion, manager cases, execute_once retry identities,
+OrgMixin isolation and server-side pagination. No second catalogue, location tree,
+approval engine, identity store or inbox.
+
+Blind rule enforced on the backend, not in React: the counter-facing sheet
+projection returns product identity, location, unit, step and an entered flag
+only. It has no field for expected stock, earlier rounds or value, so a
+serialisation mistake cannot leak one. A counter holding only Enter_CountResult
+cannot reach planning or discrepancy reads, and can only open their own session.
+
+Permissions, migrate_20261004_count_permissions.py, idempotent, also added to
+auth/policy/catalog.py: View_CountPlan, Manage_CountPlan, Assign_CountSession,
+Enter_CountResult, View_CountDiscrepancy, Review_CountDiscrepancy. Granted to
+Super_Admin, Administrator and Tenant_Admin; Warehouse_Supervisor gets planning
+visibility, assignment and entry; Warehouse_Operator gets entry only;
+Auditor_ReadOnly gets the two read permissions. Enter_CountResult deliberately
+grants no visibility of expected stock.
+
+API, 12 endpoints under /inventory/counts, INVENTORY module guarded, every write
+taking an operation_key and an expected version: plan list/create, scope save,
+activate, coverage, session list/assign, blind sheet, entries, submit, recount,
+discrepancy list, review request and decision.
+
+Scope is frozen once a plan is ACTIVE, so an assigned round can never be re-aimed
+at different shelves after a counter has started. One open round per location.
+Every scoped line must be counted before a round can be submitted. Zero is a
+valid count, recorded as an empty shelf rather than a blank.
+
+Expected stock is read for the first time at submission, and only to record a
+provisional difference with the balance version it was taken from. No balance is
+locked, changed, valued or posted. The screens state that the difference is
+provisional because stock can move before review.
+
+Verified on org 4, 2026-10-04:
+- plan DEMO-CNT-1 created DRAFT, 3 scope lines saved, activated ACTIVE
+- round 1 assigned to counter user 20
+- blind sheet returned exactly product_id, product_name, sku, location_id,
+  location_name, base_unit, quantity_step, units, entered; no expected or value
+- 3 counts entered including an explicit 0; state IN_PROGRESS
+- submit produced 3 discrepancy snapshots, 2 non-zero: -2.000000 and -20.000000 PCS
+- direct UPDATE on inventory_count_entries rejected:
+  "Counted history is immutable; open a new recount round"
+- review requested by user 19, decided RECOUNT_REQUIRED by user 20; T04 delivery
+  produced 3 notifications; self-review refusal is inherited from manager cases
+- recount round 2 opened; round 1 and its entries unchanged
+
+Two corrections made during implementation and kept: stock_locations is unique on
+(id, branch_id, org_id), so count tables carry branch_id exactly as
+inventory_stock_balances does; and entries of one save share that save's posting
+operation key, because the deferred posting FK only records the outer operation.
+Row identity comes from (org_id, session_id, product_id, location_id).
+
+Frontend, on the shared RegisterShell, under a new Stock Counts sidebar group
+with its own routes: count plans register with coverage and activation, scope
+builder, assignment board with recount, tablet-oriented blind sheet, and the
+discrepancy register with request and decision. Production build compiles with no
+warnings in the new files; existing MenuPanel, Sales, MasterData and Inventory
+suites pass 179/179 unchanged.
+
+Known gaps, explicitly not claimed:
+- No focused retry/concurrency tests for the count services. The queue's
+  acceptance criteria require them. Deferred on owner instruction 2026-10-04:
+  tests proceed once the feature work is complete.
+- Browser acceptance pending, as for every other slice.
+- No stock adjustment, freeze, valuation, price labels, final reconciliation,
+  offline entry or scanning hardware.

@@ -132,7 +132,14 @@ Personal queue slice implemented: profile shortcut, Needs my review / My request
 All cases filters, authenticated identity and exact company scope, exclusion of
 self/decided cases before pagination. Reuses the existing case register, not a
 second approval system. Evidence: evidence/personal-review-queue-verification.txt.
-Durable recipient/unread notification delivery remains outstanding. No task signoff.
+Durable recipient/unread in-app delivery for manager cases is now implemented:
+recipients resolve from the permission each review endpoint requires and rows are
+written inside the case transaction, so a committed request/decision always has
+its recipients. No customer, quantity, amount or reason text is carried. Verified
+on synthetic data: request notified both eligible reviewers, decision notified the
+requester, all unread and case-linked. Evidence:
+evidence/t04-case-notification-delivery.txt. Remaining: email/push channels and
+browser acceptance. No task signoff.
 Verified request/review/consume contracts permit dependent T05 work.
 
 T05 | Activate reviewed inventory policies
@@ -342,7 +349,15 @@ Evidence: evidence/t06-authority-status-verification.txt. Browser acceptance pen
 Opening valuations now also require persisted central authority and bind the claim
 into retry intent, using the same pool-before-product lock order as charge posting.
 Evidence: evidence/t06-opening-authority-verification.txt. No UI/API activation.
-Next: connect authenticated central-runtime identity. Existing branch authority
+Local gates cleared 2026-10-04 (evidence/t06-t07-runtime-and-retention-gates.txt):
+the stock runtime now carries a configured process node key matched against an
+enrolled node with an active authority epoch, and RustFS object version retention
+was validated empirically then enforced idempotently at startup, failing loudly if
+a provider cannot retain versions. Object lock is unavailable from this provider
+and bounded evidence capture itself stays disabled; version retention is necessary
+but not sufficient. Only the demo company is enrolled, so a deployment still needs
+per-company node enrollment. Next: receipt/freight source integration, which needs
+the T09 movement ledger, then central reconciliation. Existing branch authority
 must not stand in for central shared-pool
 authority; runtime enrollment/fencing remains a T21-T23 integration gate. Continue
 receipt costs and central reconciliation. Public financial posting remains off;
@@ -385,8 +400,15 @@ segments, preserving original quantity/date and enforcing combined demand caps.
 Exact history digest invalidates concurrent/stale reviews; deferred DB guard
 requires paired reallocation. Backend110/frontend38 and build pass; evidence:
 evidence/t07-reservation-segments.txt. Prior existing-target restriction is superseded.
-Next action: Resolve salesperson work context and default-area automatic allocation,
-then explicit other-area/multi-location exceptions and
+Work context and default-area automatic allocation are now exercised end to end:
+with the runtime node key configured, the work-area preview reports reservation
+ready and a real local hold was taken through the authority claim, reducing
+remaining demand to zero and local unreserved stock accordingly. A counter and its
+work area had to be seeded first, because no counter rows existed in any company
+(Utils/seed_t07_counter_demo.py). Evidence:
+evidence/t06-t07-runtime-and-retention-gates.txt.
+Next action: explicit other-area/multi-location exceptions, in active parallel
+development on 2026-10-04, and
 trusted runtime adapters. Protect paid holds; no automatic expiry or other-store
 allocation. Source-less internal compatibility is not a public sales capability.
 T13A automated contract is ready; external browser/provider acceptance stays pending.
@@ -556,7 +578,7 @@ Next action: Integrate T33A counts with movement-aware reconciliation after T09;
 price labels after T11. Do not rebuild the collaborator's count workspace.
 
 T33A | Cycle-count planning and blind-count workspace
-Status: Ready
+Status: In progress
 Dependencies: T03,T04,T05
 Owner: Collaborator; integrator owns shared interface review and merges.
 Acceptance / evidence: New annual product-location schedules, assignments, blind
@@ -564,8 +586,24 @@ entry, immutable submissions/recounts, provisional discrepancies and audited
 manager review with backend-enforced scope/permissions, pagination, exact units,
 expected versions, retry/concurrency tests and usable frontend. No expected stock
 or earlier counts exposed to blind counters. No real stock or business seeds.
-Implementation-ready foundations exist; browser/provider gates remain separate.
-No implementation or collaborator environment verification is claimed yet.
+Implemented 2026-10-04 on explicit owner instruction, after recording the schema
+and API proposal in T33A-COUNT-PROPOSAL-20261004.md. Nothing existed in the
+collaborator lane at that point; coordinate before further work to avoid duplicate
+implementations. Six append-only tables with immutable entries, discrepancy
+snapshots and review rows; recount rounds chain by parent; reviewed state derived
+from review rows. Blind sheet projection carries no expected stock, earlier round
+or value, enforced in the service and response model. Six permissions seeded; 12
+paginated endpoints with operation keys and expected versions; scope frozen once
+ACTIVE; zero is a valid count; expected stock read only at submission and recorded
+as provisional with its balance version. Frontend Stock Counts workspace on the
+shared register shell: plans, scope builder, assignment board, tablet blind sheet
+and discrepancy review. Verified end to end on synthetic data including immutability
+rejection, independent review and a recount round; 179 existing frontend tests pass
+and the production build is clean. Evidence: evidence/t33a-count-workspace.txt.
+Outstanding for acceptance: focused retry/concurrency tests are NOT written
+(deferred on owner instruction 2026-10-04, to follow once feature work completes)
+and browser acceptance is pending. No stock adjustment, freeze, valuation, price
+labels or final reconciliation. No task signoff.
 Next action: Confirm paired baseline and isolated setup, propose schema/API and
 shared-file integration changes, then build count-specific services/UI. Reuse
 existing products, locations, unit policies, cases and receipts. No inventory
