@@ -51,6 +51,7 @@ from .Orders.SalesPosting import (
     SalesInvoice, SalesInvoiceLine, SalesInvoicePayment,
     SalesInvoiceReservation,
 )
+from .Orders.SalesCollection import SalesCollection, SalesCollectionAllocation
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
@@ -103,6 +104,7 @@ __all__ = [
     "SalesPostingAttempt", "SalesPostingTender", "SalesCardConfirmation",
     "SalesInvoice", "SalesInvoiceLine", "SalesInvoicePayment",
     "SalesInvoiceReservation",
+    "SalesCollection", "SalesCollectionAllocation",
     "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
     "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
     "MasterDocumentType"

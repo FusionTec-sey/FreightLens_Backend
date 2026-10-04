@@ -788,7 +788,7 @@ progress because customer-credit liability and actual payment posting are not pa
 of T12A; they do not block the merged pilot cash/card configuration contract.
 
 T13 | Complete atomic sales posting
-Status: Implemented—verification pending
+Status: Verified
 Dependencies: T07,T08,T11,T12,T13A
 Acceptance / evidence: Invoice/commitments/payments/number/outbox commit together; retries and unknown payment outcomes safe.
 The bounded pilot contract now persists exact posting attempts and configured tender
@@ -807,20 +807,27 @@ The checkout-safe posting-options read supplies exact active counters, redacted
 payment identities and reservation bindings without exposing ledger accounts.
 The Wave2 full backend gate passes 1,586 tests and fresh empty-database startup/
 bootstrap verification passes. Evidence: evidence/20261005-atomic-sales-posting.txt.
-GitHub CI,
-frontend connection, browser acceptance and real financial configuration remain
-open gates; no live money or stock posting is enabled.
-Next action: publish the backend contract for checkout integration, confirm GitHub
-CI/fresh migration replay, then connect T14 without duplicating cart state.
+GitHub pytest/fresh-install CI passed and backend PR #12 merged as d0d4f44. The
+existing T14 draft workspace now consumes this contract through frontend PR #10,
+merged as c903117. Real financial configuration and supervised pilot approval
+remain external gates; no live money or stock posting is enabled.
+Next action: retain the immutable contract while T16 collection and T17 invoice
+rendering consume it.
 
 T14 | Build tablet checkout
-Status: Blocked
+Status: In progress
 Dependencies: T13,T15A,T14D
 Acceptance / evidence: Customer/cart, scan/images/units/split payments/parked carts, distinct payment/fulfilment status.
-Next action: Integrate authoritative pricing, payments and atomic posting into
-the shared T14C/T14D workspace as T11-T13 become ready. Do not rebuild its cart,
-customer selector or recovery store. T14A-D bring presentation forward only;
-they do not satisfy financial posting or operational checkout acceptance.
+The existing draft detail now opens one integrated checkout panel rather than a
+second cart. It consumes authoritative posting options, exact counters, configured
+cash/card methods and reservation bindings; preserves stable operation/attempt/
+invoice/tender identities; recovers prior outcomes; supports split cash/card; and
+keeps payment and fulfilment status separate. Raw terminal references are hashed
+in the browser and uncertain/dirty departure is guarded. Fifteen focused frontend
+tests and the production build pass. Frontend PR #10 merged as c903117 and the
+local preview was refreshed to that revision.
+Next action: complete T15 copy/recovery, add the T16 collection workspace and T17
+invoice actions, then perform the separately approved browser/tablet acceptance.
 
 T14A | Confirm sales design and map existing capabilities
 Status: Verified
@@ -967,10 +974,20 @@ copy with new document/line identities and retained source reference; do not rep
 its draft store, copy invoice numbering or introduce another identity model.
 
 T16 | Implement physical collection
-Status: Blocked
+Status: In progress
 Dependencies: T09,T13,T14
 Acceptance / evidence: Line locations/partial pickup/collector/serial assignment; payment eligibility and quantity/duplicate caps.
-Next action: Add scoped handover service and UI.
+The first safe backend slice persists immutable collection headers and allocations,
+requires collector details, supports partial/final same-store handover, and binds
+every allocation to an exact invoice line, posted reservation, balance/location/
+batch version and T09 HANDOVER movement. Stable retries have one effect; changed
+intent, excess quantities, stale stock and direct posted-sale HANDOVER bypasses
+fail closed. Ordinary reads expose payment and fulfilment status but not accounts,
+cost pools or valuation values. Six focused T16 tests and the 22-test affected
+posting/handover set pass. Evidence: evidence/20261005-sales-collection.txt.
+Next action: publish the backend slice and connect the existing sale-detail screen
+to collection options/history. Exact serial assignment and reviewed other-store
+collection remain fail-closed follow-ups; browser/hardware acceptance stays open.
 
 T17 | Implement invoices and print queues
 Status: Blocked

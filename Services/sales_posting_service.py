@@ -743,6 +743,9 @@ def read_invoice(db, context, invoice_key, *, authorize):
         invoice_key=invoice.invoice_key).order_by(
         SalesInvoiceReservation.line_key,
         SalesInvoiceReservation.reservation_key).all()
+    from Services.sales_collection_service import invoice_fulfilment_status
+    fulfilment_status = invoice_fulfilment_status(
+        db, context, invoice.invoice_key)
     return dict(invoice_key=invoice.invoice_key,
         attempt_key=invoice.attempt_key, operation_key=invoice.operation_key,
         invoice_number=invoice.invoice_number,
@@ -760,7 +763,7 @@ def read_invoice(db, context, invoice_key, *, authorize):
         gross_total_scr=_money(invoice.gross_total_scr),
         net_total_scr=_money(invoice.net_total_scr),
         tax_total_scr=_money(invoice.tax_total_scr),
-        payment_status="PAID", fulfilment_status="AWAITING_COLLECTION",
+        payment_status="PAID", fulfilment_status=fulfilment_status,
         lines=[dict(line_key=row.line_key,
             source_line_key=row.source_line_key, position=row.position,
             product_id=row.product_id, product_name=row.product_name,

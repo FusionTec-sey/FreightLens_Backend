@@ -24,8 +24,12 @@ FOCUSED VERIFICATION
 - The sales-posting schema compiled and replayed twice on an isolated synthetic PostgreSQL database.
 
 EXPLICIT OPEN GATES
-- Full backend CI and fresh-install replay after the PR checkpoint.
-- Frontend T14 connection to the frozen contract and approved browser/tablet checks.
+- Approved browser/tablet checks for the integrated checkout.
 - Real payment methods/accounts, provider acceptance, accounting acceptance and pilot approval.
 - T16 collection, T17 immutable rendering/print queue and later return/close workflows.
 - No deployment, live financial posting, customer messaging or physical handover was performed.
+
+INTEGRATION CHECKPOINT
+- Backend PR #12 passed GitHub pytest and fresh-install checks and merged as d0d4f44.
+- Frontend PR #10 connected the existing checkout workspace and merged as c903117 after its full test/build check passed.
+- The local preview was refreshed to those exact paired revisions; no business record was created during refresh.
