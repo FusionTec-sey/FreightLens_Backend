@@ -788,10 +788,30 @@ progress because customer-credit liability and actual payment posting are not pa
 of T12A; they do not block the merged pilot cash/card configuration contract.
 
 T13 | Complete atomic sales posting
-Status: Blocked
+Status: Implemented—verification pending
 Dependencies: T07,T08,T11,T12,T13A
 Acceptance / evidence: Invoice/commitments/payments/number/outbox commit together; retries and unknown payment outcomes safe.
-Next action: Compose existing posting boundary and authoritative services.
+The bounded pilot contract now persists exact posting attempts and configured tender
+plans, keeps unknown card outcomes recoverable outside the invoice transaction, and
+atomically commits the immutable invoice, line pricing/tax snapshots, confirmed
+payment allocations, exact reservation commitments, branch/day number and generic
+outbox receipt. Cash and externally confirmed card are supported; payment mappings
+fail closed and retries have one effect. Posted reservations cannot enter the release
+workflow or be directly increased unless final released quantity reconciles to
+cumulative HANDOVER history; T16 remains
+responsible for physical handover. External terminal results require a distinct
+audited permission, ordinary sales reads hide receiving-account references, and a
+declined card may be retried on its exact tender. Eight focused T13 tests and 42
+affected posting/payment/release/handover tests pass on an isolated synthetic database.
+The checkout-safe posting-options read supplies exact active counters, redacted
+payment identities and reservation bindings without exposing ledger accounts.
+The Wave2 full backend gate passes 1,586 tests and fresh empty-database startup/
+bootstrap verification passes. Evidence: evidence/20261005-atomic-sales-posting.txt.
+GitHub CI,
+frontend connection, browser acceptance and real financial configuration remain
+open gates; no live money or stock posting is enabled.
+Next action: publish the backend contract for checkout integration, confirm GitHub
+CI/fresh migration replay, then connect T14 without duplicating cart state.
 
 T14 | Build tablet checkout
 Status: Blocked

@@ -2001,3 +2001,15 @@ Newest entries appear first. Every architecture change records why it changed, i
 - **Backend commit:** `4f064f6`
 - **Frontend commit:** `43e52be`
 - **Undo:** v1 remains on legacy branches; histories cannot be bisected across this boundary.
+2026-10-05 — T13 bounded atomic retail posting
+- Added immutable posting attempts/tenders, append-only external card outcomes,
+  immutable invoices/lines/payments/reservation commitments and replay-safe schema.
+- Reused existing draft, pricing, floor-case, payment-mapping, branch/counter,
+  staff assignment, reservation and PostingOperation boundaries.
+- Sale posting binds protected stock but does not hand it over; posted holds cannot
+  be released. Cash and externally confirmed card are the only pilot methods.
+- Focused evidence: planning/evidence/20261005-atomic-sales-posting.txt.
+- Review hardening separates store-scoped external-card result authority from sale posting,
+  permits declined-card retry, hides receiving-account references from ordinary
+  sales reads, aligns customer-agreement lock order and independently reconciles
+  posted reservation release changes to cumulative HANDOVER movement history.

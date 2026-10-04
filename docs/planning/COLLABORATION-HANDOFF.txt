@@ -250,6 +250,28 @@ real mappings/imports and supervised cloud pilot are separate. Offline/paper
 software recovery is retained but deferred by BD-20261004-10.
 Two legacy stock-writer xfails remain tracked by T08; not newly passing tests.
 No deployment, pilot, real money posting, external messaging or purchases authorised.
+
+2026-10-05 T13 CONTRACT UPDATE
+The integrator branch now defines the backend pilot posting contract under
+`/sales/posting-attempts` and `/sales/invoices`. Checkout work must reuse the
+existing server draft, prepared pricing snapshot, reservation keys and recovery
+store. It must never create a second cart/sale record or treat payment as physical
+collection. Unknown card outcomes remain AWAITING_CARD; only the exact appended
+confirmation can make the attempt READY. Finalization returns payment_status=PAID
+and fulfilment_status=AWAITING_COLLECTION. Coordinate any schema or route change
+before editing; T16 collection and T17 print artifacts consume the immutable
+invoice after this backend contract is merged.
+External terminal-result entry is a separate audited permission from `Post_Sale`
+and requires a current selling-store assignment; its actor may be distinct from the
+salesperson. It records a manual terminal observation and is not provider authentication.
+Declined card observations can be followed by another observation on the same exact
+tender; a different tender plan requires a new draft revision. Ordinary checkout
+responses deliberately omit internal receiving-account references. Posted holds
+may change only when its final released quantity exactly reconciles to cumulative
+T09 HANDOVER movement history.
+Use the protected `/sales/posting-options/{document_key}` read to populate checkout
+counters, payment methods and exact reservation bindings. Do not use the financial
+configuration register or reservation-review API as a salesperson-data fallback.
 Repository hooks/workflows are checked for this push; unknown external polling
 integrations cannot be ruled out merely by reading workflow files.
 

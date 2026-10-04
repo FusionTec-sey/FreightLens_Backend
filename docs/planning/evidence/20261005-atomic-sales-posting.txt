@@ -1,0 +1,31 @@
+T13 ATOMIC SALES POSTING — BOUNDED PILOT EVIDENCE
+Date: 2026-10-05
+Branch: codex/t13-atomic-sales-posting
+
+IMPLEMENTED
+- Immutable exact sales posting attempts own one draft revision and one pricing snapshot.
+- Exact versioned CASH or CARD tender plans resolve one selling-branch receiving account; there is no fallback.
+- UNKNOWN/CONFIRMED/DECLINED card observations are append-only. Confirmed evidence stores only a SHA-256 reference hash, never PAN or provider secrets.
+- External card results require the distinct Record_ExternalCardConfirmation permission and current selling-store assignment. The audited confirmer may differ from the salesperson. This is a manual terminal observation, not provider authentication. A decline can be followed by another observation on the same exact tender; changing the tender plan requires a new draft revision.
+- Finalization atomically writes the invoice identity/number, immutable product/pricing/tax lines, confirmed payment allocations, exact stock-reservation commitments and the existing PostingOperation/outbox receipt.
+- The current branch/counter/business date, staff assignment, customer profile version, price/tax fingerprint, payment mappings and active reservations are revalidated under locks.
+- Invoice posting binds stock rights but does not reduce on-hand or reserved quantities. T16 owns physical collection.
+- Posted reservations are rejected by reviewed release service and database guards; final released quantity must reconcile exactly to cumulative HANDOVER history.
+- Permissions View_Sale, Post_Sale and Record_ExternalCardConfirmation are distinct. Internal account references are omitted from ordinary sales responses.
+- A protected checkout-options read exposes only exact active counter, redacted payment identity and reservation-binding inputs; salespeople do not need financial-configuration access.
+
+FOCUSED VERIFICATION
+- tests/test_sales_posting.py: 8 passed, including distinct confirmer authority, safe trigger-error mapping and direct migration replay.
+- tests/test_payment_configuration.py: 4 passed after the locked resolver began returning its exact method snapshot.
+- Affected posting/payment/release/handover set after review fixes: 42 passed.
+- Full backend regression: 1,586 passed with existing warnings.
+- Fresh empty-database startup, health check and bootstrap-admin protected read passed.
+- Python compilation and containerMgmt application import passed.
+- The sales-posting schema compiled and replayed twice on an isolated synthetic PostgreSQL database.
+
+EXPLICIT OPEN GATES
+- Full backend CI and fresh-install replay after the PR checkpoint.
+- Frontend T14 connection to the frozen contract and approved browser/tablet checks.
+- Real payment methods/accounts, provider acceptance, accounting acceptance and pilot approval.
+- T16 collection, T17 immutable rendering/print queue and later return/close workflows.
+- No deployment, live financial posting, customer messaging or physical handover was performed.
