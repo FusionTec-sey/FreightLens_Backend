@@ -1,0 +1,29 @@
+FreightLens internal atomic receipt coordinator — 2026-10-04
+
+Scope
+- Added `post_reviewed_receipt` as the single internal execute-once owner for an
+  approved full-line receipt classification.
+- One transaction consumes the exact manager case and receipt-line capacity,
+  appends exact location/batch/serial stock movements, appends pool-wac-v2 receipt
+  values, and saves the immutable operation receipt/outbox envelope.
+- Lock order is central cost-pool authority, receiving branch authority, purchasing
+  source, then product/location. Separate financial and stock permission callbacks
+  rerun before replay receipts can be returned.
+- Stable intent binds manifest, case, expected valuation version, exact SCR value,
+  reason and both authority epochs.
+
+Verification
+- Focused coordinator/valuation set: 9 passed, 23 warnings.
+- Committed independent-session concurrency covers identical operation replay and
+  two different keys competing for one receipt source. Both leave one movement,
+  one valuation and one receipt-posting outbox effect.
+- Existing rollback coverage verifies that a later failure removes source use,
+  movement, valuation and the operation receipt together.
+
+Boundary
+- No HTTP route or UI posting control was added.
+- `reviewed_goods_value_scr` is a trusted internal contract, not a client field.
+  Version-pinned purchasing document, source currency and FX evidence remain
+  mandatory before a public adapter may call this coordinator.
+- No deployment, real receipt, selling-price change or final accounting
+  reconciliation was performed.

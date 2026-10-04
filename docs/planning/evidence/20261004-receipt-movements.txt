@@ -1,0 +1,26 @@
+FreightLens internal receipt-movement checkpoint — 2026-10-04
+
+Scope
+- Extended immutable inventory stock movements with the RECEIPT kind through a
+  replay-safe, no-backfill schema migration.
+- Added an internal helper that acquires trusted receiving-branch authority before
+  purchasing source locks, revalidates the exact approved manifest and requires its
+  same-operation source-use claim.
+- Reused the existing location balances, batch identities, serial registry and
+  stock movement recorder. The helper never commits and does not edit product totals.
+- Added database guards for exact company/branch/location/product/unit scope,
+  manifest identities, condition deltas and complete source quantity.
+
+Focused isolated PostgreSQL verification
+- tests/test_inventory_receipt_movements.py
+- Result: 6 passed, 23 warnings.
+- Covered exact batch receipt and retry, rollback after a later outer failure,
+  replay permission and stale node authority, authority-before-source lock order,
+  direct receipt movement bypass rejection and migration replay.
+
+Outstanding gates
+- Source use, stock movement, receipt valuation, outbox and operation receipt must
+  commit through one public coordinator; none is exposed by this checkpoint.
+- Competing committed receipt attempts remain to be exercised after that complete
+  coordinator exists. Partial multi-location receipts remain a separate design.
+- No deployment, real data, product-price update or financial posting was enabled.

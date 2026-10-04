@@ -1,0 +1,65 @@
+FREIGHTLENS ACCELERATED CLOUD SALES PILOT
+Decision: BD-20261005-01
+Status: Wave0 baseline verification in progress
+Integration branches: codex/pos-development in both repositories
+Open baseline PRs: backend #6 and frontend #7 from codex/local-area-scope
+
+DELIVERY TARGET
+Build a supervised cloud sales pilot with customer selection, configured pricing
+and tax, protected reservations, configured cash and externally confirmed card
+methods, atomic posting, invoices, collection, returns/credit notes and till close.
+No deployment, real account mapping, live financial activation, provider messaging
+or offline synchronization is authorised.
+
+LANES
+1. Integrator/core: T08, pilot T09 movement contract, T13, backend T16/T18/T20,
+   shared contracts, integration review and final merges.
+2. Programmer: T12A, remaining T10 acceptance, T17 and later T20 screens only after
+   the integrator publishes the applicable contract.
+3. Checkout worktree: T14B-D, T15 and frontend T16/T18. It reuses existing draft,
+   customer, pricing, reservation and recovery stores.
+
+PROTECTED SHARED FILES AND CONTRACTS
+Only the integrator edits model/router exports, containerMgmt.py startup/migration
+ordering, auth permission catalogues, stock_ledger/inventory posting/authority and
+valuation services, ManagerCase shared bindings, OrgContext, shared sales/customer
+schemas, search_service, frontend App/MainPage/Menu, shared API clients and shared
+pickers. Other lanes list the required registrations in their PR handoff; the
+integrator applies them in a separate integration commit.
+
+MIGRATION RESERVATIONS
+Integrator/core: migrate_20261005_sales_posting.py,
+migrate_20261005_stock_movements.py, migrate_20261005_collections.py,
+migrate_20261005_returns.py and migrate_20261005_till_close.py.
+Programmer: migrate_20261005_payment_methods.py,
+migrate_20261005_branch_receiving_accounts.py and
+migrate_20261005_invoice_print_queue.py.
+Checkout lane has no migration allocation. Any additional migration filename must
+be reserved here before it is created. Registration order remains integrator-owned.
+
+WAVES AND MERGE ORDER
+Wave0: review current files, run affected checks, update both open baseline PRs,
+run full CI/fresh install and merge the paired revisions together. Publish SHAs.
+Wave1: T08 + T12A + T14B-D/T15 foundation in parallel. Merge bounded green PRs.
+Wave2: pilot T09 contract, then T13 atomic posting; connect T14 and finish T17.
+Wave3: T16 collection, then T18 returns/credit notes with their frontend workspaces.
+Wave4: T20 close/export, full regression, approved browser/tablet acceptance and
+synthetic staging rehearsal. Provider, Epson, accounting and owner pilot approval
+remain explicit external gates.
+
+BRANCH AND PR RULES
+Create one task branch per package from the latest paired integration revisions.
+Use separate worktrees, databases, Docker project names and ports. Pair backend and
+frontend PRs when both change. Backend contract merges before its client. Rebase
+before review; never force-push integration or replace a conflicted file wholesale.
+Check TASK-QUEUE, BUSINESS-DECISIONS and this record before task start, PR and merge.
+
+VERIFICATION GATES
+Per PR: focused permissions, tenant/branch isolation, stable retry, expected-version,
+rollback/concurrency and affected frontend tests/build. Full suites and fresh-install
+replay run at Wave0, after T13 and at pilot acceptance. Browser automation requires
+the separate approval named by AGENTS.md. Use isolated synthetic data only.
+
+BASELINE MANIFEST
+Pending Wave0 merge. Record exact backend SHA, frontend SHA, CI runs, known warnings
+and outstanding browser/provider/hardware gates here before feature worktrees start.

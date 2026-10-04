@@ -1,0 +1,21 @@
+T06/T08 immutable receipt-manifest proposal persistence — 2026-10-04
+
+Internal save only, existing execute_once operation framework. Indexed source
+references, shared operation FK, DB same-company parent check and immutable trigger.
+Registered idempotent migration creates empty table; no backfill or stock activation.
+Permission and authoritative snapshot rechecked on every attempt, including replay.
+
+Isolated PostgreSQL command:
+pytest -q tests/test_inventory_receipt_manifest_store.py
+tests/test_inventory_receipt_manifest.py tests/test_inventory_receipt_source.py
+Results: 26 passed,23 existing dependency warnings.
+Checks: save/replay one record; immutable update/delete; source drift; denied retry;
+caller rollback; foreign company; DB parent guard; migration twice leaves two triggers.
+Initial replay test incorrectly left first save uncommitted before denied attempt;
+shared boundary correctly rolls back on denial. Test now commits initial save and
+proves later retry source/access checks independently.
+
+No frontend build required for internal backend-only slice. No browser acceptance,
+public API, manager review consumption, simultaneous multi-connection posting or
+global identity claims. SAVED is not approved/received. Source use and stock/value
+posting remain future work; no full T06/T08 completion or real financial posting.

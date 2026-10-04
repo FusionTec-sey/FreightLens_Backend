@@ -1,5 +1,5 @@
 FREIGHTLENS BUSINESS DECISIONS
-Revision: BD-20261004-09
+Revision: BD-20261005-01
 Canonical companion: TASK-QUEUE.txt. Recorded 2026-10-03 from owner instructions.
 These decisions preserve actionable requirements, not the full private chat.
 Do not publish customer records, legal PDFs, credentials or personal chat exports.
@@ -150,37 +150,70 @@ negative isolation tests, minimal diffs and a reproducible PR manifest. T21 scop
 is unchanged; no new business APIs, enrollment or sync authorised. This tightens
 BD-20261004-07 delivery gates rather than reopening completed T33A implementation.
 
-BD-20261004-09 | Single cloud deployment; store-local nodes deferred | T21,T22,T23,T24,T06,T07,T25,T26,T34
-Owner decided the system runs as ONE cloud deployment used by every store. No
-store-local hosting, no multi-node topology and no synchronisation for now.
-Stores reach the single cloud instance over the network; a counter cannot sell
-while that link is down, and the agreed interim mitigation is a manual paper
-fallback entered once the link returns.
+BD-20261004-09 | InFlow-informed Sales presentation and lifecycle scope | T11-T18,T25,T29
+Owner approved revising the queue after a read-only comparison with InFlow. Adopt
+its useful information density, split-workspace hierarchy and persistent action
+placement without copying its combined order/payment/fulfilment behaviour. Current
+draft screens lead with customer/store and Draft vN; exact UUID remains the secondary
+reference. Show saved customer/store/audit context, exact unit and reservation facts,
+and separate Demand, Reservation, Payment and Collection states. Pricing remains
+pending until T11 supplies an authoritative versioned result. Mark paid, Fulfill,
+invented invoice numbers, one-location assumptions, unversioned financial edits,
+ordinary-user cost exposure and unrestricted returns remain prohibited.
+T29 acceptance now includes versioned salesperson assignment, customer PO reference,
+confirmed/ordered date, requested ship-by or ETA, remarks and order address snapshots
+coordinated with T10. This is typed order metadata, not last-mile delivery execution.
+T15 copy, T17 print artifacts, T25 digital delivery and T18 returns retain their
+existing safety boundaries. Generic sales attachments, purchase/dropship conversion,
+unconfirm and split-order transitions remain unowned until separately approved.
+Task dependencies, current statuses and release gates are unchanged.
 
-T21, T22, T23 and T24 are DEFERRED, not cancelled or deleted. Their analysis,
-assignment and handoff documents are retained. The data model already supports a
-later reversal: StoreNode identities, branch authority epochs and execute_once
-operation keys stay in place and need no rewrite if multi-node work resumes.
+BD-20261004-10 | Cloud-first single runtime; offline work deferred | T12,T21-T26,T32,T34
+Owner confirmed on 2026-10-04 that FreightLens should now be developed as one
+cloud-hosted system and that store-local/offline operation for internet outages is
+not required in the current delivery. Existing authority, outbox, recovery and
+packaging work is retained; do not remove or weaken it. Stop expanding multi-node
+store packaging, synchronization, cached offline eligibility or software paper-
+recovery workflows until the owner explicitly reactivates that scope. Internet
+outages use an operational contingency outside the current software build; do not
+claim offline sales, silent local fallback or automatic later synchronization.
 
-Consequences recorded now:
-- The T21-T23 "runtime enrollment and fencing" integration gate no longer applies
-  to T06 and T07 under a single deployment. One cloud runtime owns authority; its
-  node key is configured and verified (evidence/t06-t07-runtime-and-retention-
-  gates.txt). Enrollment becomes a one-time administrative action per company
-  rather than a distributed protocol. Fencing is retained as a safety guard
-  against two processes posting at once, not as a distributed concern.
-- Offline eligibility, cached policy, node fencing and shared-money limits are out
-  of scope while deferred. Customer credit and deposit redemption therefore remain
-  centrally checked, which removes the double-redemption risk T23 existed to cover.
-- T25 digital invoice delivery must be rescoped to deliver directly from the cloud
-  instead of depending on T22 synchronisation.
-- T26 recovery rehearsals keep import and restore scope but drop node recovery.
-- T34 pilot gates drop the offline, sync and multi-node readiness items.
+This supersedes the current priority and pre-pilot requirement portions of T21-T24,
+not the long-term capability definitions. Current development targets one cloud
+database/API/frontend/search/object-storage authority. Cloud queued delivery may
+reuse the T13 outbox without depending on store synchronization. Import/backup
+rehearsals and supervised cloud readiness no longer wait for T24, but their own
+accounting, data, provider, hardware and owner-approval gates remain.
 
-The PROGRAMMER-T21-HANDOFF.txt assignment is suspended. Notify that programmer
-before any packaging work begins; BD-20261004-07 and BD-20261004-08 are superseded
-only on the question of whether T21 proceeds now, not on their delivery standards,
-which continue to apply to any future package.
+The other programmer's T21 packaging assignment is deferred. Its replacement is
+the bounded T12A payment and receiving-account configuration package documented in
+PROGRAMMER-T12A-HANDOFF.txt. It configures synthetic methods/account mappings and
+fail-closed lookup only; it does not post money, create customer balances, enable
+credit, process cheques/deposits/refunds or use real banking details.
+
+BD-20261005-01 | Accelerated three-lane cloud sales pilot | T08-T20
+Owner approved a pilot-first parallel delivery plan on 2026-10-05. Establish one
+paired, verified backend/frontend baseline before creating feature worktrees. Then
+run three active lanes: integrator/core, full-stack programmer and checkout UI.
+The integrator exclusively owns shared stock/posting/authority contracts, common
+registries, permission catalogues, migration ordering and final merges. The
+programmer starts with T12A, then remaining T10 acceptance and T17. The checkout
+lane finishes T14B-D/T15 and later connects T14/T16/T18 to frozen backend contracts.
+
+Use one task branch per bounded package and paired backend/frontend PRs when both
+repositories change. No feature branch starts from an uncommitted checkout. Reserve
+migration filenames before implementation; other lanes supply registration manifests
+instead of editing protected registration files. Run focused checks per PR and full
+backend/frontend/fresh-install gates at the paired baseline, atomic-posting checkpoint
+and pilot acceptance. This supersedes serial execution as the current scheduling
+policy but does not relax business rules, dependency gates or release authority.
+
+The first supervised cloud pilot prioritises customer selection, configured store
+pricing/tax, protected reservations, configured cash and externally confirmed card
+methods, atomic sale posting, invoices, line-level collection, returns/credit notes
+and till close. Cheques, deposits, contract credit, promotions, full reporting,
+provider delivery and T21-T24 offline work remain later. No deployment, real account
+mapping, live financial posting or customer messaging is authorised by this decision.
 
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record

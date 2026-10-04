@@ -1,5 +1,405 @@
 # FreightLens Architecture Log
 
+## 2026-10-04 - Reviewed immutable cost-reconciliation checkpoints
+
+- Added product/pool checkpoints that bind one latest valuation head and every
+  current physical balance/version in mapped branches. Exact on-hand and pool
+  quantities must agree in one base unit.
+- Reused manager cases for separate request/review/close permissions. Close requires
+  a current approval plus server-derived central cost authority and appends an
+  immutable checkpoint without editing weighted-average history.
+- Added server-paged case/checkpoint APIs and a permission-aware Cost pools workflow.
+  Stale states, duplicate exact closes, foreign scope and missing runtime fail closed.
+- Backend7/frontend18 focused tests and production build pass. This is not a T20
+  accounting/till close, journal export or final external-retention acceptance.
+
+## 2026-10-04 - Public receipt cost evidence review
+
+- Added scoped receipt-cost request/list/review routes over the existing immutable
+  receipt manifest and shared manager-case engine. Declarations retain exact source
+  unit price, currency, SCR rate, justification and version-pinned PO/FX documents.
+- Storage reads occur outside business transactions. Review and download recheck the
+  complete current source/document binding; generic reads expose no private hashes,
+  versions, keys or paths.
+- Connected a Goods Receiving workflow with retained uncertain retries, independent
+  review, listed-version decisions and reviewed-document downloads. Approval remains
+  evidence-only and exposes no stock/value posting action.
+- Backend49/frontend9 focused tests and production build pass. RustFS retention,
+  final receipt execution, immutable reconciliation and browser acceptance remain.
+
+## 2026-10-04 - Cloud-derived central cost runtime
+
+- Added a server-owned cloud node identity that derives current cost-pool authority
+  from persisted company scope and active epochs; clients cannot submit claims.
+- Invalid cloud configuration, foreign ownership, suspension and stale epochs fail
+  closed without local fallback. Explicit local-development compatibility remains.
+- Routed existing reviewed charge context/posting through the shared server resolver.
+- 64 authority/evidence/posting tests pass. No authority, business record or real
+  financial post was created; receipt composition and external gates remain.
+
+## 2026-10-04 - T08 reviewed exact stock adjustments
+
+- Added request, independent review and confirmed execution over exact scoped
+  location balances; reservations are preserved and serial aggregates are blocked.
+- Execution uses server-owned authority, exact approval consumption and one immutable
+  ADJUSTMENT movement. Database guards reject direct/unreviewed or mismatched writes.
+- Added separate permissions, replay-safe migrations and a permission-aware Location
+  Stock UI with stable uncertain retries and explicit reconciliation wording.
+- 65 backend and 26 frontend focused tests pass; the production build passes with
+  existing warnings. T08 remains open for opening/import and public receipt gates.
+
+## 2026-10-04 - T08 authoritative product quantity readers
+
+- Replaced product catalogue, lookup, export, low-stock and dashboard dependence on
+  `Product.current_stock` with scoped Inventory balance summaries. Exact quantity
+  categories remain separate and incompatible base units fail closed as unavailable.
+- Removed legacy stock from product search documents and updated Product Master,
+  quick view, selectors and the older order picker to consume authoritative fields.
+- Replaced estimated catalogue-cost dashboard value with latest immutable cost-pool
+  heads in SCR, explicitly provisional and coverage-aware.
+- 63 focused backend and four frontend tests pass; the production build passes with
+  existing warnings. No stock writer or financial posting was enabled; T08 remains
+  open for reviewed adjustments/import/openings and public receipt gates.
+
+## 2026-10-04 - T07 shared cloud reservation runtime
+
+- Added a server-owned cloud stock runtime keyed by one configured node identity.
+  It derives only active branch epochs owned by that node and reuses the existing
+  locked posting-authority guard; clients cannot submit authority or business date.
+- Routed same-store allocation, approved release and approved other-store execution
+  through the same resolver. Invalid cloud configuration cannot fall back to the
+  retained explicit local-development mode.
+- Kept T21-T24 deferred: no offline enrollment, synchronization or failover was
+  added. Unconfirmed release continues to reject confirmed/non-DRAFT demand.
+- 66 focused isolated-PostgreSQL tests pass with existing warnings. T07 is
+  Implemented—verification pending on browser and real runtime configuration gates.
+
+## 2026-10-04 - Cloud-first sequencing and collaborator reassignment
+
+- Recorded BD-20261004-10: current development targets one cloud-authoritative
+  application. Existing offline-safe foundations remain, but T21-T24 expansion is
+  deferred and no transparent internet-outage operation is claimed.
+- Removed T24 from current cloud pilot/import dependency paths and made digital
+  delivery depend on the cloud posting outbox rather than store synchronization.
+- Replaced the collaborator's T21 package with bounded T12A versioned payment-method
+  and branch receiving-account configuration. It is configuration/fail-closed
+  lookup only, with no real bank data, money posting, balances or provider flow.
+
+## 2026-10-04 - T11 reviewed floors and immutable transaction pricing
+
+- Reused the shared manager-case engine for below-floor selling prices and bound
+  every request/review to the exact draft revision plus canonical price/tax input
+  fingerprint. Self-review, stale drafts/configuration and foreign scope fail closed.
+- Added immutable `sales_transaction_pricing` records using the shared posting
+  operation identity. They retain exact source/version/tax/total inputs and reference
+  the approved floor case when required, without consuming it or posting a sale.
+- Added read/prepare draft endpoints and usable sales-detail preparation plus a
+  dedicated manager review screen. Permission-gated reviews no longer disappear
+  merely because the reviewer lacks customer-facing draft access.
+- 48 focused backend tests and 43 focused frontend tests pass. The production build
+  succeeds with only the repository's existing unrelated warnings. Browser and real
+  tax/accounting configuration acceptance remain pending.
+- T11 is Implemented—verification pending. T13 must select the exact pricing snapshot
+  and consume any floor case atomically with invoice, stock, money, numbering and
+  outbox effects; financial posting remains disabled until those dependencies exist.
+
+## 2026-10-04 - T11 versioned configuration, draft preview and frontend
+
+- Added stable, tenant-scoped configuration identities with consecutive immutable
+  revisions for tax rules, store/product/selling-unit prices, product tax assignment
+  and customer/store/product/unit agreements. Stable operation keys protect retries.
+- Kept tax separate from price lists and added no seeded rate, price, tax class or
+  real business record. Selling unit is part of price/agreement identity.
+- Added protected, paginated `/sales/pricing` reads and writes with independent
+  customer/personal-data access for agreements and financial management for writes.
+- Added read-only authoritative draft pricing preview with exact SCR gross/net/tax,
+  selected source and versions, and an explicit below-floor approval requirement.
+  It cannot post invoices, payments or stock.
+- Added the Sales > Pricing & tax frontend with four registers, selectors and
+  version-aware forms. 42 pricing/configuration/preview/API backend tests, 26 focused
+  frontend tests and the production build pass; the build retains pre-existing
+  unrelated lint and bundle warnings. Browser acceptance remains pending.
+- Follow-up above implements reviewed floor approval and immutable transaction
+  pricing. This earlier checkpoint did not enable financial posting.
+
+## 2026-10-04 - T11 exact pricing and tax calculation foundation
+
+- Added a pure exact-Decimal contract for tax-inclusive SCR, versioned selling-store
+  prices, already-eligible customer agreements, tax snapshots and explicit floors.
+- Lowest eligible price benefits the customer; same-price ties retain store price.
+  Below-floor results require approval but are not silently raised or posted.
+- Tax treatment is independent from price lists and keeps standard, zero-rated and
+  exempt supplies distinct. Invoice gross is rounded once, then line/tax cents are
+  allocated deterministically with exact gross = net + tax conservation.
+- Official SRC material checked on 2026-10-04 states the current standard rate is
+  15%, distinguishes zero-rated from exempt supplies and requires VAT to be shown
+  separately on invoices/receipts. The calculator remains configurable and does not
+  seed legal classifications or rates.
+- Sixteen focused tests pass, including 200 deterministic invoices. Persistence,
+  authoritative eligibility, reviewed floor execution and checkout remain T11 work.
+
+## 2026-10-04 - T10 customer workspace automated verification
+
+- Verified existing append-only customer profile/contact revisions rather than
+  rebuilding them. Current and exact historical reads, newest-first history, stable
+  retries, immutable rows, permission/tenant denial and migration replay pass.
+- Two concurrent edits at the same expected version serialize on the stable customer
+  identity and only one revision commits. Original identity and old sales references
+  remain unchanged.
+- Verified duplicate assessment request/review with exact profile versions, stable
+  pair locks, stale-profile invalidation, independent reviewer and separate action
+  permissions. Approval creates no manager-case use and never merges customers,
+  contacts, sales references or balances.
+- 53 affected backend and 23 focused frontend tests pass. The production build from
+  this boundary succeeds with existing unrelated warnings. Browser/provider and
+  durable ordered search-projection acceptance remain; T10 stays in progress.
+
+## 2026-10-04 - Central reconciliation readiness inspection
+
+- Added a tenant/pool-scoped, server-paginated comparison of current physical
+  on-hand against each product's latest immutable valuation head.
+- Explicit `MISSING_VALUATION`, `QUANTITY_MISMATCH` and `UNIT_MISMATCH` exceptions
+  fail closed; exact quantity/value/head details remain read-only and financial-only.
+- Added the comparison to the existing Cost pools / Valuation history workspace,
+  with stale-response clearing, retry and explicit wording that agreement is not
+  final accounting approval.
+- 54 focused backend API tests and 22 focused frontend tests pass. The frontend
+  production build succeeds with the repository's existing unrelated warnings.
+- This is reconciliation readiness, not an immutable period close. Reviewed close,
+  evidence retention, accounting export, synchronized completeness and runtime
+  authority remain outstanding.
+
+## 2026-10-04 - Evidence-bound receipt value and atomic posting
+
+- Added an independent receipt-cost case bound to the official PO unit price,
+  receipt-unit quantity, source currency, explicit SCR exchange rate and exact
+  versioned PO-price/FX document fingerprints. Manifest creators cannot approve it.
+- Reused the generic two-stage evidence preparation contract: original reviewed blob
+  versions are hashed outside database transactions, then the whole binding is locked
+  and revalidated before any stock or value effect.
+- The official internal receipt coordinator derives SCR goods value from approved
+  evidence; it accepts no client or adapter value. It atomically consumes both cases
+  and the source, writes exact movements/value and records the durable event receipt.
+  The lower raw-value composition seam has a distinct internal-only operation kind.
+- 141 affected PostgreSQL tests pass, including exact derivation, replay permission
+  and content checks, both-case rollback, pinned-version reads and the existing
+  committed concurrency coverage. No HTTP action, real receipt or configuration was
+  enabled. RustFS retention, runtime identity and reconciliation remain gates.
+
+## 2026-10-04 - Atomic internal receipt coordinator
+
+- Composed source/case consumption, source-bound movement, receipt valuation and
+  the existing immutable operation/outbox envelope in one execute-once transaction.
+- Separate stock and financial permission guards and both persisted authorities
+  run on every attempt; lock order is central pool then branch then source/product.
+- Committed two-connection tests prove same-key replay and one effect for competing
+  distinct keys. Rollback restores case, source, movement, value and receipt.
+- No public adapter exists. Versioned PO/source-currency and FX evidence must supply
+  the exact reviewed SCR value before posting can be enabled.
+
+## 2026-10-04 - Internal receipt valuation stream
+
+- Extended the immutable pool valuation stream with source-bound `RECEIPT` rows;
+  existing opening and charge histories migrate without value rewrites or backfill.
+- Central pool authority precedes receipt locks. Exact source quantity, movements,
+  branch mapping, base unit and prior pool/physical consistency are revalidated.
+- Exact SCR goods value is distributed across receipt movements with stable
+  largest-remainder arithmetic. Receipt rows can enter the existing reviewed
+  additional-cost workflow; charges still cannot be reallocated.
+- 120 affected backend tests and six focused frontend tests pass. The production
+  build compiles with the repository's existing warnings. FX/evidence capture,
+  public atomic receipt coordination, outbox and reconciliation remain pending.
+
+## 2026-10-04 - Internal source-bound receipt movements
+
+- Added a replay-safe schema extension for immutable `RECEIPT` stock movements,
+  with no backfill and no public writer.
+- Trusted branch authority is acquired before purchasing source locks. The movement
+  helper then rebinds the current approved manifest, requires its same-operation
+  source-use claim and appends exact location/batch/serial effects without committing.
+- Database guards enforce source scope, complete quantities and condition deltas and
+  reject direct receipt movements without a consumed source.
+- Six focused PostgreSQL tests cover exact batch stock/replay, downstream rollback,
+  replay permission and authority, lock-order short-circuit, direct bypass rejection
+  and migration replay. Atomic valuation/outbox composition and committed concurrency
+  remain pending.
+
+## 2026-10-04 - Unsafe product-total adjustment retired
+
+- The legacy adjustment route now performs permission/company/product checks and
+  then rejects without float math, clamping, mutation, commit or search work.
+- Removed all Product Master and quick-view controls that opened the direct writer.
+- Ten focused prerequisite checks pass, including the former adjustment regression
+  and catalogue create/edit boundaries. Production build passes with existing warnings.
+- Controlled reviewed location adjustment remains T08/T09 work; no substitute total
+  or automatic correction was introduced.
+
+## 2026-10-04 - Internal receipt source-use capacity
+
+- Added immutable receipt-line source-use history and a replay-safe migration with
+  no backfill. Database guard binds company, manifest, exact base quantity and the
+  matching consumed classification approval while locking the receipt line.
+- Added an internal-only helper for a future outer physical posting transaction.
+  It revalidates the current source, consumes approval and claims capacity without
+  committing or creating stock, movement or valuation by itself.
+- Seven focused PostgreSQL tests cover retry, replay permission/source revalidation,
+  duplicate full-line denial, outer rollback, direct unapproved insert denial,
+  foreign scope and migration replay.
+  Complete concurrent movement/valuation composition remains pending.
+
+## 2026-10-04 - Exact receipt manifest entry workflow
+
+- Added read-only source and manifest previews under the existing Verify_Receipt boundary. They
+  lock and revalidate the authoritative receipt, line, location and reviewed policy,
+  converts to base units and runs shared conservation/identity rules, then releases
+  locks without a write. Save repeats all checks; preview is never posting authority.
+- Goods-receipt lines now expose their linked product identity through an eager-loaded
+  PO-line relationship without supplier or pricing fields.
+- Goods Receiving can select the line, paged branch/location, and reviewed policy,
+  retain exact failed input and retry identity, validate, and save a non-posting
+  manifest. Batch/serial controls are shared with stock reclassification.
+- Twenty-seven focused backend checks and fourteen frontend checks pass. The production
+  build passes with existing warnings. Browser acceptance remains pending.
+
+## 2026-10-04 - Public receipt proposal and classification review boundary
+
+- Added stable-key proposal save under Verify_Receipt and request/list/decision routes
+  using the existing manager-case engine and Inventory/Orders/view guards.
+- Request-only users can see only their requests; wider/needs-review views require
+  review authority. Creator/requestor independence, current-source rebinding, tenant
+  scope and replay protection are enforced on every attempt.
+- Case paging projects metadata without loading identity-heavy binding JSON and uses
+  a replay-safe partial scope/source index. Review never consumes the case or stock.
+- Goods Receiving retains failed review input/identity, blocks accidental panel exit,
+  and exposes no physical or financial posting control. Twenty-eight backend and seven
+  frontend tests pass; production build passes with existing warnings.
+
+## 2026-10-04 - InFlow-informed Sales draft presentation
+
+- Applied BD-20261004-09 to the existing register/detail/editor components: dense
+  customer/store/Draft vN identity, secondary exact UUID and compact saved context.
+- Demand, line reservations, payment and collection are separate facts. Pricing is
+  pending/not calculated; no invoice, money, handover or new save action was added.
+- Product lines retain image, SKU, exact quantity/unit, base quantity, policy and
+  protected reservation facts; current permissions/search/history/recovery remain.
+- Twenty-four affected frontend tests and production build pass with existing warnings.
+  Browser/dark-mode acceptance and authoritative T11-T17 integration remain pending.
+
+## 2026-10-04 - Read-only receipt manifest inspection
+
+- Added scoped, paginated manifest summaries and exact UUID historical reads under
+  the existing Inventory/Orders permissions; deleted and foreign parents stay hidden.
+- Responses whitelist classification metadata and exact quantities, exclude supplier/
+  price data and remain private/no-store. No write or posting route was added.
+- Goods Receiving now offers an explicit saved-manifest inspector with cancellable,
+  context-validated reads and contained modal scrolling. Saved is labelled not posted.
+- Seven isolated backend and four focused frontend tests pass; production build passes
+  with existing warnings. Browser acceptance and public create/review remain pending.
+
+## 2026-10-04 - Receipt manifest manager-case binding
+
+- Reused request_case/review_case with exact persisted manifest/source binding.
+- Receipt creator cannot review via a proxy requester; engine also blocks requester
+  self-review. Policy/source changes reject request/decision/replay binding.
+- Eight isolated review/store tests pass. No case consumption, public endpoint,
+  financial approval or physical receipt effect is enabled by classification review.
+
+## 2026-10-04 - Durable immutable receipt manifests
+
+- Added append-only manifest proposal table with source references, deferred
+  shared-operation FK, exact company/parent insert guard and mutation rejection.
+- Save reuses execute_once and prepared source, rechecking access/source on retry.
+  No source-use reservation or stock effect is inferred from SAVED.
+- Replay-safe empty-table migration registered; no stock backfill or activation.
+  PostgreSQL guidance informed indexes and scoped FK/trigger boundaries.
+- Isolated tests cover replay, changed source, permission, rollback, immutable
+  rows, foreign insert and migration replay. Evidence in receipt-manifest-store.
+
+## 2026-10-04 - Receipt manifest conservation shares inventory validators
+
+- Extracted reusable validate_stock_manifest from existing reclassification
+  validation; old conversion restrictions remain intact in their caller.
+- Internal full-line receipt manifest uses existing batch/serial schemas, exact
+  condition quantities and prepared source. Rejects quantity mismatch, inconsistent
+  condition totals, duplicate identities and observed damage made available.
+- No persistence, approval, source consumption or stock/valuation posting added.
+  Partial/multi-location receipt composition remains subsequent integration work.
+
+## 2026-10-04 - Guarded physical receipt source preparation
+
+- Added internal typed receipt-line/location selection and caller-transaction
+  preparation over existing GoodsReceipt/ReceiptItem/POItem/product/policy records.
+- Requires submitted posting-v1 purchasing source, exact company/parent/product,
+  active receiving location and current reviewed units. No float quantity inputs.
+- Retains damaged/incorrect quantities without inventing saleable stock or costs.
+- 27 isolated PostgreSQL tests pass including existing unit/source tests. No new
+  public route, migration, stock writer or UI enabled; manifest/consumption next.
+
+## 2026-10-04 - Catalogue creation cannot establish inventory
+
+- Create-product API rejects nonzero/nonfinite opening totals after Add_Product
+  permission check and before writes. Zero/null/omitted create only catalogue data.
+- Constructor always initializes zero; quick-create UI no longer sends stock.
+- Prerequisite suite48 pass /1 remaining adjustment xfail, including compatibility
+  and rejection cases. This is not a replacement receipt/opening workflow.
+
+## 2026-10-04 - T08 legacy writer audit and metadata stock bypass closure
+
+- Audited current_stock writers/readers and purchasing receipt service; canonical
+  LEGACY-STOCK-WRITER-AUDIT.txt records remaining paths and receipt integration.
+- Product metadata rejects stock replacement and no longer whitelists the field;
+  product form omits it and shows a read-only legacy reference, not editable stock.
+- C12 metadata regression now passes for positive/zero/negative/same-value writes.
+  Affected backend59 pass /1 remaining adjustment xfail; build evidence recorded.
+  Receipt/valuation composition and nonzero creation remain outstanding.
+
+## 2026-10-04 - Readable Sales branch and saved-revision attribution
+
+- Current draft read includes current scoped branch label and immutable revision
+  timestamp/actor reference; saving actor is not an assigned salesperson.
+- Register/detail reuse a bounded branch-label lookup. PostgreSQL guidance informed
+  primary-key page lookups; deleted/foreign labels are omitted, never substituted.
+- Editor displays label but local recovery remains reference-only. No schema or
+  business-write changes. Forty affected backend tests pass; UI evidence recorded
+  in planning/evidence/20261004-sales-metadata.txt.
+
+## 2026-10-04 - Read-only portrait checks and narrow editor repair
+
+- Inspected saved historical lines and current draft in existing demo company.
+- Found390px editor cart collapsed beneath fixed metadata. Added contained body
+  scrolling with minimum pane height, retaining fixed Save/Cancel and tablet layout.
+- Browser recheck confirms390/768px body containment and visible cart controls.
+  Ten affected frontend tests pass. No record/settings writes or acceptance bypass.
+
+## 2026-10-04 - Sales route navigation recovery guard
+
+- Existing draft recovery now gates sidebar/programmatic and Back navigation via
+  one app-shell data-router blocker. No duplicate persistence or backend changes.
+- Recovery failure and in-flight/confirmed-cleanup states prevent leaving; exact
+  uncertain intent remains retained, without an additional API save.
+- 291 frontend tests / 55 suites pass, including real-router nested route/Back
+  integration; production build passes with existing warnings. Native reload,
+  multi-tab and browser appearance remain separate acceptance gates.
+
+## 2026-10-04 - Read-only saved Sales revision lines
+
+- Extended existing scoped draft reader; no duplicate history store or schema.
+- Historical lines retain saved quantities/units/policy versions and omit current
+  reservations. Catalogue labels are explicitly current; customer names are pinned.
+- UI Inspect version is read-only, cancellable and rejects mismatched responses;
+  current-draft mutation actions hide while history is active.
+- 39 affected backend and 10 focused frontend tests pass; build passes with known
+  warnings. Browser/final design acceptance remain separate gates.
+
+## 2026-10-04 - Scoped Sales register search
+
+- Reused Meilisearch client for reference/saved-name search with company/store scope.
+- Page-bounded authoritative reads reject stale versions and foreign/malformed hits.
+- Post-commit indexing and receipt status preserve confirmed-save recovery; startup
+  rebuild is bounded, durable ordered projection repair stays with T22.
+- 38 affected backend tests and 15 frontend tests pass; production build passes.
+  Synthetic provider smoke finds three drafts. Browser acceptance remains pending.
+
 ## 2026-10-04 - T33A integration safeguards for next assignment
 
 - Owner requested applying the cleaned-up T33A failure patterns to T21 handoff.

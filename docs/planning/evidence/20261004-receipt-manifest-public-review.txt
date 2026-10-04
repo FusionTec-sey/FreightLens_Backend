@@ -1,0 +1,41 @@
+RECEIPT MANIFEST PUBLIC SAVE AND REVIEW — 2026-10-04
+
+Implemented boundary
+- POST /inventory/receipt-manifests saves an immutable, exact manifest proposal with
+  a caller-supplied stable operation UUID. Verify_Receipt is required in addition to
+  the router's INVENTORY/ORDERS and view guards.
+- Request-review, paginated case-list and independent approve/reject routes reuse
+  inventory_receipt_review_service and the shared manager-case history.
+- Request_InventoryReview can request and list only MY_REQUESTS. Review_InventoryPolicy
+  is required for ALL/NEEDS_MY_REVIEW and decisions.
+- Case summaries reuse the already-scoped manifest source and project only decision
+  metadata; identity-heavy manifest bindings are not loaded for every register row.
+- A partial index covers active manager-case company/action/source lookups. The
+  replay-safe migration has a five-second lock timeout and is idempotent.
+
+Frontend
+- Existing Goods Receiving manifest detail exposes request and independent decision
+  controls only when the corresponding permissions are present.
+- Failed requests retain reason and exact operation identity for safe retry.
+- Dirty/busy review entry blocks hiding or leaving the selected manifest; explicit
+  discard is available and browser unload warns.
+- Review list is server paginated and validates manifest identity before rendering.
+- Saved/approved classification is explicitly not stock receipt, valuation or
+  collection authority. No post/receive/value button exists.
+
+Verification
+- Isolated PostgreSQL: test_manager_cases.py plus test_receipt_manifest_api.py —
+  28 passed, 23 warnings. Coverage includes save replay/conflict, clean-transaction
+  retry, each authority boundary, self-review denial, foreign scope, no case use,
+  no stock effect, paging projection and migration/index replay.
+- Frontend: ReceiptManifestPanel.test.js and receiptManifestsApi.test.js — 7 passed.
+  Coverage includes company/key pinning, explicit reads, stale-response clearing,
+  aborts, retained failed request identity and independent decision without posting.
+- Production frontend build passed with existing warnings. Log:
+  ../runtime/receipt-manifest-review-build.log (outside Git).
+
+Remaining
+- Manifest-entry UI and branch/location/source selection are not yet exposed.
+- Cumulative receipt-line use, partial/location splits, global identity uniqueness,
+  trusted node authority and atomic movement/valuation posting remain pending.
+- Browser/tablet/dark-mode acceptance remains a separate gate.

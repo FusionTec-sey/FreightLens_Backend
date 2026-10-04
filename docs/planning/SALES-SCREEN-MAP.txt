@@ -12,8 +12,10 @@ View requires SALES plus sales/product/customer/personal-data access; create/edi
 adds Manage_SalesDraft. User identity comes from current /auth/me/access.user_id.
 Server paging, store filter and store-name labels implemented. Customer names use
 the exact saved profile version. Stable UUID reference remains visible; never
-fabricate an invoice/order number. Full-text register search is still pending;
-it must use the existing search service with scoped DB rehydration, not SQL LIKE.
+fabricate an invoice/order number. Full-text register search now uses existing
+Meilisearch service with scoped/version-checked DB rehydration, not SQL LIKE.
+Search by saved customer name/reference; unavailable/stale results fail closed.
+New unindexed drafts may await projection; direct browse/open remains available.
 Local drafts and due/review deep links remain their existing routes, not fake tabs.
 
 DESKTOP DETAILS (T14C)
@@ -24,6 +26,9 @@ Edit -> SalesDraftEditor; Reserved stock -> DraftReservations.
 Allocate -> DraftAllocation/T07; other-store request -> OtherStoreRequest/T07.
 Existing action-specific backend permissions, runtime and source checks remain.
 Tabs/navigation do not post. Payment/collection not recorded or authorised by draft.
+Revision history -> explicit version inspection -> scoped immutable quantities,
+units and policy versions. Current catalogue labels are identified; no historical
+hold/payment/collection claim. Current mutation actions hide in the history view.
 
 TABLET DRAFT (T14D)
 Same SalesDraftEditor/cart and T15A recovery, no second tablet store.

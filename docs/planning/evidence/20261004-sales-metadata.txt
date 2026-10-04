@@ -1,0 +1,18 @@
+Sales current branch label and revision attribution — 2026-10-04
+
+Reused scoped reader and bounded branch-label query in register/detail. New read
+fields: branch_name (current), created_at and created_by (saved revision). No
+user-profile lookup, salesperson assignment, migration or posting change.
+
+Isolated backend: 40 passed, 23 existing dependency warnings, covering API auth,
+tenant isolation, revision reads, saves/retries and search. New case checks renamed
+branch, deleted label fallback, foreign label exclusion and max page bound.
+Command: pytest -q tests/test_sales_intent_api.py
+tests/test_sales_intent_persistence.py tests/test_sales_search.py.
+Database: freightlens_full_20261004_test on isolated phase0 Docker DB.
+
+Frontend: detail test checks explicit saved-by wording/time and branch reference;
+editor test checks label display without recovery persistence. Ten focused tests
+pass / 2 suites. Production build passes with existing warnings; log outside Git:
+runtime/sales-metadata-build.log. No new browser acceptance claimed.
+No records/settings changed in preview; no deployment or live financial action.

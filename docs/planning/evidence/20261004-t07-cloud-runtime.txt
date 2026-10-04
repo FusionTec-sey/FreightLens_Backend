@@ -1,0 +1,48 @@
+T07 CLOUD-AUTHORITATIVE RESERVATION RUNTIME EVIDENCE
+Date: 2026-10-04
+
+Scope
+-----
+- Added one server-owned cloud stock runtime identity. The process configuration
+  supplies only a nonzero node identity; the active branch epoch is resolved from
+  immutable authority history and must belong to that exact node.
+- Same-store initial allocation, reviewed reservation release and reviewed
+  other-store execution now use the same server runtime resolver.
+- Retained the existing explicit local-development configuration as a fallback for
+  isolated development only. A configured but invalid cloud identity fails closed
+  and never falls back to local authority.
+- HTTP callers still cannot supply node, epoch, branch authority or business date.
+
+Business boundaries
+-------------------
+- This is the cloud-first BD-20261004-10 adapter, not offline enrollment, failover,
+  synchronization or paper-outage work. T21-T24 remain deferred.
+- Same-store allocation still prefers the optional counter area and then other
+  eligible locations in the assigned branch. Other-store stock remains explicit,
+  reviewed and separately executed.
+- Reviewed release remains limited to unconfirmed DRAFT demand. A confirmed/non-
+  draft source fails closed, preserving paid/credit-confirmed holds for the later
+  T13 transaction lifecycle rather than silently releasing them.
+- Missing runtime configuration, foreign scope, inactive/stale authority and a
+  different current node owner all block the stock write.
+
+Verification
+------------
+Isolated PostgreSQL focused checkpoint:
+  tests/test_stock_runtime.py
+  tests/test_store_allocation_api.py
+  tests/test_reservation_release_api.py
+  tests/test_other_store_fulfilment_api.py
+  tests/test_other_store_execution.py
+  Result: 66 passed; 23 existing warnings.
+
+The checks cover cloud epoch derivation, cloud precedence, invalid-cloud no-
+fallback, exact local compatibility, same-store allocation, reviewed release,
+tenant/permission boundaries, retries and other-store review/execution services.
+
+Outstanding gates
+-----------------
+- No real cloud node key or branch authority was seeded or enabled.
+- Browser acceptance for existing allocation/review screens remains pending.
+- T13 must retain the non-DRAFT release protection when it creates confirmed stock
+  commitments and consume approved cases only inside atomic sale posting.

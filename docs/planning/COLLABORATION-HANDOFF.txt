@@ -1,9 +1,13 @@
-FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-04
-Decision revision: BD-20261004-08
-Assignment revision 2 adds mandatory T33A-derived integration safeguards; read
-PROGRAMMER-T21-HANDOFF.txt before implementation. Application starting revisions
-remain CHECKPOINT-20261004-UI.txt; this is a documentation-only tightening.
-Current collaborator assignment: PROGRAMMER-T21-HANDOFF.txt (isolated packaging).
+FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-05
+Decision revision: BD-20261005-01
+Current execution map: PARALLEL-PILOT-EXECUTION.txt. The integration owner must
+publish the paired baseline SHAs before either feature worktree begins.
+Current collaborator assignment: PROGRAMMER-T12A-HANDOFF.txt (cloud payment and
+receiving-account configuration). The previous PROGRAMMER-T21-HANDOFF.txt package
+is owner-deferred and historical until offline/store-node work is reactivated.
+Application starting revisions remain CHECKPOINT-20261004-UI.txt until the open
+paired baseline PRs are updated, verified and merged. The integrator must then
+supply the new exact paired revisions before collaborator implementation.
 This supersedes the historical T33A assignment below; retain its integrated work.
 Current publication manifest: CHECKPOINT-20261004-UI.txt.
 Current task summaries T14B-D supersede historical untested/next-action notes.
@@ -17,7 +21,8 @@ Publication state and paired revisions are recorded in the current manifest;
 verify remote SHAs before starting work. Historical report hashes are not latest.
 Phase map: PHASE-ROADMAP.txt; task status remains only in TASK-QUEUE.txt.
 Full roadmap review 2026-10-04: see roadmap review section for slice-level
-readiness and T06/T08 coordinated integration. T21 isolated packaging is Ready.
+readiness and T06/T08 coordinated integration. T12A configuration is Ready;
+T21 store/cloud packaging is deferred.
 T33A frontend located at 3260838; owner confirms backend is still in motion.
 Latest owner update: backend b6f888e (includes T33A b004536) is available;
 frontend head4b6705f includes T33A3260838. Owner explicitly assigned defect repair
@@ -38,8 +43,17 @@ Three concepts were shown;
 visual direction was approved on 2026-10-04. T14 retains backend-gated checkout integration;
 T14E is deferred acceptance. Reuse existing sales/customer/case/recovery code.
 No inFlow code import, duplicate sales records or tab-triggered business writes.
-Integrator owns Sales/shared interfaces; collaborator now owns the bounded T21
-packaging slice. Prior T33A assignment paragraphs below are historical context.
+Integrator owns Sales/pricing/shared interfaces; collaborator now owns the bounded
+T12A configuration slice. T21 and prior T33A assignment paragraphs below are
+historical context.
+
+CLOUD-FIRST UPDATE — BD-20261004-10
+Develop one cloud-authoritative frontend/API/database/search/object-storage system.
+Retain existing offline-safe foundations but do not expand T21-T24. Never imply
+that an internet outage can transparently fall back, accept local transactions or
+later synchronize. The collaborator must not continue the T21 package and instead
+uses PROGRAMMER-T12A-HANDOFF.txt. T12A supplies configuration/fail-closed lookup,
+not payments, balances, banking data or financial activation.
 
 Read backend AGENTS.md, relevant .agents/rules, architecture and latest10 log entries,
 then this handoff, decisions and queue. Frontend AGENTS.md points here. Later dated
@@ -230,13 +244,14 @@ reinsert count links under Procurement. No backend contract or permission change
 
 New browser checks require specific approval; current browser acceptance remains
 pending. Actual Epson printing, provider/storage retention, accounting review,
-real mappings/imports, offline/paper recovery and supervised pilot are separate.
+real mappings/imports and supervised cloud pilot are separate. Offline/paper
+software recovery is retained but deferred by BD-20261004-10.
 Two legacy stock-writer xfails remain tracked by T08; not newly passing tests.
 No deployment, pilot, real money posting, external messaging or purchases authorised.
 Repository hooks/workflows are checked for this push; unknown external polling
 integrations cannot be ruled out merely by reading workflow files.
 
-HISTORICAL T33A COLLABORATOR PROMPT (superseded by PROGRAMMER-T21-HANDOFF.txt)
+HISTORICAL T33A COLLABORATOR PROMPT (superseded first by T21, now by T12A)
 You are developing FreightLens alongside an integration owner. Read AGENTS.md,
 the paired baseline, architecture, task queue, BUSINESS-DECISIONS.txt and this
 handoff before editing. Your assignment is T33A cycle-count planning and blind-

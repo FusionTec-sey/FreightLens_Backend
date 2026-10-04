@@ -1,0 +1,23 @@
+Sales draft route navigation recovery — 2026-10-04
+
+Scope: T14C/T15A frontend only. Existing MainPage routes retained under installed
+createBrowserRouter. One blocker delegates retention to existing scoped recovery.
+
+Verification:
+- Full frontend: 291 passed, 55 suites.
+- Production build: exit 0, existing lint warnings (not strict warning-free).
+- Real installed router: nested route renders; menu and Back block; Stay resets;
+  retained recovery permits departure.
+- Provider: wait for persistence; reject double leave; storage failure retry;
+  editor replacement invalidates a pending departure.
+- Editor: exact decimal text retained; local failure rejects departure;
+  running save blocks; uncertain operation body retained without second API call.
+- Existing confirmed-cleanup editor tests remain passing.
+Commands: CI=true react-scripts test --watchAll=false --runInBand;
+CI=false react-scripts build. Logs outside Git in runtime/sales-navigation-tests.log
+and runtime/sales-navigation-build.log.
+
+Not claimed: browser visual acceptance, native reload/multi-tab behaviour,
+organisation/logout interception, offline authority or financial posting.
+No backend change/test required for this slice; earlier API evidence is separate.
+No deployment or business-record changes. T14C and T15A status unchanged.

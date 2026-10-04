@@ -1,0 +1,22 @@
+T14C SAVED REVISION LINE INSPECTION - 2026-10-04
+
+GET /sales/drafts/{key}/history/{version} reuses scoped get_sales_intent with an
+explicit version. Exact saved quantities, unit conversions/base quantities and
+policy version come from immutable line revisions; saved customer name is pinned
+to the original customer profile version. No current-reservation read occurs.
+Product names/SKUs/images are current authorised catalogue labels, explicitly
+identified as such; they are not represented as historical invoice snapshots.
+History payload has no reserved quantity, payment/collection entitlement or write
+operation identity. Existing module/read/privacy guards and no-store apply.
+No schema migration, additional catalogue/history ledger or restore operation.
+
+UI: explicit Inspect version action opens read-only line view; cancellation aborts
+reads, mismatched responses fail closed, failed refresh clears stale content.
+Current edit/allocation footer is hidden while revision history is selected.
+Returning to current Items restores current-draft actions, never historical ones.
+
+Verification: 39 affected backend tests passed (draft API/persistence/search),
+23 existing dependency warnings; 10 focused frontend history/detail/revision tests
+passed. Production build passed with existing warnings. Isolated test DB only.
+Browser acceptance pending. Not full T14C/design/operational acceptance.
+Local changes remain unpushed along with the previous search slice.

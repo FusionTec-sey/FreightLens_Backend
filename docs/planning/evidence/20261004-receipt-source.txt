@@ -1,0 +1,25 @@
+T06/T08 physical receipt source preparation — 2026-10-04
+
+New internal contract only: InventoryReceiptSource selects existing receipt/line,
+branch/location and expected policy version. No caller-supplied quantity/product,
+price or tax. Permission callback and active caller transaction required.
+Reads submitted/verified posting-v1 purchasing source, exact PO and line parents,
+product mapping, same-company active location and reviewed product unit policy.
+Quantities convert exactly with existing convert_quantity and serialize to six
+decimals. Damage and incorrect counts are retained separately; no available count
+is inferred and no stock/valuation row or purchasing total is written.
+
+27 tests passed /23 existing dependency warnings in isolated PostgreSQL database
+freightlens_full_20261004_test:
+pytest -q tests/test_inventory_receipt_source.py tests/test_sales_intent_sources.py
+Checks cover exact BOX conversion, no pending ORM mutations, legacy/unsubmitted
+rejection, wrong PO unit/product/status, stale policy, wrong line/location/company,
+foreign PO item, invalid quantities, discrepancy limits, permission/transaction.
+Initial assertion expected eight trailing zeros; corrected contract to canonical
+six-decimal serialization and reran successfully.
+
+No frontend/build needed: no routes/UI/dependencies changed in this internal slice.
+No migration required: no new table/column. No concurrency/posting acceptance
+claimed. Future source-use uniqueness and outer authority/valuation lock ordering
+must be verified in the actual atomic writer. Batch/serial identities, condition
+manifest and cumulative source cap remain unimplemented. T06/T08 stay In progress.

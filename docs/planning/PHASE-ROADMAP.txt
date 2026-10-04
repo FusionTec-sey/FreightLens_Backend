@@ -1,5 +1,5 @@
 FREIGHTLENS PHASE ROADMAP
-Revision 4.3 | 2026-10-04 | Design authority BD-20261004-03; navigation BD-20261004-06
+Revision 4.5 | 2026-10-04 | Cloud-first sequencing BD-20261004-10
 
 AUTHORITY
 TASK-QUEUE.txt is the only task-status and execution ledger. This document maps
@@ -11,9 +11,13 @@ statuses, branch names, test counts or permission to deploy.
 CURRENT CHECKPOINT
 T14B-D are partially implemented and tested, not complete: register/store filters,
 desktop detail/editor composition and tablet product/cart are present. Remaining
-search, visual fidelity and acceptance are in the canonical queue. T33A is locally
-integrated; do not rebuild it. T21 isolated packaging is the next collaborator
-assignment, with shared interface changes reserved to integration review.
+scoped register search is implemented; durable ordered projection repair remains
+T22. Remaining visual fidelity and acceptance are in the canonical queue. T33A is
+locally integrated; do not rebuild it. T21-T24 are owner-deferred. The next
+collaborator assignment is bounded T12A cloud payment/account configuration, with
+shared interface changes reserved to integration review.
+The owner-requested read-only InFlow comparison is mapped below as phase-specific
+UI scope. It changes no task status, dependency, financial capability or release gate.
 
 DELIVERY ORDER
 1. T14A: confirm the proposed register, desktop and tablet designs and map each
@@ -27,8 +31,9 @@ DELIVERY ORDER
    ready. Unavailable business actions show accurate blockers, not fake success.
 4. Connect physical collection, printing, returns and close through their owning
    tasks. Add later deposits/credit/orders/offers into the same workspace.
-5. Complete runtime/sync/offline/paper recovery, import rehearsals and reporting
-   dependencies; retain T34 as the final supervised readiness/pilot gate.
+5. Complete cloud import/restore rehearsals and reporting dependencies; retain T34
+   as the final supervised cloud readiness/pilot gate. T21-T24 offline/store-node
+   work resumes only after a later explicit owner decision.
 
 Phase numbers describe capabilities, not a waterfall requiring every earlier
 external acceptance gate to close before independent development can start.
@@ -47,7 +52,8 @@ Phase 3 | C30-C32 | T14A-D early screen delivery; T14 checkout; T15/T15A draft
 Phase 4 | C40-C42 | T18 returns/credit notes; T19 conditions/damage; T20 close
   and accounting export, consuming T12 customer-money foundations.
 Phase 4A | C45-C47 | T21 runtimes; T22 sync; T23 offline eligibility; T24 paper
-  recovery; T25 consent-aware digital delivery using approved sandbox adapters.
+  recovery are retained but deferred by BD-20261004-10. T25 cloud consent-aware
+  digital delivery uses the T13 outbox and approved sandbox adapters.
 Phase 5 | C50-C51 | T26 imports/restore rehearsals; T34 supervised readiness.
   T34 dependencies in the queue supersede the historical early-pilot sequence.
 Phase 6 | C60-C62 | T27 deposits/cheques; T28 contract credit; T29 orders,
@@ -55,6 +61,52 @@ Phase 6 | C60-C62 | T27 deposits/cheques; T28 contract credit; T29 orders,
 Phase 7 | C70-C71 | T30 offers and T31 promotion-aware returns.
 Phase 8 | C80-C81 | T32 reports; T33 labels/count reconciliation; collaborator
   T33A count planning/entry/review may proceed independently on existing contracts.
+
+INFLOW-TO-FREIGHTLENS UI BACKLOG BY PHASE — 2026-10-04
+P1-P5 below are UI backlog priorities, not roadmap Phase 1-5 identifiers.
+P1 | Phase 3 / T14B-T14D: complete current-contract presentation—denser scoped
+register/sidebar; exact UUID as secondary Draft reference; compact saved-customer,
+store, revision, save-time and audit-actor context; image/SKU/exact-unit/reservation rows;
+separate Demand/Reservation/Payment/Collection states; stronger split-pane hierarchy;
+persistent actions and save/recovery status. Keep Pricing pending / Not calculated
+without a currency until T11. Preserve search, pagination, barcode review, immutable
+history, source-owned reservations, compatible same-store multi-location allocation,
+explicit reviewed other-store requests and permission-aware routes.
+
+P2 | Phases 2-3 / T11-T13,T16: add authoritative price/tax/totals. If a
+customer-facing freight charge is approved, define versioned T11 calculation and
+T13 posting semantics distinct from T06 landed cost before exposing it. T12 owns
+method/account/liability configuration; T13 owns committed invoice/number/basic
+payment facts and history; T27 owns deposit/cheque/refund extensions and T28 owns
+contract terms/due dates/ageing. Follow with separate T16 line-level collection.
+Do not expose inline financial edits, Mark paid, Fulfill or a blended Order/Pick/
+Ship strip. Payment and collection retain independent commands and safe retries.
+
+P3 | Phase 6 / T29: this owner-approved plan addition explicitly expands T29
+acceptance to versioned salesperson/assignment, customer PO reference,
+confirmed/ordered date, requested ship-by or ETA, remarks and address snapshots;
+coordinate contact/address sources with T10. These fields are metadata, not an
+unowned last-mile delivery workflow. Reuse T13A identities and source links.
+Unconfirm/split actions stay unavailable until transition, permission, reservation,
+financial, handover/collection and audit effects are specified in the queue.
+
+P4 | Phases 3 and 4A / T15,T17,T25: safe copy mints a revalidated new draft and
+copies no effects; printing uses immutable artifacts, COPY reprints and visible
+queue outcomes; digital delivery is consent-aware and queued with uncertain-state
+reconciliation. Arbitrary sales attachments remain an ownership gap: assign a
+version-bound sales-document contract with UUID identity, scoped permission and
+retention before adding UI, and never reuse PO-only attachment routes. Cross-domain
+purchase/dropship conversion is unowned, not implied by T15. Price labels remain
+T33 after T11; shipping/logistics label ownership remains unassigned.
+
+P5 | Phase 4 / T18: returns start from an authoritative invoice and actual handover,
+count prior/pending claims and settle debt before surplus credit. No unrestricted
+Return products toggle; promotion-aware recalculation remains T31.
+
+Explicitly unsuitable parity: invented order/invoice numbers derived from UUIDs;
+one-location fulfilment assumptions; premature Mark paid/Fulfill shortcuts;
+unversioned client financial edits; generic custom fields replacing typed contracts;
+ordinary-sales access to protected cost detail; and unrestricted returns.
 
 SHARED UI CONTRACT, INCLUDING T33A
 Reuse FreightLens branding and shared layout primitives; no replacement catalogue,
@@ -83,7 +135,7 @@ Verification: tests/builds resumed under BD-20261004-04. Use affected tests and
 shared-boundary checks, then integration regression at the agreed checkpoint.
 Record current results separately from historical verification evidence.
 Browser acceptance requires its own approval and desktop/tablet evidence.
-Hardware, accounting, provider, offline and pilot gates are not replaced by UI
+Hardware, accounting, provider, cloud-availability and pilot gates are not replaced by UI
 approval or automated checks. No deployment, real posting or customer messaging
 is authorised. Publish this revision through the normal paired Git handoff;
 local documentation changes do not notify or update the collaborator automatically.
@@ -91,7 +143,7 @@ local documentation changes do not notify or update the collaborator automatical
 FULL ROADMAP REVIEW — 2026-10-04
 Read-only dependency audit: all 44 task IDs resolve; no dependency cycles found.
 This is a planning check, not an application test or verification of implemented code.
-All original capability groups remain mapped; no financial/offline scope is removed.
+All original capability groups remain mapped; offline scope is deferred, not deleted.
 
 Execution clarification:
 - T14A's action map is complete; continue remaining T14B/C/D. Do not ask for
@@ -103,9 +155,10 @@ Execution clarification:
 - T11/T12 may start against existing stable customer identity/settings contracts;
   customer-history delivery and search-repair gates do not prevent pure pricing
   calculations or synthetic bank-configuration development. No posting is enabled.
-- T21 environment packaging is ready for isolated implementation using T02/T03;
-  browser acceptance of settings does not block it. Preserve preview and use
-  separate services/ports/databases. T22-T24 remain genuine sync/recovery work.
+- T21-T24 remain genuine future sync/recovery work but are owner-deferred under
+  BD-20261004-10. Do not expand them in the current cloud-only delivery.
+- The collaborator instead owns bounded T12A configuration: versioned payment
+  methods, branch receiving-account mappings and fail-closed lookup only.
 - T15 safe-copy foundations and T29 quote-intent/read presentation may be built
   against existing drafts before full checkout/credit. Their final capabilities
   retain listed dependencies; do not confirm orders without deposit/credit rules.
@@ -113,7 +166,8 @@ Execution clarification:
   accounting/credit/order reports still wait for their authoritative source tasks.
 - T33A was selectively integrated and repaired; retain it, do not rebuild it.
   Populated read-only checks exist; submission/review E2E remains pending.
-  The next collaborator package is T21 isolated packaging (BD-20261004-07).
+  The next collaborator package is T12A cloud payment/account configuration
+  (BD-20261004-10); the former T21 package is historical until reactivated.
   Shared UI adaptation preserves blind counting.
 
 Persistent goal boundary: deliver all authorised local implementation plus explicit

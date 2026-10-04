@@ -1,0 +1,81 @@
+T11 PRICING, REVIEWED FLOOR AND IMMUTABLE INPUT EVIDENCE
+Date: 2026-10-04
+
+Scope
+-----
+- Persisted stable tax-rule, branch-product-selling-unit price, product-tax and
+  customer-branch-product-selling-unit agreement identities.
+- Every change appends a consecutive immutable revision. Exact retries use one
+  stable operation identity; changed intent and stale versions fail closed.
+- Added tenant-scoped paginated API routes. SALES + View_Product + View_Financials
+  are required for reads; Manage_Financials is required for writes. Customer
+  agreements additionally require customer and personal-data access.
+- Added an authoritative, read-only sales-draft preview. It resolves current
+  configuration and returns exact tax-inclusive SCR net/tax/gross values, selected
+  source and versions, and whether the customer-beneficial price is below floor.
+- Added Sales > Pricing & tax with separate Tax rules, Store prices, Product tax
+  and Customer prices registers, version-aware forms and paginated source pickers.
+- Added reusable manager cases for below-floor prices, bound to the exact draft
+  revision and canonical price/tax fingerprint. Requestors cannot self-review and
+  a changed draft or pricing configuration invalidates the decision path.
+- Added immutable prepared transaction-pricing inputs. The record retains exact
+  source/configuration versions, line values, tax treatments and invoice totals,
+  references the approved floor case when required, and is protected by stable
+  retry identity and tenant scope.
+- Added price-floor review and exact-pricing preparation to the sales frontend.
+  Review access is independent from customer-facing draft access where the backend
+  contract permits it; the draft screen clearly distinguishes preparation from sale.
+
+Business and safety boundaries
+------------------------------
+- Tax classification remains separate from every price list.
+- Selling unit is part of store-price and customer-agreement identity.
+- No VAT rate, tax classification, store price, customer agreement or real business
+  record is seeded. Configuration must be supplied through authorised workflows.
+- Preview does not create an invoice, reserve or move stock, collect money, approve
+  a floor exception or activate financial posting.
+- Floor review records a decision only. Pricing preparation references but does not
+  consume approval. T13 must consume the same exact case and snapshot atomically
+  with the eventual invoice, stock, money, numbering and outbox effects.
+- Product eligibility lookup avoids procurement/supplier cost relationships.
+
+Verification
+------------
+Backend isolated PostgreSQL database (combined current checkpoint):
+  tests/test_sales_transaction_pricing.py
+  tests/test_sales_price_floor_cases.py
+  tests/test_sales_pricing.py
+  tests/test_sales_pricing_configuration.py
+  tests/test_sales_pricing_preview_api.py
+  tests/test_sales_pricing_api.py
+  Result: 48 passed; 23 existing warnings.
+
+Backend protected configuration API checkpoint:
+  tests/test_sales_pricing_configuration.py
+  tests/test_sales_pricing_preview_api.py
+  tests/test_sales_pricing_api.py
+  Result: 26 passed; 23 existing warnings.
+
+Frontend affected checkpoint:
+  src/services/salesPricingApi.test.js
+  src/component/Pages/Sales/SalesPricingPage.test.js
+  src/component/MenuPanel/Menu.test.js
+  src/component/Pages/Sales/SalesDraftDetails.test.js
+  src/component/Pages/Sales/PriceFloorCases.test.js
+  src/component/Pages/Sales/SalesDraftsPage.test.js
+  Result: 43 passed.
+
+Frontend production build:
+  Result: succeeded. Repository-wide pre-existing lint warnings and the existing
+  bundle-size warning remain. The new pricing page has no reported build warning.
+  No warning is reported for the new price-floor or pricing-preparation files.
+
+Outstanding gates
+-----------------
+- Browser visual/tablet/dark-mode acceptance was not authorised in this slice.
+- Real tax/accounting configuration still requires owner/accounting validation;
+  no statutory rate or classification was seeded.
+- T13 atomic posting must explicitly select the immutable snapshot and consume the
+  matching approved floor case in the same transaction.
+- T11 is Implemented—verification pending. Financial posting remains disabled
+  because T12/T13 are separate unfinished tasks.
