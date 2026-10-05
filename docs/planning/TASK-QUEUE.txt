@@ -718,6 +718,9 @@ no real opening balances or inFlow data were loaded.
 
 T09 | Complete transfers and stock movements
 Status: In progress
+PARTIALLY UNMERGED: exact serial handover history exists at 715dcc5 on
+codex/t09-serial-handover, not merged here.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T08
 Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments with batch/serial history; destination available only after receipt.
 Accelerated pilot slice: internal reserved `HANDOVER` and central-pool `ISSUE` now
@@ -836,6 +839,10 @@ rendering consume it.
 
 T14 | Build tablet checkout
 Status: In progress
+PARTIALLY UNMERGED: posted invoice reference (970e7f2, codex/t14-direct-
+fulfilment-read), its record (1d5e828) and the frontend posted-sale actions
+(codex/t14-posted-sale-actions) are not merged here. Merge code and record together.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T13,T15A,T14D
 Acceptance / evidence: Customer/cart, scan/images/units/split payments/parked carts, distinct payment/fulfilment status.
 The existing draft detail now opens one integrated checkout panel rather than a
@@ -1014,6 +1021,10 @@ recovery acceptance; no historical money or fulfilment state is copied.
 
 T16 | Implement physical collection
 Status: In progress
+PARTIALLY UNMERGED: serial binding at collection exists at 7ae40e2 on
+codex/t16-serial-collection with its record at 9b687d4, and the serial selector UI
+on frontend codex/t16-serial-selector. None merged here.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T09,T13,T14
 Acceptance / evidence: Line locations/partial pickup/collector/serial assignment; payment eligibility and quantity/duplicate caps.
 The first safe backend slice persists immutable collection headers and allocations,
@@ -1088,6 +1099,9 @@ and frontend build CI passed. Evidence: planning/evidence/20261005-sales-returns
 
 T19 | Implement damaged/display workflows
 Status: In progress
+PARTIALLY UNMERGED: the merged T19A checkpoint record exists at a8780e3 on
+codex/t19-integration-record, not merged here.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T04,T09,T18
 Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.
 BD-20261005-03 starts T19A with one reviewed non-serial T18 return disposition:
