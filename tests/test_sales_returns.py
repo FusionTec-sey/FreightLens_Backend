@@ -179,6 +179,12 @@ def test_return_database_guards_bind_review_stock_value_and_credit():
     assert "NEW.invoice_key<>credit.invoice_key" in MONEY_CHILD_GUARD_FUNCTION
     assert "NEW.customer_key<>credit.customer_key" in MONEY_CHILD_GUARD_FUNCTION
     assert "credit.created_by<>NEW.created_by" in MONEY_CHILD_GUARD_FUNCTION
+    assert ("IF TG_TABLE_NAME='sales_invoice_debt_applications' THEN\n"
+            " IF NEW.invoice_key" in MONEY_CHILD_GUARD_FUNCTION)
+    assert ("ELSIF TG_TABLE_NAME='customer_credit_liability_entries' THEN\n"
+            " IF NEW.customer_key" in MONEY_CHILD_GUARD_FUNCTION)
+    assert ("TG_TABLE_NAME='sales_invoice_debt_applications'\n AND NEW.invoice_key"
+            not in MONEY_CHILD_GUARD_FUNCTION)
     assert "inventory.return.receive.v1" in RETURN_MOVEMENT_GUARD_FUNCTION
     assert "matches<>1" in RETURN_MOVEMENT_GUARD_FUNCTION
     assert "inventory_stock_balances" in RETURN_MOVEMENT_GUARD_FUNCTION

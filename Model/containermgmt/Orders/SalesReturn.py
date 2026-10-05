@@ -522,12 +522,15 @@ SELECT invoice_key, customer_key, gross_credit_scr, created_by INTO credit
  WHERE org_id=NEW.org_id AND credit_note_key=NEW.credit_note_key;
 IF credit IS NULL OR credit.created_by<>NEW.created_by THEN
  RAISE EXCEPTION 'Return money entry must share its exact credit-note actor'; END IF;
-IF TG_TABLE_NAME='sales_invoice_debt_applications'
- AND NEW.invoice_key<>credit.invoice_key THEN
- RAISE EXCEPTION 'Return debt application must target its credit-note invoice'; END IF;
-IF TG_TABLE_NAME='customer_credit_liability_entries'
- AND NEW.customer_key<>credit.customer_key THEN
- RAISE EXCEPTION 'Return liability must target its credit-note customer'; END IF;
+IF TG_TABLE_NAME='sales_invoice_debt_applications' THEN
+ IF NEW.invoice_key<>credit.invoice_key THEN
+  RAISE EXCEPTION 'Return debt application must target its credit-note invoice'; END IF;
+ELSIF TG_TABLE_NAME='customer_credit_liability_entries' THEN
+ IF NEW.customer_key<>credit.customer_key THEN
+  RAISE EXCEPTION 'Return liability must target its credit-note customer'; END IF;
+ELSE
+ RAISE EXCEPTION 'Unsupported return money child table %', TG_TABLE_NAME;
+END IF;
 SELECT gross_total_scr INTO invoice FROM containermgmt.sales_invoices
  WHERE org_id=NEW.org_id AND invoice_key=credit.invoice_key FOR UPDATE;
 SELECT COALESCE(SUM(amount_scr),0) INTO paid
