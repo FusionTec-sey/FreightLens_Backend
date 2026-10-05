@@ -1,6 +1,5 @@
+import math
 import logging
-from datetime import datetime
-from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -19,24 +18,34 @@ NotificationRouter = APIRouter(prefix="/notifications", tags=["Notifications"])
 @NotificationRouter.get("/")
 async def list_notifications(
     unread_only: bool = Query(False),
-    limit: int = Query(20),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Notification)
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
     query = apply_org_filter(query, Notification, org_context)
 
     if unread_only:
         query = query.filter(Notification.is_read == False)
 
-    notifs = query.order_by(desc(Notification.created_at)).limit(limit).all()
+    total = query.count()
+    notifs = query.order_by(desc(Notification.created_at), desc(Notification.id)).offset(
+        (page - 1) * limit).limit(limit).all()
     
-    unread_count = db.query(Notification).filter(Notification.is_read == False)
+    unread_count = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    )
     unread_count = apply_org_filter(unread_count, Notification, org_context).count()
 
     return {
         "unread_count": unread_count,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if total else 1,
         "notifications": [
             {
                 "id": n.id,
@@ -59,7 +68,10 @@ async def mark_read(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Notification).filter(Notification.id == notif_id)
+    query = db.query(Notification).filter(
+        Notification.id == notif_id,
+        Notification.user_id == current_user.id,
+    )
     n = apply_org_filter(query, Notification, org_context).first()
     if not n:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -73,7 +85,10 @@ async def mark_all_read(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Notification).filter(Notification.is_read == False)
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    )
     query = apply_org_filter(query, Notification, org_context)
     query.update({"is_read": True}, synchronize_session=False)
     db.commit()
