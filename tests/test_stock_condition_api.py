@@ -101,6 +101,13 @@ def test_source_options_are_private_named_paginated_and_permission_scoped(condit
     assert row["branch_name"] and row["location_name"]
     assert row["product_name"] and row["product_sku"]
     assert row["credit_note_key"] and row["return_key"] and row["invoice_key"]
+    filtered = f.condition_client.get(
+        f.condition_url + f"/sources?invoice_key={row['invoice_key']}&credit_note_key={row['credit_note_key']}")
+    assert filtered.status_code == 200 and filtered.json()["total"] == 1
+    assert filtered.json()["items"][0]["credit_note_line_id"] == f.api_line.id
+    missing = f.condition_client.get(
+        f.condition_url + f"/sources?invoice_key={uuid4()}")
+    assert missing.status_code == 200 and missing.json()["items"] == []
     policy = f.api_user.access_policy
     f.api_user.access_policy = replace(
         policy, permission_names=policy.permission_names - {"View_Product"})
