@@ -1,5 +1,24 @@
 # Owner verification plan
 
+**SUPERSEDED AS A REQUIREMENT by BD-20261005-09 (2026-10-05).** The owner has
+waived manual acceptance and directed that time to development. Tasks now reach
+Verified on automated evidence alone.
+
+This plan is **retained, not cancelled**. It remains the script to run if a pass is
+ever wanted, and it SHOULD be run before the supervised pilot. The sessions below
+also mark what is now knowingly untested.
+
+**Still genuinely untested, because only a browser can show it:**
+
+- Navigation, reload and multi-tab draft recovery (Session 5, rows 5.3 and 5.6)
+- Visual layout, dark mode, narrow viewport (Session 12)
+- Print output as the browser renders it (Session 7, rows 7.2 and 7.3)
+- Tablet ergonomics for checkout and the blind count sheet (Sessions 7 and 11)
+
+Everything else in this plan has equivalent assertions in the automated suites.
+
+---
+
 Everything waiting on the owner to verify, in one place. **16 tasks** currently
 converge here, and acceptance is the project's throughput bottleneck — not
 development.

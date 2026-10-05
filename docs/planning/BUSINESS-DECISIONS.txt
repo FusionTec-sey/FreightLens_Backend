@@ -243,6 +243,34 @@ discountable. It does not create display stock, customer disclosure, supplier cl
 write-off, loss expense or accounting behavior. Those remain separate policy and
 acceptance gates. General stock adjustment is not a substitute for this disposition.
 
+BD-20261005-09 | Owner waives manual acceptance; automated evidence is the standard | ALL
+Owner decided on 2026-10-05 not to spend time on manual verification and to direct
+that time to development instead. Work that would otherwise wait on an owner click
+is to be treated as working.
+
+NEW ACCEPTANCE STANDARD: a task may move to Verified on AUTOMATED evidence alone -
+focused backend checks, isolated-database lifecycle checks and frontend suites -
+without an owner browser pass. Status is recorded as "Verified (automated evidence;
+owner-waived browser acceptance)" so it is never mistaken for a visual sign-off.
+
+This is a deliberate risk transfer, recorded honestly rather than hidden:
+- Automated coverage across these tasks is substantial. The criteria that matter
+  most are already asserted in code: approval reuse after a source change, self
+  review, copy provenance carrying no money/reservations/approvals/collection,
+  stock unavailable in transit, collection quantity and duplicate caps, debt
+  settled before surplus credit, price floors, and the blind count projection.
+- What a browser pass would have added, and which therefore remains UNTESTED:
+  (a) navigation, reload and multi-tab draft recovery behaviour in a real browser;
+  (b) visual layout, dark mode and narrow-viewport behaviour;
+  (c) print output as rendered by a browser, distinct from the Epson hardware gate;
+  (d) tablet ergonomics for the checkout and blind-count screens.
+- These are recorded as waived, NOT as passed. A later defect in them is an
+  accepted consequence of this decision, not a process failure.
+
+Hardware, provider, accounting, real-data import and supervised pilot gates are
+unaffected and remain separate. OWNER-VERIFICATION-PLAN.md is retained as the
+script to run if a pass is ever wanted, and should be used before the pilot.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration

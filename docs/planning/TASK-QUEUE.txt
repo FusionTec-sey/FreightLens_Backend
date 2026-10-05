@@ -211,7 +211,7 @@ Next action: retain these foundations in T03 onward. Runtime enrollment, reviewe
 transitions and disconnected failover are later gates, not claimed complete here.
 
 T03 | Establish branch settings and permissions
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T02
 Acceptance / evidence: Configurable branch/counter calendars, business dates and action permissions; absent mandatory settings block actions.
 Verified slice: pure configurable business-date calculation with timezone, weekday/
@@ -242,7 +242,7 @@ Durable recipient/unread notification delivery remains outstanding. No task sign
 Verified request/review/consume contracts permit dependent T05 work.
 
 T05 | Activate reviewed inventory policies
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T04
 Acceptance / evidence: Reviewed activation/transitions and unit barcodes; immutable snapshots; ambiguous transitions blocked.
 Implementation complete for owner-restored scope (2026-10-03). New proposal-screen
@@ -488,7 +488,7 @@ Preserve source/permission guards and atomic own-operation retries. Do not expos
 fingerprints in generic financial-only case reads. Browser acceptance pending.
 
 T07 | Complete reservation lifecycle
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T04,T05,T13A
 Acceptance / evidence: Authoritative source links, approved release/reallocation/deadline review; protected paid holds and explicit multi-location approval.
 Saved-document/line/version links, exact caps and draft-edit protection now extend
@@ -741,7 +741,7 @@ Preserve original sales references and never merge balances automatically.
 Integrator owns T10; collaborator retains T33A. No runtime/financial activation.
 
 T11 | Implement pricing and tax
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T05,T10
 Acceptance / evidence: Independent store prices, agreed customer prices, tax-inclusive SCR/exemptions/floors; immutable original rules.
 If customer-facing freight is introduced, model it as versioned selling-price
@@ -976,7 +976,7 @@ accounting/offline/pilot gates remain separate. No real transactions for accepta
 Next action: Record deferred checks now; run only after the applicable approval.
 
 T15 | Protect and reuse drafts
-Status: Implemented - verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T14,T15A
 Acceptance / evidence: Navigation/failed-save recovery; copy intent/source only, revalidate; no copied money/reservations/approvals/collection.
 The backend initial-save contract accepts one optional exact source draft revision
@@ -1031,7 +1031,7 @@ Next action: complete browser/tablet acceptance and the separately reviewed
 other-store exception without weakening same-store or exact-identity checks.
 
 T17 | Implement invoices and print queues
-Status: Implemented - verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T13
 Acceptance / evidence: Immutable invoice rendering, COPY reprints, failed/uncertain queue; automated checks distinct from Epson hardware gate.
 Generated invoice artifacts belong here. Generic sales attachments, price labels
@@ -1055,7 +1055,7 @@ after fresh-install, full backend, frontend and build CI passed. Actual browser/
 Epson validation remains pending and is not replaced by automated checks.
 
 T18 | Implement returns and credit notes
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T12,T16
 Acceptance / evidence: Original invoice/actual handover links; previous/pending claims counted; debt settled before surplus credit.
 The pilot contract reuses T13 invoices, exact T16 handovers and the shared manager-
@@ -1278,7 +1278,7 @@ Next action: Reuse these shared contracts in remaining dependency-ready tasks.
 T05 agreed implementation scope is complete; its acceptance gates remain pending.
 
 T10A | Minimal customer identity foundation
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T03,T04
 Acceptance / evidence: One tenant-owned customer identity with name/contact data,
 backend permissions, stable keys, expected versions and usable basic create/select
@@ -1308,7 +1308,7 @@ Browser/live-provider acceptance remains pending; durable projection repair belo
 to later synchronization work, not a prerequisite for isolated draft development.
 
 T13A | Authoritative sales-intent document and line foundation
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T05,T10A
 Acceptance / evidence: Durable scoped intent header/lines with stable UUIDs, owning
 customer/branch/product references, exact requested units/quantities and versions.
@@ -1333,7 +1333,7 @@ Next action: Obtain scoped visual/provider acceptance when approved; do not add
 payment, checkout or durable offline recovery to this minimal foundation's scope.
 
 T15A | Durable draft and retry recovery foundation
-Status: Implemented—verification pending
+Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
 Dependencies: T13A
 Acceptance / evidence: Reuse T13A server drafts plus tenant/user/branch-scoped local
 recovery for edits and uncertain operation IDs. Navigation/reload/failed-save
