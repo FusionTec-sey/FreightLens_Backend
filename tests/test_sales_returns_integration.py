@@ -45,6 +45,7 @@ from Services.sales_return_service import (
     review_return_claim,
 )
 from Utils.org_filter import OrgContext
+from auth.policy import AccessPolicy, get_request_policy
 from tests.test_sales_collection import collectible  # noqa: F401
 from tests.test_sales_posting import NOW, _create, _finalize, posting  # noqa: F401
 from tests.test_sales_transaction_pricing import floor_api  # noqa: F401
@@ -166,6 +167,36 @@ def returnable_sale(t18_schema, collectible):
     f.request_return = request
     f.review_return = review
     f.process_return = process
+    return f
+
+
+@pytest.fixture
+def return_api(returnable_sale):
+    """Expose T18 through the same ordinary-user overrides as the sales API."""
+    from Routes.Orders.SalesReturnRouter import SalesReturnRouter
+
+    f = returnable_sale
+    if not any(route.path == "/sales/invoices/{invoice_key}/return-options"
+               for route in f.app.routes):
+        f.app.include_router(SalesReturnRouter)
+    f.return_read_permissions = frozenset({
+        "View_Sale",
+        "View_Product",
+        "View_Customer",
+        "View_Personal_Data",
+        "View_Financials",
+    })
+    f.user.access_policy = AccessPolicy(
+        user=f.user,
+        org_ids=(f.org_a,),
+        permission_names=f.return_read_permissions,
+        module_names=frozenset({"SALES"}),
+        field_permissions={
+            "PERSONAL": "View_Personal_Data",
+            "FINANCIAL": "View_Financials",
+        },
+        is_platform_admin=False,
+    )
     return f
 
 
@@ -368,3 +399,52 @@ def test_sales_return_migration_replays_and_keeps_database_guards(
         "return_stock_movement_guard",
         "return_valuation_guard",
     }.issubset(set(triggers))
+
+
+def test_ordinary_sales_user_with_exact_field_mappings_can_read_return_options(
+        return_api):
+    f = return_api
+    response = f.client.get(
+        f"/sales/invoices/{f.posting_invoice_key}/return-options")
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.json()["invoice_key"] == str(f.posting_invoice_key)
+    assert response.json()["handovers"][0]["returnable"] == "10.000000"
+    assert not f.user.access_policy.is_platform_admin
+    assert f.user.access_policy.field_permissions == {
+        "PERSONAL": "View_Personal_Data",
+        "FINANCIAL": "View_Financials",
+    }
+
+
+def test_return_mutation_requires_explicit_action_permission(return_api):
+    f = return_api
+    payload = f.return_claim_payload().model_dump(mode="json")
+    response = f.client.put(
+        f"/sales/returns/{payload['return_key']}", json=payload)
+    assert response.status_code == 403
+    assert "Request_SaleReturn" in response.text
+    assert f.db.query(SalesReturnClaim).filter_by(org_id=f.org_a).count() == 0
+
+
+def test_return_http_endpoint_denies_unauthenticated_request(return_api):
+    f = return_api
+    for dependency in f.user_dependencies:
+        f.app.dependency_overrides.pop(dependency, None)
+    f.app.dependency_overrides.pop(get_request_policy, None)
+    response = f.client.get(
+        f"/sales/invoices/{f.posting_invoice_key}/return-options")
+    assert response.status_code == 401
+    assert str(f.posting_invoice_key) not in response.text
+
+
+def test_return_http_endpoint_does_not_disclose_foreign_organisation(return_api):
+    f = return_api
+    f.context.current_org_id = f.org_b
+    f.context.allowed_org_ids = [f.org_a, f.org_b]
+    f.context.is_root = True
+    response = f.client.get(
+        f"/sales/invoices/{f.posting_invoice_key}/return-options")
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "RETURN_NOT_FOUND"
+    assert "returnable" not in response.text
