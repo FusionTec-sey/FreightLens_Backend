@@ -4,7 +4,8 @@ Each collection records one stable business operation at one fulfilment branch.
 Allocations bind invoice reservations to the unique T09 ``HANDOVER`` movement
 identified by company, balance and handover operation.  The database validates
 that linkage at transaction end because movement and collection history are
-created atomically.  Serial-tracked collection is excluded from this first slice.
+created atomically. Serial allocations also reconcile one exact immutable
+identity movement to every collected base unit.
 """
 from sqlalchemy import (
     CheckConstraint,
@@ -264,7 +265,7 @@ ALLOCATION_GUARD_FUNCTION = """CREATE OR REPLACE FUNCTION containermgmt.check_sa
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE header record; invoice record; line record; binding record; hold record;
 balance record; movement record; handover_operation record;
-line_collected numeric; reservation_collected numeric;
+line_collected numeric; reservation_collected numeric; serial_count integer;
 BEGIN
 -- Lock invoice line then reservation consistently to serialize cumulative caps.
 PERFORM 1 FROM containermgmt.sales_invoice_lines
@@ -291,7 +292,7 @@ WHERE reservation.org_id=NEW.org_id AND reservation.reservation_key=NEW.reservat
 SELECT branch_id, location_id, product_id, base_unit, tracking_policy, batch_key INTO balance
 FROM containermgmt.inventory_stock_balances
 WHERE org_id=NEW.org_id AND id=NEW.balance_id;
-SELECT balance_id, reservation_id, operation_key, kind, on_hand_delta,
+SELECT id, balance_id, reservation_id, operation_key, kind, on_hand_delta,
  reserved_delta, created_by INTO movement
 FROM containermgmt.inventory_stock_movements
 WHERE org_id=NEW.org_id AND balance_id=NEW.balance_id
@@ -306,9 +307,8 @@ IF header IS NULL OR header.invoice_key<>NEW.invoice_key
  RAISE EXCEPTION 'Collection allocation scope is unavailable'; END IF;
 IF balance.branch_id<>header.branch_id OR balance.location_id<>NEW.location_id
  OR balance.product_id<>line.product_id OR balance.base_unit<>NEW.base_unit
- OR line.base_unit<>NEW.base_unit OR balance.batch_key IS DISTINCT FROM NEW.batch_key
- OR balance.tracking_policy='SERIAL' THEN
- RAISE EXCEPTION 'Collection allocation must use compatible non-serial branch stock'; END IF;
+ OR line.base_unit<>NEW.base_unit OR balance.batch_key IS DISTINCT FROM NEW.batch_key THEN
+ RAISE EXCEPTION 'Collection allocation must use compatible branch stock'; END IF;
 IF hold.balance_id<>NEW.balance_id OR movement.reservation_id<>hold.id
  OR movement.kind<>'HANDOVER' OR movement.on_hand_delta<>-NEW.quantity
  OR movement.reserved_delta<>-NEW.quantity
@@ -316,6 +316,21 @@ IF hold.balance_id<>NEW.balance_id OR movement.reservation_id<>hold.id
  OR handover_operation.kind<>'inventory.handover.issue.v1'
  OR handover_operation.created_by<>header.created_by THEN
  RAISE EXCEPTION 'Collection allocation requires its exact HANDOVER movement'; END IF;
+
+SELECT COUNT(*) INTO serial_count
+FROM containermgmt.inventory_stock_serial_movements serial_movement
+WHERE serial_movement.org_id=NEW.org_id
+ AND serial_movement.operation_key=NEW.handover_operation_key
+ AND serial_movement.stock_movement_id=movement.id
+ AND serial_movement.from_balance_id=NEW.balance_id
+ AND serial_movement.product_id=balance.product_id
+ AND serial_movement.kind='HANDOVER';
+IF balance.tracking_policy='SERIAL' THEN
+ IF NEW.quantity<>trunc(NEW.quantity) OR serial_count<>NEW.quantity THEN
+  RAISE EXCEPTION 'Serial collection requires one exact serial identity per base unit'; END IF;
+ELSIF serial_count<>0 THEN
+ RAISE EXCEPTION 'Non-serial collection cannot contain serial movements';
+END IF;
 
 SELECT COALESCE(SUM(quantity),0) INTO line_collected
 FROM containermgmt.sales_collection_allocations

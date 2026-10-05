@@ -16,6 +16,7 @@ from Model.containermgmt.Inventory.BranchSettings import BranchSettingsRevision
 from Model.containermgmt.Inventory.CostPool import BranchCostPool
 from Model.containermgmt.Inventory.Location import StockLocation
 from Model.containermgmt.Inventory.StockLedger import StockBalance, StockBatch, StockMovement, StockReservation
+from Model.containermgmt.Inventory.StockSerial import StockSerialIdentity, StockSerialMovement, StockSerialPosition
 from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from Model.containermgmt.Orders.SalesCollection import SalesCollection, SalesCollectionAllocation
 from Model.containermgmt.Orders.SalesPosting import SalesInvoice, SalesInvoiceLine, SalesInvoiceReservation
@@ -87,6 +88,29 @@ def _collection_read(db, context, row):
         collection_key=row.collection_key).order_by(
         SalesCollectionAllocation.line_key,
         SalesCollectionAllocation.reservation_key).all()
+    serials_by_operation = defaultdict(list)
+    operation_keys = [item.handover_operation_key for item in allocations]
+    if operation_keys:
+        serial_rows = _owned(db, StockSerialMovement, context).join(
+            StockSerialIdentity,
+            (StockSerialIdentity.id == StockSerialMovement.serial_id)
+            & (StockSerialIdentity.org_id == StockSerialMovement.org_id)
+            & (StockSerialIdentity.product_id == StockSerialMovement.product_id),
+        ).filter(
+            StockSerialMovement.operation_key.in_(operation_keys),
+            StockSerialIdentity.is_deleted.is_(False),
+        ).with_entities(
+            StockSerialMovement.operation_key,
+            StockSerialIdentity.serial_key,
+            StockSerialIdentity.serial_number,
+        ).order_by(
+            StockSerialMovement.operation_key,
+            StockSerialIdentity.serial_number,
+            StockSerialIdentity.serial_key,
+        ).all()
+        for operation_key, serial_key, serial_number in serial_rows:
+            serials_by_operation[operation_key].append(dict(
+                serial_key=serial_key, serial_number=serial_number))
     return dict(
         collection_key=row.collection_key,
         operation_key=row.operation_key,
@@ -113,6 +137,7 @@ def _collection_read(db, context, row):
             handover_operation_key=item.handover_operation_key,
             quantity=_quantity(item.quantity),
             base_unit=item.base_unit,
+            serials=serials_by_operation[item.handover_operation_key],
         ) for item in allocations],
     )
 
@@ -207,10 +232,6 @@ def read_collection_options(db, context, actor_id, invoice_key, *, authorize):
             raise PostingConflict("Committed reservation stock is unavailable")
         if balance.branch_id != assignment.branch_id:
             continue
-        if balance.tracking_policy == "SERIAL":
-            # The invoice remains visible, but no unsafe collection action is
-            # offered until exact serial movement history exists.
-            continue
         remaining = Decimal(binding.quantity) - collected_by_reservation[
             binding.reservation_key]
         if remaining <= ZERO:
@@ -220,6 +241,28 @@ def read_collection_options(db, context, actor_id, invoice_key, *, authorize):
         batch = (_owned(db, StockBatch, context).filter_by(
             batch_key=balance.batch_key).one_or_none()
             if balance.batch_key else None)
+        serials = []
+        if balance.tracking_policy == "SERIAL":
+            serials = _owned(db, StockSerialIdentity, context).join(
+                StockSerialPosition,
+                (StockSerialPosition.serial_id == StockSerialIdentity.id)
+                & (StockSerialPosition.org_id == StockSerialIdentity.org_id)
+                & (StockSerialPosition.product_id == StockSerialIdentity.product_id),
+            ).filter(
+                StockSerialIdentity.product_id == balance.product_id,
+                StockSerialPosition.balance_id == balance.id,
+                StockSerialPosition.condition == "AVAILABLE",
+                StockSerialPosition.is_deleted.is_(False),
+                ~_owned(db, StockSerialMovement, context).filter(
+                    StockSerialMovement.serial_id == StockSerialIdentity.id,
+                ).exists(),
+            ).with_entities(
+                StockSerialIdentity.serial_key,
+                StockSerialIdentity.serial_number,
+            ).order_by(
+                StockSerialIdentity.serial_number,
+                StockSerialIdentity.serial_key,
+            ).all()
         reservations.append(dict(
             line_key=binding.line_key,
             reservation_key=binding.reservation_key,
@@ -238,6 +281,8 @@ def read_collection_options(db, context, actor_id, invoice_key, *, authorize):
             collected=_quantity(collected_by_reservation[binding.reservation_key]),
             remaining=_quantity(remaining),
             stock_version=balance.version,
+            serials=[dict(serial_key=serial_key, serial_number=serial_number)
+                for serial_key, serial_number in serials],
         ))
     return dict(
         invoice_key=invoice_key,
@@ -339,9 +384,6 @@ def post_collection(factory, context, actor_id, payload: SalesCollectionCreate, 
                 raise PostingConflict("Stock version changed; refresh collection options")
             if balance.base_unit != line.base_unit:
                 raise PostingConflict("Collection stock unit differs from the invoice")
-            if balance.tracking_policy == "SERIAL":
-                raise PostingConflict(
-                    "Serial collection requires exact serial assignment history")
             already = _owned(db, SalesCollectionAllocation, context).filter_by(
                 invoice_key=invoice.invoice_key,
                 reservation_key=item.reservation_key).with_entities(
@@ -368,7 +410,8 @@ def post_collection(factory, context, actor_id, payload: SalesCollectionCreate, 
                 stock_authority=stock_authority,
                 cost_authority=cost_authority,
                 authorize_stock=authorize,
-                authorize_financial=authorize)
+                authorize_financial=authorize,
+                serial_keys=item.serial_keys)
             movement = _owned(db, StockMovement, context).filter_by(
                 balance_id=balance.id, operation_key=handover_key,
                 kind="HANDOVER").one()

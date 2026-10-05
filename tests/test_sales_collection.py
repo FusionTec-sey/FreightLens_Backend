@@ -13,11 +13,16 @@ from Model.containermgmt.Inventory.PostingAuthority import (
     BranchAuthorityEpoch, CostPoolAuthorityEpoch, StoreNode,
 )
 from Model.containermgmt.Inventory.PostingOperation import PostingOperation
+from Model.containermgmt.Inventory.SalesReservationSource import SalesReservationSource
 from Model.containermgmt.Inventory.StockLedger import StockBalance, StockMovement, StockReservation
+from Model.containermgmt.Inventory.StockSerial import (
+    StockSerialIdentity, StockSerialMovement, StockSerialPosition,
+)
 from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from Model.containermgmt.Orders.SalesCollection import SalesCollection, SalesCollectionAllocation
 from Model.containermgmt.Orders.SalesPosting import SalesInvoiceReservation
 from Schema.BranchCounterSchema import CounterSave
+from Schema.InventoryPolicySchema import InventoryPolicyConfig
 from Schema.SalesCollectionSchema import SalesCollectionAllocationInput, SalesCollectionCreate
 from Services.inventory_costing_service import COSTING_POLICY_VERSION
 from Services.inventory_handover_movement_service import handover_reserved_stock
@@ -41,10 +46,7 @@ from tests.test_inventory_locations import locations  # noqa: F401
 COLLECTION_TIME = datetime(2026, 10, 5, 11, 0, tzinfo=timezone.utc)
 
 
-@pytest.fixture
-def collectible(posting):
-    f = posting
-    _create(f); _finalize(f)
+def _prepare_collectible(f):
     counter_key = uuid4()
     counter = save_counter(f.own, counter_key, CounterSave.model_validate({
         "operation_key": str(uuid4()), "expected_version": 0, "code": "T16",
@@ -114,7 +116,7 @@ def collectible(posting):
     f.collection_key = uuid4()
     f.collection_operation_key = uuid4()
 
-    def payload(quantity="10", stock_version=2, **changes):
+    def payload(quantity="10", stock_version=2, serial_keys=None, **changes):
         values = dict(collection_key=f.collection_key,
             operation_key=f.collection_operation_key,
             invoice_key=f.posting_invoice_key, branch_id=f.own,
@@ -127,7 +129,8 @@ def collectible(posting):
             allocations=[SalesCollectionAllocationInput(
                 line_key=f.collection_line_key,
                 reservation_key=f.posting_reservation_key,
-                quantity=quantity, expected_stock_version=stock_version)])
+                quantity=quantity, expected_stock_version=stock_version,
+                serial_keys=serial_keys or [])])
         values.update(changes)
         return SalesCollectionCreate(**values)
     f.collection_payload = payload
@@ -142,6 +145,85 @@ def collectible(posting):
         f.db.commit()
         return result
     f.collect = collect
+    return f
+
+
+@pytest.fixture
+def collectible(posting):
+    _create(posting); _finalize(posting)
+    return _prepare_collectible(posting)
+
+
+@pytest.fixture
+def serial_collectible(posting, monkeypatch):
+    f = posting
+    old_hold = f.db.query(StockReservation).filter_by(
+        org_id=f.org_a, reservation_key=f.posting_reservation_key).one()
+    old_balance = f.db.get(StockBalance, old_hold.balance_id)
+    quantity = Decimal(old_balance.on_hand)
+    old_balance.on_hand = Decimal("0")
+    old_balance.reserved = Decimal("0")
+    serial_policy = dict(old_balance.policy_config)
+    serial_policy["tracking"] = "SERIAL"
+    serial_policy["quantity_step"] = "1"
+    serial_policy["require_expiry"] = False
+    serial_policy["require_shade"] = False
+    serial_policy["require_calibre"] = False
+    import Services.inventory_handover_movement_service as handover_service
+    monkeypatch.setattr(handover_service, "_effective_policy",
+        lambda db, context, stock: InventoryPolicyConfig.model_validate(
+            stock.policy_config))
+    balance = StockBalance(
+        org_id=f.org_a, branch_id=old_balance.branch_id,
+        location_id=old_balance.location_id, product_id=old_balance.product_id,
+        base_unit=old_balance.base_unit, tracking_policy="SERIAL",
+        batch_key=None, policy_config=serial_policy, quantity_step=Decimal("1"),
+        on_hand=quantity, reserved=quantity, damaged=0, quarantined=0,
+        version=2, created_by=f.user.id,
+    )
+    f.db.add(balance); f.db.flush()
+    reservation_key = uuid4()
+    hold = StockReservation(
+        org_id=f.org_a, reservation_key=reservation_key,
+        balance_id=balance.id, source_line_key=old_hold.source_line_key,
+        quantity=quantity, released=0,
+        review_at=datetime(2026, 10, 20, tzinfo=timezone.utc),
+        created_by=f.user.id,
+    )
+    f.db.add(hold); f.db.flush()
+    f.db.add(SalesReservationSource(
+        org_id=f.org_a, reservation_key=reservation_key,
+        document_key=f.attempt.document_key, version=1,
+        line_key=f.posting_line_key, created_by=f.user.id,
+    ))
+    serials = []
+    for index in range(int(quantity)):
+        identity = StockSerialIdentity(
+            org_id=f.org_a,
+            serial_key=uuid4(),
+            product_id=balance.product_id,
+            serial_number=f"T16-SERIAL-{index + 1:03d}",
+            created_by=f.user.id,
+        )
+        f.db.add(identity)
+        f.db.flush()
+        f.db.add(StockSerialPosition(
+            org_id=f.org_a,
+            serial_id=identity.id,
+            product_id=balance.product_id,
+            balance_id=balance.id,
+            condition="AVAILABLE",
+            created_by=f.user.id,
+        ))
+        serials.append(identity)
+    f.db.commit()
+    binding = f.finalize.reservations[0].model_copy(
+        update={"reservation_key": reservation_key})
+    f.finalize = f.finalize.model_copy(update={"reservations": [binding]})
+    f.posting_reservation_key = reservation_key
+    _create(f); _finalize(f)
+    _prepare_collectible(f)
+    f.collection_serials = serials
     return f
 
 
@@ -190,6 +272,39 @@ def test_collection_rejects_excess_and_stale_stock(collectible):
         f.collect(quantity="25")
     with pytest.raises(PostingConflict, match="Stock version"):
         f.collect(request=f.collection_payload(quantity="1", stock_version=3))
+
+
+def test_serial_collection_requires_and_records_exact_available_identities(
+        serial_collectible):
+    f = serial_collectible
+    options = read_collection_options(f.db, f.context, f.user.id,
+        f.posting_invoice_key, authorize=lambda db: None)
+    reservation = options["reservations"][0]
+    assert reservation["tracking_policy"] == "SERIAL"
+    assert len(reservation["serials"]) == 24
+    selected = [row.serial_key for row in f.collection_serials[:2]]
+
+    with pytest.raises(PostingConflict, match="one exact identity"):
+        f.collect(request=f.collection_payload(quantity="2", serial_keys=[]))
+    f.db.rollback()
+
+    result = f.collect(request=f.collection_payload(
+        quantity="2", serial_keys=selected))
+    allocation = result.result["allocations"][0]
+    assert {row["serial_key"] for row in allocation["serials"]} == {
+        str(key) for key in selected}
+    assert f.db.query(StockSerialMovement).filter_by(
+        org_id=f.org_a,
+        operation_key=allocation["handover_operation_key"],
+    ).count() == 2
+
+
+def test_serial_collection_rejects_duplicate_identity_input():
+    key = uuid4()
+    with pytest.raises(ValueError, match="only once"):
+        SalesCollectionAllocationInput(
+            line_key=uuid4(), reservation_key=uuid4(), quantity="2",
+            expected_stock_version=1, serial_keys=[key, key])
 
 
 def test_direct_handover_of_posted_hold_requires_collection_history(collectible):

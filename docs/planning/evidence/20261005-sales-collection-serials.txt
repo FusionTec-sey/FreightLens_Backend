@@ -1,0 +1,27 @@
+T16 EXACT SERIAL COLLECTION BACKEND CHECKPOINT
+Date: 2026-10-05
+
+Scope
+- Collection options include currently available exact serial identities only for
+  the invoice reservation's own balance and working store.
+- Each serial-tracked allocation requires one unique serial key per collected base
+  unit and passes those keys into the existing atomic T09 handover operation.
+- Collection history projects the immutable serial numbers and keys recorded by the
+  handover operation; it does not copy a mutable serial snapshot.
+- The deferred collection allocation guard requires the serial movement count,
+  stock movement, product, balance and operation to match the exact allocation.
+- Other-store collection remains denied and the frontend selector remains pending.
+
+Verification
+- Python compilation: passed for changed schema, model, service and test modules.
+- Focused backend: 21 passed in tests/test_sales_collection.py and
+  tests/test_inventory_handover_movement.py.
+- Existing-database verification replayed
+  Utils.migrate_20261005_sales_collection.ensure_sales_collection_schema before
+  the focused run so the CREATE OR REPLACE guard matched current code.
+- git diff --check: passed (line-ending notices only).
+- Full GitHub CI and fresh-install: pending PR.
+
+Synthetic-data boundary
+- Tests use generated companies, products, reservations and serial numbers only.
+- No real stock identity, customer, account or financial data was created.

@@ -714,11 +714,11 @@ serial gateway now binds one exact available identity per base unit to the same
 HANDOVER operation, appends immutable per-identity history, hides handed-over
 identities from current stock and enforces the identity/quantity total with deferred
 database guards on both sides. Same-key reordered identities replay once; competing
-operations cannot reuse a stock version or identity. No public serial collection
-endpoint exists.
+operations cannot reuse a stock version or identity. T16 now supplies the public
+invoice-bound binding; the remaining work is its frontend selection control.
 Evidence: evidence/t09-pilot-handover-movement.txt.
-Next action: let T16 bind exact serial keys to authoritative invoice-line/payment
-eligibility, immutable allocation and collector history before exposing serial sales.
+Next action: retain the exact serial gateway while the T16 frontend exposes explicit
+selection and confirms the immutable collector history returned by the API.
 After the pilot slice, complete dispatch/transit/receipt/write-off. Integrate retained reclassification
 proposals only with product-wide compatibility, global identity checks, node fencing,
 exact physical/condition/value conservation and immutable atomic movement lineage.
@@ -1013,8 +1013,17 @@ Backend PR #13 and frontend PR #11 are merged at ea1a890 and 5e8c3dc. The existi
 sale-detail screen now connects to collection options/history with exact retry
 recovery. Frontend PR #16 adds direct post-sale entry from Sales details using the
 minimal reference from backend PR #21; the collection panel still owns all action
-eligibility. Exact serial assignment and reviewed other-store
-collection remain fail-closed follow-ups; browser/hardware acceptance stays open.
+eligibility. Frontend exact-serial selection and reviewed other-store collection
+remain fail-closed follow-ups; browser/hardware acceptance stays open.
+The backend serial slice now exposes only currently available identities for the
+exact invoice reservation balance, requires one unique identity per collected base
+unit, passes those identities through T09 atomically, returns the immutable serial
+history on the collection allocation and checks the allocation/movement total again
+in a deferred database guard. Duplicate, unavailable and mismatched identities fail
+closed. Twenty-one focused T09/T16 tests pass after replaying the collection trigger
+migration. Evidence: evidence/20261005-sales-collection-serials.txt. Next action:
+add the bounded frontend selector and keep serial collection unavailable in the UI
+until that selector passes its focused tests.
 
 T17 | Implement invoices and print queues
 Status: Implemented - verification pending
