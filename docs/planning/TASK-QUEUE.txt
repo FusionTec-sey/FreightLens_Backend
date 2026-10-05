@@ -966,12 +966,22 @@ accounting/offline/pilot gates remain separate. No real transactions for accepta
 Next action: Record deferred checks now; run only after the applicable approval.
 
 T15 | Protect and reuse drafts
-Status: Blocked
+Status: In progress
 Dependencies: T14,T15A
 Acceptance / evidence: Navigation/failed-save recovery; copy intent/source only, revalidate; no copied money/reservations/approvals/collection.
-Next action: Extend T15A recovery in the real checkout and implement safe document
-copy with new document/line identities and retained source reference; do not replace
-its draft store, copy invoice numbering or introduce another identity model.
+The backend initial-save contract accepts one optional exact source draft revision
+and persists it in immutable same-company provenance. Destination document and line
+identities must be new. Current customer/product/policy/store sources are still
+revalidated through the existing save service; no price, payment, reservation,
+approval, invoice, posting or collection record is cloned. The source is returned
+on current and historical detail reads. Stable retries bind the exact reference,
+rerun permissions and have one effect; foreign/missing sources fail closed. A
+deferred database guard independently binds provenance to the destination's first
+save operation and rejects reused source line identities. Seven focused T15 tests and
+34 affected draft/API/concurrency tests pass. Evidence:
+evidence/20261005-safe-draft-copy-backend.txt.
+Next action: Connect the existing frontend copy helper to this backend field, keep
+new document/line identities and finish applicable recovery/browser acceptance.
 
 T16 | Implement physical collection
 Status: In progress

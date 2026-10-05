@@ -196,6 +196,8 @@ async def startup_event():
     ensure_policy_activation_schema()
     from Utils.migrate_20261003_sales_intents import ensure_sales_intents_schema
     ensure_sales_intents_schema()
+    from Utils.migrate_20261005_sales_intent_copy_origins import ensure_sales_intent_copy_origins_schema
+    ensure_sales_intent_copy_origins_schema()
     from Utils.migrate_20261004_customer_profiles import ensure_customer_profiles_schema
     ensure_customer_profiles_schema()
     from Utils.migrate_20261004_sales_pricing import ensure_sales_pricing_schema

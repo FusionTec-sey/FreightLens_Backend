@@ -203,7 +203,8 @@ def save_draft(key: UUID, payload: SalesIntentSave, db: Session = Depends(get_db
     try:
         if not db.in_transaction(): db.begin()
         result = save_sales_intent(db, context, user.id, payload.operation_key, key, payload.draft,
-            expected_version=payload.expected_version, authorize=authorize)
+            expected_version=payload.expected_version, authorize=authorize,
+            source_reference=payload.source_reference)
         db.commit()
         indexed = project_sales_draft(db, context, key, authorize=authorize)
         return dict(**result.result, replayed=result.replayed, search_indexed=indexed)

@@ -1,6 +1,6 @@
 FREIGHTLENS ACCELERATED CLOUD SALES PILOT
 Decision: BD-20261005-01
-Status: Wave0/Wave1 merged; T09 pilot slice merged; T13 backend verification in progress
+Status: Wave0-Wave3 foundations through T17 merged; T15 safe copy in progress
 Integration branches: codex/pos-development in both repositories
 Merged baseline PRs: backend #6 and frontend #7 from codex/local-area-scope
 
@@ -30,7 +30,8 @@ integrator applies them in a separate integration commit.
 MIGRATION RESERVATIONS
 Integrator/core: migrate_20261005_sales_posting.py,
 migrate_20261005_stock_movements.py, migrate_20261005_collections.py,
-migrate_20261005_returns.py and migrate_20261005_till_close.py.
+migrate_20261005_returns.py, migrate_20261005_till_close.py and
+migrate_20261005_sales_intent_copy_origins.py.
 Programmer: migrate_20261005_payment_methods.py,
 migrate_20261005_branch_receiving_accounts.py and
 migrate_20261005_invoice_print_queue.py.
@@ -81,3 +82,10 @@ attempt and atomic invoice contract under focused verification. Its review fixes
 separate external-card observation authority, hide internal account references,
 protect posted reservations from direct edits and allow declined-card retry. It
 does not perform physical handover or activate real financial configuration.
+
+WAVE3 CHECKPOINT — 2026-10-05
+T13 atomic posting, the bounded T16 partial collection workspace and T17 immutable
+invoice/print queues are merged. T15 now extends the existing draft save contract
+with the integrator-reserved migrate_20261005_sales_intent_copy_origins.py; it does
+not introduce another cart, sale or invoice identity. Browser, Epson, real account,
+return, till-close and supervised-pilot gates remain open.

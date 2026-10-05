@@ -3,9 +3,10 @@ from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.dialects.postgresql import insert
 from Model.containermgmt.Orders.SalesIntent import SalesIntent, SalesIntentRevision, SalesIntentLineRevision
+from Model.containermgmt.Orders.SalesIntentCopyOrigin import SalesIntentCopyOrigin
 from Model.containermgmt.Orders.Product import Product
 from Model.containermgmt.Inventory.Location import InventoryBranch
-from Schema.SalesIntentSchema import SalesIntentInput
+from Schema.SalesIntentSchema import SalesIntentInput, SalesIntentSourceReference
 from Services.inventory_posting_service import execute_once, PostingEffect, PostingConflict
 from Services.sales_intent_source_service import prepare_sales_intent
 from Services.customer_profile_service import historical_names_for_page
@@ -35,7 +36,8 @@ def sales_branch_labels(db, context, branch_ids):
 
 
 def save_sales_intent(factory, context, actor_id, operation_key, document_key,
-                      payload, *, expected_version, authorize):
+                      payload, *, expected_version, authorize,
+                      source_reference=None):
     if not callable(authorize): raise ValueError('Sales draft permission guard required')
     if not isinstance(document_key, UUID) or not document_key.int:
         raise ValueError('Nonzero document UUID required')
@@ -43,6 +45,15 @@ def save_sales_intent(factory, context, actor_id, operation_key, document_key,
         raise ValueError('Expected draft version required')
     if not isinstance(payload, SalesIntentInput): raise ValueError('Typed sales draft required')
     payload = SalesIntentInput.model_validate(payload.model_dump())
+    if source_reference is not None:
+        if not isinstance(source_reference, SalesIntentSourceReference):
+            raise ValueError('Typed sales draft source reference required')
+        source_reference = SalesIntentSourceReference.model_validate(
+            source_reference.model_dump())
+        if expected_version != 0:
+            raise ValueError('A source reference is allowed only on the initial draft save')
+        if source_reference.document_key == document_key:
+            raise ValueError('A copied draft needs a new document identity')
 
     def effect(db):
         if expected_version == 0:
@@ -57,6 +68,21 @@ def save_sales_intent(factory, context, actor_id, operation_key, document_key,
         if (previous.version if previous else 0) != expected_version:
             raise PostingConflict('Sales draft changed; reload before saving')
         protect_held_draft(db, context, document_key, previous, payload)
+        if source_reference is not None:
+            source = scoped(db, SalesIntentRevision, context,
+                source_reference.document_key).filter(
+                    SalesIntentRevision.version == source_reference.version
+                ).one_or_none()
+            if source is None:
+                raise LookupError('Sales draft copy source not found')
+            source_line_keys = {row.line_key for row in scoped(
+                db, SalesIntentLineRevision, context,
+                source_reference.document_key
+            ).filter(
+                SalesIntentLineRevision.version == source_reference.version
+            ).with_entities(SalesIntentLineRevision.line_key).all()}
+            if source_line_keys.intersection(line.line_key for line in payload.lines):
+                raise PostingConflict('Copied draft lines require new identities')
         snapshot = prepare_sales_intent(db, context, payload, authorize=authorize)
         # Line identities are scoped to their document and cannot be relabelled
         # as a different product, even after removal from an intervening revision.
@@ -80,12 +106,23 @@ def save_sales_intent(factory, context, actor_id, operation_key, document_key,
                 quantity=Decimal(line['quantity']), unit=line['unit'],
                 base_quantity=Decimal(line['base_quantity']), base_unit=line['base_unit'],
                 policy=line['policy'], created_by=actor_id))
+        if source_reference is not None:
+            db.add(SalesIntentCopyOrigin(org_id=context.org_id,
+                destination_document_key=document_key,
+                source_document_key=source_reference.document_key,
+                source_version=source_reference.version,
+                operation_key=operation_key, created_by=actor_id))
         result = dict(document_key=str(document_key), version=version, status='DRAFT')
         return PostingEffect(result, dict(kind='sales.intent.saved', **result))
 
-    return execute_once(factory, context, actor_id, operation_key, 'sales.intent.save.v1',
-        dict(document_key=str(document_key), expected_version=expected_version,
-             draft=payload.model_dump(mode='json')), effect, authorize=authorize)
+    request = dict(document_key=str(document_key), expected_version=expected_version,
+                   draft=payload.model_dump(mode='json'))
+    # Preserve the pre-T15 operation fingerprint for ordinary saves so an
+    # uncertain retry created before this additive field remains replayable.
+    if source_reference is not None:
+        request['source_reference'] = source_reference.model_dump(mode='json')
+    return execute_once(factory, context, actor_id, operation_key,
+        'sales.intent.save.v1', request, effect, authorize=authorize)
 
 
 def get_sales_intent(db, context, document_key, *, authorize, version=None):
@@ -110,12 +147,20 @@ def get_sales_intent(db, context, document_key, *, authorize, version=None):
     holds = active_demand_holds(db, context, document_key) if version is None else {}
     customer_names = historical_names_for_page(db, context,
         [(revision.customer_key, revision.customer_version)], authorize=authorize)
+    origin = apply_org_filter(db.query(SalesIntentCopyOrigin).filter(
+        SalesIntentCopyOrigin.org_id == context.org_id,
+        SalesIntentCopyOrigin.destination_document_key == document_key,
+        SalesIntentCopyOrigin.is_deleted.is_(False)), SalesIntentCopyOrigin,
+        context).one_or_none()
     result = dict(document_key=str(document_key), version=revision.version, status=revision.status,
         customer_key=str(revision.customer_key), expected_customer_version=revision.customer_version,
         customer_name=customer_names.get((revision.customer_key, revision.customer_version)),
         branch_id=revision.branch_id,
         branch_name=sales_branch_labels(db, context, [revision.branch_id]).get(revision.branch_id),
         created_at=revision.created_at, created_by=revision.created_by,
+        source_reference=(dict(document_key=str(origin.source_document_key),
+                               version=origin.source_version)
+                          if origin is not None else None),
         lines=[dict(line_key=str(line.line_key),
             product_id=line.product_id, expected_policy_version=line.policy_version,
             quantity=format(line.quantity, 'f'), unit=line.unit,

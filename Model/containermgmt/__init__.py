@@ -55,6 +55,7 @@ from .Orders.SalesCollection import SalesCollection, SalesCollectionAllocation
 from .Orders.SalesInvoicePrint import (
     SalesInvoiceArtifact, SalesInvoicePrintJob, SalesInvoicePrintEvent,
 )
+from .Orders.SalesIntentCopyOrigin import SalesIntentCopyOrigin
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
@@ -109,6 +110,7 @@ __all__ = [
     "SalesInvoiceReservation",
     "SalesCollection", "SalesCollectionAllocation",
     "SalesInvoiceArtifact", "SalesInvoicePrintJob", "SalesInvoicePrintEvent",
+    "SalesIntentCopyOrigin",
     "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
     "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
     "MasterDocumentType"
