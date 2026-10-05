@@ -10,12 +10,13 @@ from Schema.SalesPostingSchema import (
     SalesPostingAttemptCreate, SalesPostingCreateResult,
     SalesCardConfirmationAppend, SalesPostingAttemptRead,
     SalesPostingFinalize, SalesPostingFinalizeResult, SalesInvoiceRead,
-    SalesPostingOptionsRead,
+    SalesPostedInvoiceReferenceRead, SalesPostingOptionsRead,
 )
 from Services.inventory_posting_service import PostingConflict
 from Services.sales_posting_service import (
     append_card_confirmation, create_posting_attempt,
-    finalize_posting_attempt, read_invoice, read_posting_attempt,
+    finalize_posting_attempt, read_invoice, read_invoice_reference_for_draft,
+    read_posting_attempt,
     read_posting_options,
 )
 from Utils.org_filter import OrgContext
@@ -121,6 +122,21 @@ def get_posting_options(document_key: UUID,
                         user=Depends(require_permission("Post_Sale"))):
     return _call(db, lambda: read_posting_options(db, context, user.id,
         document_key, draft_version, authorize=_authorize(policy, write=True)))
+
+
+@SalesPostingRouter.get(
+    "/drafts/{document_key}/posted-invoice-reference",
+    response_model=SalesPostedInvoiceReferenceRead,
+)
+def get_posted_invoice_reference(document_key: UUID,
+                        draft_version: int = Query(..., gt=0),
+                        db: Session = Depends(get_db),
+                        context: OrgContext = Depends(get_org_context),
+                        policy: AccessPolicy = Depends(posting_access),
+                        user=Depends(require_permission("View_Sale"))):
+    return _call(db, lambda: read_invoice_reference_for_draft(
+        db, context, document_key, draft_version,
+        authorize=_authorize(policy)))
 
 
 @SalesPostingRouter.post(
