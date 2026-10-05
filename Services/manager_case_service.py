@@ -10,6 +10,7 @@ import re
 from uuid import UUID
 from Model.containermgmt.Inventory.ManagerCase import ManagerCase, ManagerCaseDecision, ManagerCaseUse
 from Services.inventory_posting_service import execute_once, PostingEffect, PostingConflict, _json_snapshot
+from Services.case_notification_service import notify_case_requested, notify_case_decided
 from Utils.org_filter import apply_org_filter
 
 
@@ -67,6 +68,9 @@ def request_case(factory, context, actor_id, operation_key, *, binding: CaseBind
             source_type=binding.source_type, source_key=binding.source_key, source_version=binding.source_version,
             binding=snapshot, reason=reason, created_by=actor_id)
         db.add(row); db.flush()
+        # Durable delivery in this same transaction: a committed request always
+        # has its recipients recorded, and no reason text or customer data rides along.
+        notify_case_requested(db, context, row, actor_id)
         return PostingEffect({"case_key": str(operation_key), "version": 1, "status": "REQUESTED"},
                              {"kind": "manager.case.requested", "case_key": str(operation_key)})
     return execute_once(factory, context, actor_id, operation_key, "manager.case.request.v1",
@@ -99,6 +103,7 @@ def review_case(factory, context, actor_id, operation_key, *, case_key: UUID, bi
             raise PostingConflict("Case has already been reviewed")
         db.add(ManagerCaseDecision(org_id=context.org_id, case_id=row.id, outcome=outcome,
                                   reason=reason, created_by=actor_id))
+        notify_case_decided(db, context, row, outcome, actor_id)
         return PostingEffect({"case_key": str(case_key), "version": 2, "status": outcome},
                              {"kind": "manager.case.reviewed", "case_key": str(case_key), "outcome": outcome})
     return execute_once(factory, context, actor_id, operation_key, "manager.case.review.v1",
