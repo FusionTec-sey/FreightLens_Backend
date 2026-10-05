@@ -7,7 +7,7 @@ in a read-only document audit (not an application test). PHASE-ROADMAP.txt recor
 slice-level readiness: listed dependencies gate full outcomes, not all independent
 preparation. Keep unverified integration disabled and preserve release gates.
 
-CURRENT PRIORITY — SALES SCREEN REVISION (BD-20261004-01)
+CURRENT PRIORITY â€” SALES SCREEN REVISION (BD-20261004-01)
 Owner requested revising this queue around the three inFlow-inspired concepts:
 sales register, desktop split-view workspace and tablet product/cart workspace.
 Owner approved the three concepts on 2026-10-04 (BD-20261004-03).
@@ -22,7 +22,7 @@ Owner resumed full testing on 2026-10-04 (BD-20261004-04). Neither mockups nor
 coding nor a suite pass alone imply whole-task Verified status.
 Historical "Next" statements below do not override this priority or current status.
 
-ACCELERATED PILOT EXECUTION — BD-20261005-01
+ACCELERATED PILOT EXECUTION â€” BD-20261005-01
 Current objective is a supervised single-cloud sales pilot through T20 using three
 active lanes. Wave0 first updates and merges the paired local-area-scope PRs; no
 new feature branch starts from the current uncommitted checkout. After the exact
@@ -33,7 +33,7 @@ PARALLEL-PILOT-EXECUTION.txt for protected files, migration reservations, merge
 order and wave gates. Focused tests run per PR; full suites run at baseline, T13
 and pilot acceptance. This scheduling change does not mark any task complete.
 
-PRIOR PARALLEL OWNERSHIP — BD-20261004-10
+PRIOR PARALLEL OWNERSHIP â€” BD-20261004-10
 Read BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt before work.
 Integrator retains inventory/allocation/valuation/reservations/sales foundations.
 Next collaborator package is T12A payment/account configuration; see
@@ -43,6 +43,17 @@ contract inventory, negative scope/retry tests and complete revision/evidence ma
 No shared-file changes without interface coordination; linked PRs to integration.
 
 LATEST VERIFICATION
+2026-10-05 verification-only pass on backend 021ae5b / frontend a373c8f:
+frontend 387 passed across 78 suites and the production build passed with existing
+warnings. Backend executable tests passed 512, while 1134 database-backed tests
+were skipped because the local PostgreSQL service rejected the isolated test
+credentials and Docker was unavailable. The required-database run failed at
+fixture setup before application assertions. No product failure was found in
+executed checks and no task was promoted. T03, T05, T07, T10A, T11, T13A, T15,
+T15A, T17 and T18 remain Implementedâ€”verification pending for their recorded
+database/browser/provider/runtime/hardware/accounting gates. Evidence:
+evidence/20261005-pending-task-verification.txt.
+
 2026-10-04 reconciled GitHub checkpoint: full isolated backend 1329 passed /
 2 known legacy xfailed; full frontend 278 passed / 52 suites; production build
 passed with existing warnings. Pairing: CHECKPOINT-20261004-UI.txt. GitHub CI
@@ -102,7 +113,7 @@ This instruction supersedes earlier requirements to run tests after each slice;
 the full implementation scope and deferred release/acceptance gates are unchanged.
 
 Owner instruction 2026-10-04: cancel further test runs and continue coding.
-New work remains Implemented—verification pending until deferred checks run.
+New work remains Implementedâ€”verification pending until deferred checks run.
 Approved release runtime/UI adapter added; evidence/t07-release-runtime.txt.
 21 backend/35 frontend tests ran before this instruction; later UI receipt/view
 changes and production build are unverified. No entire T07 completion claimed.
@@ -149,7 +160,7 @@ deferred browser/hardware acceptance gate does not block unrelated development.
 Independent ready work may proceed when an
 external acceptance gate blocks another task. Blocked below means dependency-waiting
 unless an external blocker is explicitly named. No phase is declared complete here.
-States: Ready; In progress; Implemented—verification pending; Verified; Blocked.
+States: Ready; In progress; Implementedâ€”verification pending; Verified; Blocked.
 
 COMMON ACCEPTANCE FOR EVERY IMPLEMENTATION TASK
 Owner update 2026-10-03: use affected-feature tests and relevant shared-boundary
@@ -211,7 +222,7 @@ Next action: retain these foundations in T03 onward. Runtime enrollment, reviewe
 transitions and disconnected failover are later gates, not claimed complete here.
 
 T03 | Establish branch settings and permissions
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T02
 Acceptance / evidence: Configurable branch/counter calendars, business dates and action permissions; absent mandatory settings block actions.
 Verified slice: pure configurable business-date calculation with timezone, weekday/
@@ -242,7 +253,7 @@ Durable recipient/unread notification delivery remains outstanding. No task sign
 Verified request/review/consume contracts permit dependent T05 work.
 
 T05 | Activate reviewed inventory policies
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T04
 Acceptance / evidence: Reviewed activation/transitions and unit barcodes; immutable snapshots; ambiguous transitions blocked.
 Implementation complete for owner-restored scope (2026-10-03). New proposal-screen
@@ -488,7 +499,7 @@ Preserve source/permission guards and atomic own-operation retries. Do not expos
 fingerprints in generic financial-only case reads. Browser acceptance pending.
 
 T07 | Complete reservation lifecycle
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T04,T05,T13A
 Acceptance / evidence: Authoritative source links, approved release/reallocation/deadline review; protected paid holds and explicit multi-location approval.
 Saved-document/line/version links, exact caps and draft-edit protection now extend
@@ -709,16 +720,11 @@ Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments
 Accelerated pilot slice: internal reserved `HANDOVER` and central-pool `ISSUE` now
 commit under one retry-safe operation with exact reservation/source, stock/value
 versions, branch/pool authority, conservation and immutable history. Same-key replay
-has one effect and competing versions cannot reuse the hold/value. The internal
-serial gateway now binds one exact available identity per base unit to the same
-HANDOVER operation, appends immutable per-identity history, hides handed-over
-identities from current stock and enforces the identity/quantity total with deferred
-database guards on both sides. Same-key reordered identities replay once; competing
-operations cannot reuse a stock version or identity. No public serial collection
-endpoint exists.
+has one effect and competing versions cannot reuse the hold/value. Serial handover
+remains blocked until exact identity history; no public collection endpoint exists.
 Evidence: evidence/t09-pilot-handover-movement.txt.
-Next action: let T16 bind exact serial keys to authoritative invoice-line/payment
-eligibility, immutable allocation and collector history before exposing serial sales.
+Next action: Extend the identity-specific serial movement gateway, then let T16 bind
+this seam to authoritative invoice-line/payment eligibility and collector history.
 After the pilot slice, complete dispatch/transit/receipt/write-off. Integrate retained reclassification
 proposals only with product-wide compatibility, global identity checks, node fencing,
 exact physical/condition/value conservation and immutable atomic movement lineage.
@@ -740,7 +746,7 @@ Preserve original sales references and never merge balances automatically.
 Integrator owns T10; collaborator retains T33A. No runtime/financial activation.
 
 T11 | Implement pricing and tax
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T05,T10
 Acceptance / evidence: Independent store prices, agreed customer prices, tax-inclusive SCR/exemptions/floors; immutable original rules.
 If customer-facing freight is introduced, model it as versioned selling-price
@@ -1041,7 +1047,7 @@ after fresh-install, full backend, frontend and build CI passed. Actual browser/
 Epson validation remains pending and is not replaced by automated checks.
 
 T18 | Implement returns and credit notes
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T12,T16
 Acceptance / evidence: Original invoice/actual handover links; previous/pending claims counted; debt settled before surplus credit.
 The pilot contract reuses T13 invoices, exact T16 handovers and the shared manager-
@@ -1264,7 +1270,7 @@ Next action: Reuse these shared contracts in remaining dependency-ready tasks.
 T05 agreed implementation scope is complete; its acceptance gates remain pending.
 
 T10A | Minimal customer identity foundation
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T03,T04
 Acceptance / evidence: One tenant-owned customer identity with name/contact data,
 backend permissions, stable keys, expected versions and usable basic create/select
@@ -1294,7 +1300,7 @@ Browser/live-provider acceptance remains pending; durable projection repair belo
 to later synchronization work, not a prerequisite for isolated draft development.
 
 T13A | Authoritative sales-intent document and line foundation
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T05,T10A
 Acceptance / evidence: Durable scoped intent header/lines with stable UUIDs, owning
 customer/branch/product references, exact requested units/quantities and versions.
@@ -1319,7 +1325,7 @@ Next action: Obtain scoped visual/provider acceptance when approved; do not add
 payment, checkout or durable offline recovery to this minimal foundation's scope.
 
 T15A | Durable draft and retry recovery foundation
-Status: Implemented—verification pending
+Status: Implementedâ€”verification pending
 Dependencies: T13A
 Acceptance / evidence: Reuse T13A server drafts plus tenant/user/branch-scoped local
 recovery for edits and uncertain operation IDs. Navigation/reload/failed-save
@@ -1354,3 +1360,4 @@ changes. Security/concurrency/rollback checks are never omitted for speed.
 Evidence is written once; queue links it. Architecture records contracts, not a
 second live backlog. Preserve historical evidence without treating it as current.
 Keep reviewable code/docs/tests together; no commits, pushes or deployment implied.
+
