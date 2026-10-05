@@ -709,11 +709,16 @@ Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments
 Accelerated pilot slice: internal reserved `HANDOVER` and central-pool `ISSUE` now
 commit under one retry-safe operation with exact reservation/source, stock/value
 versions, branch/pool authority, conservation and immutable history. Same-key replay
-has one effect and competing versions cannot reuse the hold/value. Serial handover
-remains blocked until exact identity history; no public collection endpoint exists.
+has one effect and competing versions cannot reuse the hold/value. The internal
+serial gateway now binds one exact available identity per base unit to the same
+HANDOVER operation, appends immutable per-identity history, hides handed-over
+identities from current stock and enforces the identity/quantity total with deferred
+database guards on both sides. Same-key reordered identities replay once; competing
+operations cannot reuse a stock version or identity. No public serial collection
+endpoint exists.
 Evidence: evidence/t09-pilot-handover-movement.txt.
-Next action: Extend the identity-specific serial movement gateway, then let T16 bind
-this seam to authoritative invoice-line/payment eligibility and collector history.
+Next action: let T16 bind exact serial keys to authoritative invoice-line/payment
+eligibility, immutable allocation and collector history before exposing serial sales.
 After the pilot slice, complete dispatch/transit/receipt/write-off. Integrate retained reclassification
 proposals only with product-wide compatibility, global identity checks, node fencing,
 exact physical/condition/value conservation and immutable atomic movement lineage.

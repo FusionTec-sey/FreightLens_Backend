@@ -246,6 +246,8 @@ async def startup_event():
     ensure_receipt_valuation_schema()
     from Utils.migrate_20261005_stock_movements import ensure_inventory_handover_schema
     ensure_inventory_handover_schema()
+    from Utils.migrate_20261005_stock_serial_handovers import ensure_stock_serial_handover_schema
+    ensure_stock_serial_handover_schema()
     from Utils.migrate_20261005_sales_posting import ensure_sales_posting_schema
     ensure_sales_posting_schema()
     from Utils.migrate_20261005_sales_collection import ensure_sales_collection_schema

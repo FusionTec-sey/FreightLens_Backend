@@ -11,12 +11,17 @@ from uuid import UUID
 from sqlalchemy import func
 
 from Model.containermgmt.Inventory.CostPool import BranchCostPool
-from Model.containermgmt.Inventory.StockLedger import StockBalance, StockReservation
+from Model.containermgmt.Inventory.StockLedger import (
+    StockBalance, StockMovement, StockReservation,
+)
 from Model.containermgmt.Inventory.Valuation import InventoryValuation
 from Model.containermgmt.Orders.Product import Product
 from Services.inventory_costing_service import COSTING_POLICY_VERSION, CostBalance, CostPool, issue
 from Services.inventory_posting_service import PostingConflict, PostingEffect, execute_once
 from Services.inventory_unit_service import convert_quantity
+from Services.serial_stock_service import (
+    lock_serials_for_handover, record_serial_handover, verify_serial_projection,
+)
 from Services.posting_authority_service import (
     AuthorityClaim,
     CostPoolAuthorityClaim,
@@ -50,7 +55,8 @@ def _claim_snapshot(claim):
 def handover_reserved_stock(factory, context, actor_id, operation_key, *,
         balance_id, reservation_key, source_line_key, quantity, input_unit,
         expected_stock_version, expected_valuation_version, reason,
-        stock_authority, cost_authority, authorize_stock, authorize_financial):
+        stock_authority, cost_authority, authorize_stock, authorize_financial,
+        serial_keys=None):
     """Consume one owned hold and its pool value in one retry-safe transaction.
 
     The future collection coordinator may pass its active Session as ``factory``.
@@ -76,6 +82,11 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
         raise PermissionError("Trusted central cost authority required")
     if not callable(authorize_stock) or not callable(authorize_financial):
         raise ValueError("Stock and financial authorization guards are required")
+    serial_keys = tuple(serial_keys or ())
+    if any(not isinstance(key, UUID) or not key.int for key in serial_keys):
+        raise ValueError("Serial identities must be nonzero UUIDs")
+    if len(set(serial_keys)) != len(serial_keys):
+        raise ValueError("Serial identities must be unique")
 
     request = {
         "balance_id": balance_id,
@@ -86,6 +97,7 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
         "expected_stock_version": expected_stock_version,
         "expected_valuation_version": expected_valuation_version,
         "reason": reason.strip(),
+        "serial_keys": sorted(str(key) for key in serial_keys),
         "stock_authority": _claim_snapshot(stock_authority),
         "cost_authority": _claim_snapshot(cost_authority),
     }
@@ -135,8 +147,6 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
             raise PostingConflict("Handover stock scope changed")
         if balance.version != expected_stock_version:
             raise PostingConflict("Stock version changed; refresh before handover")
-        if balance.tracking_policy == "SERIAL":
-            raise PostingConflict("Serial handover requires exact serial assignment history")
         base_quantity = convert_quantity(
             _effective_policy(db, context, balance), quantity,
             input_unit if input_unit is not None else balance.base_unit,
@@ -151,6 +161,18 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
         remaining = Decimal(hold.quantity) - Decimal(hold.released)
         if base_quantity > remaining:
             raise PostingConflict("Handover exceeds this reservation's remaining quantity")
+        serial_rows = []
+        if balance.tracking_policy == "SERIAL":
+            if (base_quantity != base_quantity.to_integral_value()
+                    or len(serial_keys) != int(base_quantity)):
+                raise PostingConflict(
+                    "Serial handover requires one exact identity per base unit")
+            verify_serial_projection(db, context, balance)
+            serial_rows = lock_serials_for_handover(
+                db, context, balance, serial_keys)
+        elif serial_keys:
+            raise PostingConflict(
+                "Non-serial handover cannot assign serial identities")
 
         latest = _query(db, InventoryValuation, context).filter_by(
             cost_pool_id=scope["cost_pool_id"], product_id=scope["product_id"],
@@ -182,9 +204,16 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
         balance.updated_by = actor_id
         hold.released = Decimal(hold.released) + base_quantity
         hold.updated_by = actor_id
-        movement = _record(db, balance, operation_key, actor_id, "HANDOVER",
+        movement_effect = _record(db, balance, operation_key, actor_id, "HANDOVER",
             reason.strip(), before, hold)
         db.flush()
+        if serial_rows:
+            movement = _query(db, StockMovement, context).filter_by(
+                operation_key=operation_key, balance_id=balance.id,
+            ).one()
+            record_serial_handover(
+                db, context, balance, movement, serial_rows, actor_id)
+            verify_serial_projection(db, context, balance)
         valuation = InventoryValuation(
             org_id=context.org_id, kind="ISSUE", source_valuation_id=latest.id,
             operation_key=operation_key, cost_pool_id=scope["cost_pool_id"],
@@ -199,7 +228,7 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
         )
         db.add(valuation)
         db.flush()
-        result = dict(movement.result,
+        result = dict(movement_effect.result,
             source_line_key=str(source_line_key),
             handed_over=format(base_quantity, ".6f"),
             valuation_id=valuation.id,
@@ -208,6 +237,7 @@ def handover_reserved_stock(factory, context, actor_id, operation_key, *,
             pool_quantity=format(issued.remaining.quantity, ".6f"),
             pool_value_scr=format(issued.remaining.value_scr, ".6f"),
             valuation_status="UNRECONCILED",
+            serial_keys=sorted(str(key) for key in serial_keys),
         )
         return PostingEffect(result, {
             "kind": "inventory.stock.handed-over",
