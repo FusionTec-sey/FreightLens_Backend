@@ -2,21 +2,24 @@
 
 ## Status
 
-### Source-linked safe sales draft copies (2026-10-05; in progress)
+### Source-linked safe sales draft copies (2026-10-05; implemented, verification pending)
 
 The existing initial sales-intent save may now carry one exact source document and
 revision. The destination still receives new document and line identities and runs
 through the current authoritative customer, selling-store, product and reviewed-unit
 policy validation. An immutable, same-company provenance row binds the reference to
-the exact first-save operation; changed retries conflict and permissions rerun on
-every attempt. A deferred database guard independently checks the first revision,
-operation actor/kind and absence of source line-key reuse.
+a distinct `sales.intent.copy.v1` first-save receipt and its exact source/destination
+event; changed retries conflict and permissions rerun on every attempt. A deferred
+database guard independently checks the first revision, operation actor/kind/event
+and absence of source line-key reuse, so an ordinary draft cannot be relabelled later.
 
 Current and historical detail reads expose only the exact source document/version.
 No price snapshot, floor approval, reservation, posting attempt, payment, invoice,
 collection or print state is copied. This is the backend T15 copy contract over the
-existing draft identity, not another cart or sales system. Frontend integration and
-browser acceptance remain open.
+existing draft identity, not another cart or sales system. The existing frontend
+copy/recovery path sends the reference only on the initial save, retains it across
+uncertain retries and distinguishes source changes from copy-identity conflicts.
+Browser acceptance remains open.
 
 ### Immutable sales invoice artifacts and print state (2026-10-05; in progress)
 

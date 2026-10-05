@@ -91,7 +91,7 @@ DECLARE first_revision record; operation record; reused integer; BEGIN
 SELECT operation_key, created_by INTO first_revision
 FROM containermgmt.sales_intent_revisions
 WHERE org_id=NEW.org_id AND document_key=NEW.destination_document_key AND version=1;
-SELECT kind, created_by INTO operation
+SELECT kind, created_by, result, event_payload INTO operation
 FROM containermgmt.inventory_posting_operations
 WHERE org_id=NEW.org_id AND operation_key=NEW.operation_key;
 SELECT COUNT(*) INTO reused
@@ -105,8 +105,16 @@ WHERE destination.org_id=NEW.org_id
   AND source.version=NEW.source_version;
 IF first_revision IS NULL OR first_revision.operation_key<>NEW.operation_key
  OR first_revision.created_by<>NEW.created_by
- OR operation IS NULL OR operation.kind<>'sales.intent.save.v1'
- OR operation.created_by<>NEW.created_by THEN
+ OR operation IS NULL OR operation.kind<>'sales.intent.copy.v1'
+ OR operation.created_by<>NEW.created_by
+ OR operation.result->>'document_key' IS DISTINCT FROM NEW.destination_document_key::text
+ OR operation.result->>'version' IS DISTINCT FROM '1'
+ OR operation.event_payload->>'kind' IS DISTINCT FROM 'sales.intent.copied'
+ OR operation.event_payload->>'document_key' IS DISTINCT FROM NEW.destination_document_key::text
+ OR operation.event_payload->'source_reference'->>'document_key'
+      IS DISTINCT FROM NEW.source_document_key::text
+ OR operation.event_payload->'source_reference'->>'version'
+      IS DISTINCT FROM NEW.source_version::text THEN
  RAISE EXCEPTION 'Copy provenance requires the destination first-save operation'; END IF;
 IF reused<>0 THEN
  RAISE EXCEPTION 'Copied draft lines require new identities'; END IF;

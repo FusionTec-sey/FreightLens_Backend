@@ -966,7 +966,7 @@ accounting/offline/pilot gates remain separate. No real transactions for accepta
 Next action: Record deferred checks now; run only after the applicable approval.
 
 T15 | Protect and reuse drafts
-Status: In progress
+Status: Implemented - verification pending
 Dependencies: T14,T15A
 Acceptance / evidence: Navigation/failed-save recovery; copy intent/source only, revalidate; no copied money/reservations/approvals/collection.
 The backend initial-save contract accepts one optional exact source draft revision
@@ -976,12 +976,16 @@ revalidated through the existing save service; no price, payment, reservation,
 approval, invoice, posting or collection record is cloned. The source is returned
 on current and historical detail reads. Stable retries bind the exact reference,
 rerun permissions and have one effect; foreign/missing sources fail closed. A
-deferred database guard independently binds provenance to the destination's first
-save operation and rejects reused source line identities. Seven focused T15 tests and
-34 affected draft/API/concurrency tests pass. Evidence:
+deferred database guard independently binds provenance to the distinct immutable
+copy operation/source event and rejects retroactive origin claims or reused source
+line identities. The existing frontend copy/recovery path persists the exact pending
+reference, sends it only on the initial save and distinguishes reselectable source
+changes from irrecoverable copy-identity conflicts. Eight focused T15 tests, 35
+affected backend draft/API/concurrency tests, 44 focused frontend checks and the
+production build pass. Evidence:
 evidence/20261005-safe-draft-copy-backend.txt.
-Next action: Connect the existing frontend copy helper to this backend field, keep
-new document/line identities and finish applicable recovery/browser acceptance.
+Next action: merge the paired backend/frontend PRs after CI, then finish the
+separately approved browser/recovery acceptance.
 
 T16 | Implement physical collection
 Status: In progress

@@ -23,9 +23,13 @@ DATABASE / MIGRATION
 - Migration: Utils/migrate_20261005_sales_intent_copy_origins.py.
 - Registered immediately after the existing sales-intent migration.
 - Foreign keys preserve organisation scope and exact source revision/operation.
+- Copy saves use a distinct immutable `sales.intent.copy.v1` receipt whose event
+  records the exact source and destination. Ordinary saves retain their existing
+  `sales.intent.save.v1` receipt and fingerprint.
 - UPDATE/DELETE trigger keeps provenance immutable.
-- Deferred guard requires the destination first-save operation and rejects reuse of
-  any source line identity even if application checks are bypassed.
+- Deferred guard requires the destination first-save copy receipt, verifies its
+  exact immutable event, rejects retroactive origin claims and rejects reuse of any
+  source line identity even if application checks are bypassed.
 - Migration replay was exercised twice by each focused fixture.
 
 VERIFICATION
@@ -34,12 +38,12 @@ python -m pytest -q tests/test_sales_draft_copy.py \
   tests/test_sales_intent_persistence.py tests/test_sales_intent_api.py \
   tests/test_sales_intent_concurrency.py
 
-Result: 34 passed.
-Focused T15 file: 7 passed.
+Result: 35 passed.
+Focused T15 file: 8 passed.
 Covered exact replay/readback, changed-intent conflict, current source validation,
 new identities, initial-save-only contract, permission replay, tenant isolation,
-missing/self sources, absence of copied effects, SQL immutability, independent
-database identity guard and migration replay.
+missing/self sources, absence of copied effects, SQL immutability, retroactive-origin
+rejection, independent database identity guard and migration replay.
 Ordinary non-copy saves retain the pre-T15 posting-operation fingerprint so an
 uncertain retry created before this additive contract remains replayable.
 
@@ -48,6 +52,8 @@ floor-case and reservation-source set: 38 passed.
 Fresh-install contract checks: 3 passed.
 
 OPEN GATES
-- Existing frontend copy helper must send source_reference to this contract.
+- The existing frontend copy/recovery path sends the exact source reference only on
+  the initial save and keeps uncertain retries exact. Forty-four focused checks and
+  the production build pass with existing warnings.
 - Applicable browser/recovery acceptance remains pending.
 - This evidence is not a deployment, live posting or pilot approval.

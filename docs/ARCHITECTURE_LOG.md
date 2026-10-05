@@ -7,11 +7,13 @@
 - Required new destination document/line identities and retained current source
   validation; no price, approval, reservation, money, posting, invoice, collection
   or print state is cloned.
-- Stable retries bind the source reference and rerun permissions. Service and
-  deferred database guards reject foreign/missing sources, self-copy and source
-  line-key reuse; current and historical detail return the source reference.
-- Seven focused T15 and 34 affected draft/API/concurrency tests pass. Frontend wiring
-  and browser acceptance remain open.
+- Stable retries use a distinct immutable copy operation whose event binds the exact
+  source and destination, and rerun permissions. Service and deferred database
+  guards reject foreign/missing sources, retroactive origin claims, self-copy and
+  source line-key reuse; current and historical detail return the source reference.
+- Eight focused T15 and 35 affected draft/API/concurrency tests pass. Forty-four
+  focused frontend checks and the production build pass. Browser acceptance remains
+  open.
 
 ## 2026-10-05 - T17 immutable invoice artifacts and print queue
 

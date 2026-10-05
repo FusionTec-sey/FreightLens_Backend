@@ -68,6 +68,11 @@ def test_copy_persists_exact_origin_and_replays_once(copy_api):
         destination_document_key=destination
     ).one()
     assert origin.operation_key == UUID(payload["operation_key"])
+    operation = f.db.query(PostingOperation).filter_by(
+        operation_key=origin.operation_key
+    ).one()
+    assert operation.kind == "sales.intent.copy.v1"
+    assert operation.event_payload["source_reference"] == payload["source_reference"]
 
 
 def test_ordinary_save_retains_pre_t15_operation_fingerprint(copy_api):
@@ -209,6 +214,33 @@ def test_copy_origin_is_immutable_and_database_guard_rejects_reused_line(copy_ap
         "actor": f.user.id})
     with pytest.raises(DBAPIError):
         f.db.execute(text(
-            "SET CONSTRAINTS sales_intent_copy_origin_guard IMMEDIATE"
+            "SET CONSTRAINTS ALL IMMEDIATE"
+        ))
+    f.db.rollback()
+
+
+def test_database_rejects_retroactive_origin_for_ordinary_draft(copy_api):
+    f = copy_api
+    assert f.client.put(f.url, json=f.payload).status_code == 200
+    source_key = UUID(f.url.rsplit("/", 1)[-1])
+    destination = uuid4()
+    ordinary = deepcopy(f.payload)
+    ordinary["operation_key"] = str(uuid4())
+    ordinary["draft"]["lines"][0]["line_key"] = str(uuid4())
+    assert f.client.put(
+        f"/sales/drafts/{destination}", json=ordinary
+    ).status_code == 200
+
+    f.db.execute(text(
+        "INSERT INTO containermgmt.sales_intent_copy_origins "
+        "(org_id,destination_document_key,source_document_key,source_version,"
+        "operation_key,created_by) VALUES "
+        "(:org,:destination,:source,1,:operation,:actor)"
+    ), {"org": f.org_a, "destination": destination,
+        "source": source_key, "operation": UUID(ordinary["operation_key"]),
+        "actor": f.user.id})
+    with pytest.raises(DBAPIError, match="destination first-save operation"):
+        f.db.execute(text(
+            "SET CONSTRAINTS ALL IMMEDIATE"
         ))
     f.db.rollback()

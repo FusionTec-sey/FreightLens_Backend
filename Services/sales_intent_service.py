@@ -113,7 +113,11 @@ def save_sales_intent(factory, context, actor_id, operation_key, document_key,
                 source_version=source_reference.version,
                 operation_key=operation_key, created_by=actor_id))
         result = dict(document_key=str(document_key), version=version, status='DRAFT')
-        return PostingEffect(result, dict(kind='sales.intent.saved', **result))
+        event = dict(kind=('sales.intent.copied' if source_reference is not None
+                           else 'sales.intent.saved'), **result)
+        if source_reference is not None:
+            event['source_reference'] = source_reference.model_dump(mode='json')
+        return PostingEffect(result, event)
 
     request = dict(document_key=str(document_key), expected_version=expected_version,
                    draft=payload.model_dump(mode='json'))
@@ -121,8 +125,10 @@ def save_sales_intent(factory, context, actor_id, operation_key, document_key,
     # uncertain retry created before this additive field remains replayable.
     if source_reference is not None:
         request['source_reference'] = source_reference.model_dump(mode='json')
+    operation_kind = ('sales.intent.copy.v1' if source_reference is not None
+                      else 'sales.intent.save.v1')
     return execute_once(factory, context, actor_id, operation_key,
-        'sales.intent.save.v1', request, effect, authorize=authorize)
+        operation_kind, request, effect, authorize=authorize)
 
 
 def get_sales_intent(db, context, document_key, *, authorize, version=None):
