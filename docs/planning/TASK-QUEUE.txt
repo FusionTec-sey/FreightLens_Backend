@@ -826,8 +826,12 @@ keeps payment and fulfilment status separate. Raw terminal references are hashed
 in the browser and uncertain/dirty departure is guarded. Fifteen focused frontend
 tests and the production build pass. Frontend PR #10 merged as c903117 and the
 local preview was refreshed to that revision.
-Next action: complete T15 copy/recovery, add the T16 collection workspace and T17
-invoice actions, then perform the separately approved browser/tablet acceptance.
+Backend PR #21 and frontend PR #16 merged at c21b702 and a373c8f after full CI.
+Sales details now resolve only an exact posted-invoice reference, then open the
+existing T16 collection or T17 invoice/print panels under their own permissions;
+staff no longer require posting authority or a prepared checkout to resume these
+post-sale tasks. Next action: perform separately approved browser/tablet acceptance
+and retain the existing T15/T16/T17 contracts.
 
 T14A | Confirm sales design and map existing capabilities
 Status: Verified
@@ -1002,7 +1006,9 @@ cost pools or valuation values. Six focused T16 tests and the 22-test affected
 posting/handover set pass. Evidence: evidence/20261005-sales-collection.txt.
 Backend PR #13 and frontend PR #11 are merged at ea1a890 and 5e8c3dc. The existing
 sale-detail screen now connects to collection options/history with exact retry
-recovery. Exact serial assignment and reviewed other-store
+recovery. Frontend PR #16 adds direct post-sale entry from Sales details using the
+minimal reference from backend PR #21; the collection panel still owns all action
+eligibility. Exact serial assignment and reviewed other-store
 collection remain fail-closed follow-ups; browser/hardware acceptance stays open.
 
 T17 | Implement invoices and print queues
