@@ -46,32 +46,40 @@ either clobber their queue entries or conflict heavily. Either merge it **first*
 and re-apply the lane entries on top, or take only its evidence file and
 re-annotate the queue by hand.
 
-## C. `codex/pos-wip-checkpoint` — 9 commits
+## C. `codex/pos-wip-checkpoint` — re-verified 2026-10-05
 
-The largest block. Note that **two of these commits fix and extend the earlier
-ones**, so take the branch as a whole rather than cherry-picking the originals.
+Two of the three original warnings are now **obsolete**. Verified against
+`codex/pos-development` with file-presence and content checks, not assumption.
 
-| Commit | Task | Contents |
+| Was flagged | Reality now | Action |
 |---|---|---|
-| `d9798a310b8452e4bbec3a080fa481334ab0ab20` | T07, T13A | Register display labels (`customer_name`, `branch_name`, `created_at`, `line_count`) on the drafts list; `Utils/seed_t06_sales_demo.py`; `Utils/seed_t07_counter_demo.py`. **Without the counter seed no counter row exists in any company, so the T07 work-area preview cannot be exercised at all.** Also carries the parallel lane's `sales_area_preview_service`, `sales_local_reservation_service` and `SalesAreaPreviewSchema`, which the router change depends on |
-| `b0045366441534004de7084e80987c1d2da5fd90` | **T33A**, **T04**, T06 | T33A implemented in full: six append-only tables, twelve endpoints, three services, two idempotent migrations, six permissions, and the blind-sheet projection carrying no expected stock, earlier round or value. T04 durable case-notification delivery inside the case transaction. `blob_storage.ensure_versioning_enabled()` for the T06 storage gate. Three evidence files and `T33A-COUNT-PROPOSAL-20261004.md` |
-| `b6f888e` | **T04 follow-up** | Scopes case notifications to their correct recipients, hardens `auth/module_guard.py`, and adds `tests/test_case_notification_access.py` (68 lines). **This corrects a defect in `b004536`; do not merge that commit without this one** |
-| `f12794ce654134f010c7cea91b73eec8ab780695` | **T08** | Both C12 defects closed: `adjust-stock` no longer clamps an excessive negative delta (exact `Decimal`, refused with 400), and a product metadata save can no longer replace held stock (removed from the updatable list, refused with 422). Both strict `xfail` markers removed and those tests now pass. Plus `evidence/t08-legacy-writer-inventory.txt` — the complete legacy writer inventory T08's next action required — and `BROWSER-ACCEPTANCE-CHECKLIST-20261004.md` |
-| `ac5dec0` | T04, housekeeping | Sets T04 to verification-pending, fixes a `seed_t05_demo.py` issue and repairs a `tests/test_reporting_worker.py` regression |
-| `10aee81` | mixed | Checkpoint of reporting, dashboard and T07 work in progress from the parallel lanes |
-| `88e1136`, `8269c39`, `5e12a60` | finance, fixtures | A merge commit, base-currency amount calculation, and local inventory demo seeds |
+| `f12794c` C12 stock defects | **Already fixed on the integration branch, and more thoroughly.** `adjust-stock` is a retired compatibility route returning 400 ("Direct product-total adjustment is disabled"), `current_stock` reads from a ledger quantity map, and **zero xfail markers remain** | **Do not merge** — it would revert a stronger fix. Its evidence file `t08-legacy-writer-inventory.txt` is still useful background for T08 |
+| `b004536` T33A count workspace | **Already merged** via `7b7a71e` "repaired T33A integration"; `CycleCount.py` is byte-identical | **Do not merge** |
+| `b004536` T04 notification delivery | **Was genuinely missing** | Replaced by a clean branch, below |
 
-**Act on `f12794c` first.** T08 is *In progress* on `codex/pos-development`, which
-still clamps negative stock and still permits stock replacement through a product
-metadata save, and still carries both `xfail` markers that T08's acceptance
-requires to pass.
+### Ready to merge: `codex/t04-case-notifications` (`234b8c8`)
 
-**T33A is the second priority.** It reads *In progress* on the integration branch
-with no implementation present, and is assigned to the collaborator in
-`COLLABORATION-HANDOFF.txt`. Roughly 1,900 verified lines already exist.
+The T04 slice lifted onto the current integration baseline, rather than merging the
+whole nine-commit checkpoint branch. Six files: the notification service, two hooks
+in `manager_case_service`, a `require_any_module` guard, the router registration,
+the recipient-scoped notification router and its access test.
+
+It also carries a **pre-existing access fix**: the notification list query had no
+user filter and the unread count was global, so any authenticated user could read
+every other user's notifications in the company. Both are now scoped to the
+authenticated recipient, with server-side pagination.
+
+Verified on that base: **full backend suite 515 passed, 1140 skipped, no failures.**
+
+### Still missing: seed fixtures
+
+`Utils/seed_t06_sales_demo.py` and `Utils/seed_t07_counter_demo.py` are absent from
+the integration branch, confirmed 2026-10-05. Without the counter seed **no counter
+row exists in any company**, so the T07 work-area preview cannot be exercised at
+all. They live in `d9798a3` on `codex/pos-wip-checkpoint`, alongside T07 area work
+from the parallel lane.
 
 ---
-
 # Frontend
 
 | Branch | Ahead | Task | Contents |
@@ -88,9 +96,11 @@ without `b004536` have no API to call.
 
 ## Suggested order
 
-1. `f12794c` — small, self-contained, unblocks correct T08 work.
-2. `codex/pos-wip-checkpoint` as a whole (keeps `b004536` with its `b6f888e` fix),
-   paired with frontend `codex/pos-ui-theme`.
+1. `codex/t04-case-notifications` — self-contained, tested on this exact base, and
+   carries a notification access fix. Do NOT merge `f12794c` or `b004536`; both are
+   superseded or already present.
+2. The seed fixtures from `d9798a3`, and frontend `codex/pos-ui-theme` for the
+   Stock Counts screens that T33A's merged backend already serves.
 3. The T14 and T16 pairs, each with its frontend counterpart.
 4. `codex/t09-serial-handover` and `codex/t19-integration-record`.
 5. `codex/pending-task-verification-20261005` last, or first with the lane entries

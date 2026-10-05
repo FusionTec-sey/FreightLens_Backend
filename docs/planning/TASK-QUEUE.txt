@@ -227,9 +227,11 @@ or counters seeded. Verified backend contracts permit T04 development to proceed
 
 T04 | Build reusable manager cases
 Status: In progress
-DO NOT REBUILD: durable case notification delivery is implemented at
-b0045366441534004de7084e80987c1d2da5fd90 on codex/pos-wip-checkpoint and is not
-yet merged here. See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
+DO NOT REBUILD: durable case notification delivery is ready to merge as
+codex/t04-case-notifications (234b8c8), built on this exact baseline and verified
+with the full backend suite (515 passed). It also fixes a pre-existing access defect
+where any user could read every user's notifications.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T03
 Acceptance / evidence: Request/review/approve/reject audit; exact scope/version binding; reject self approval and changed/reused approvals.
 Implemented foundation: immutable request/decision/single-use history, transactional
@@ -569,11 +571,11 @@ commitments. Browser acceptance and real runtime configuration remain pending.
 
 T08 | Replace legacy stock writers
 Status: In progress
-DO NOT REBUILD: both C12 defects are already fixed and the legacy writer
-inventory is complete at f12794ce654134f010c7cea91b73eec8ab780695 on
-codex/pos-wip-checkpoint, not yet merged here. T08 work on this branch is
-building on a base that still clamps negative stock and allows stock
-replacement through a product metadata save. Merge that commit first.
+CORRECTED 2026-10-05: both C12 defects are already fixed ON THIS BRANCH, more
+thoroughly than the earlier external fix - adjust-stock is a retired route returning
+400, current_stock reads from the ledger, and no xfail markers remain. The earlier
+warning to merge f12794c is withdrawn; merging it would revert a stronger fix. Its
+evidence file remains useful background.
 See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T06,T07
 Acceptance / evidence: All product opening/adjustment/receiving/import writers use Inventory; no direct totals or clamp; two C12 xfails pass.
@@ -1230,12 +1232,10 @@ price labels after T11. Do not rebuild the collaborator's count workspace.
 
 T33A | Cycle-count planning and blind-count workspace
 Status: In progress
-DO NOT REBUILD: T33A is fully implemented at
-b0045366441534004de7084e80987c1d2da5fd90 (backend) and on the frontend branch
-codex/pos-ui-theme, neither merged here. Roughly 1,900 verified lines: six
-append-only tables, twelve endpoints, six permissions, the blind-sheet
-projection and a four-screen workspace. Confirm with the integrator before
-starting any count work. See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
+CORRECTED 2026-10-05: the T33A backend IS already merged here via 7b7a71e;
+CycleCount.py is byte-identical to the original implementation. Only the frontend
+Stock Counts workspace on codex/pos-ui-theme is still unmerged, so the API exists
+with no screens. See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 2026-10-04 latest owner instruction: integrator to fix reviewed T33A defects.
 Located backend b6f888e (T33A b004536) and frontend 4b6705f (T33A 3260838).
 Selectively integrated count files and minimal migration/router/menu wiring;
