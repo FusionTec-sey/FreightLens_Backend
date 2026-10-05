@@ -11,7 +11,7 @@ class InventoryValuation(OrgMixin, AuditMixin, Base):
         UniqueConstraint("org_id", "cost_pool_id", "product_id", "version", name="uq_valuation_pool_version"),
         UniqueConstraint('id', 'org_id', name='uq_valuation_id_org'),
         Index('uq_valuation_physical_source', 'org_id', 'balance_id', 'source_version', unique=True,
-              postgresql_where=text("kind IN ('OPENING', 'RECEIPT', 'ISSUE')")),
+              postgresql_where=text("kind IN ('OPENING', 'RECEIPT', 'ISSUE', 'RETURN')")),
         UniqueConstraint('org_id', 'operation_key', 'balance_id', name='uq_valuation_operation_line'),
         ForeignKeyConstraint(['source_valuation_id', 'org_id'], ['containermgmt.inventory_valuations.id', 'containermgmt.inventory_valuations.org_id'], name='fk_valuation_charge_source'),
         ForeignKeyConstraint(["cost_pool_id", "org_id"], ["containermgmt.inventory_cost_pools.id", "containermgmt.inventory_cost_pools.org_id"], name="fk_valuation_pool"),
@@ -22,11 +22,12 @@ class InventoryValuation(OrgMixin, AuditMixin, Base):
         CheckConstraint("(kind = 'OPENING' AND source_version = 1 AND quantity > 0 AND source_valuation_id IS NULL) "
             "OR (kind = 'RECEIPT' AND quantity > 0 AND source_valuation_id IS NULL) "
             "OR (kind = 'CHARGE' AND quantity = 0 AND goods_value_scr = 0 AND source_valuation_id IS NOT NULL) "
-            "OR (kind = 'ISSUE' AND quantity > 0 AND additional_cost_scr = 0 AND source_valuation_id IS NOT NULL)",
+            "OR (kind = 'ISSUE' AND quantity > 0 AND additional_cost_scr = 0 AND source_valuation_id IS NOT NULL) "
+            "OR (kind = 'RETURN' AND quantity > 0 AND additional_cost_scr = 0 AND source_valuation_id IS NOT NULL)",
             name='ck_valuation_kind_v3'),
         CheckConstraint("goods_value_scr >= 0 AND additional_cost_scr >= 0 AND pool_value_scr >= 0 "
             "AND pool_value_scr < 1000000000000000000 AND "
-            "(kind = 'ISSUE' OR pool_value_scr >= goods_value_scr + additional_cost_scr)",
+            "(kind IN ('ISSUE', 'RETURN') OR pool_value_scr >= goods_value_scr + additional_cost_scr)",
             name="ck_valuation_value_v2"),
         CheckConstraint("calculation_policy = 'pool-wac-v2' AND currency = 'SCR' AND status = 'UNRECONCILED' AND length(trim(reason)) > 0 AND length(trim(base_unit)) > 0", name="ck_valuation_contract"),
         CheckConstraint("created_by IS NOT NULL AND NOT is_deleted AND deleted_at IS NULL", name="ck_valuation_audit"),

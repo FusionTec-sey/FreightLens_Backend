@@ -1,0 +1,68 @@
+T18 bounded sales returns backend — implementation evidence draft
+Date: 2026-10-05
+
+Scope implemented in task-owned files
+- Exact T16 handover-allocation return eligibility; requested, approved and
+  credited claims consume capacity while rejected claims release it.
+- Immutable return claim with returner identity/contact and declared condition.
+- Existing ManagerCase request/review/consume lifecycle; self-review and stale
+  binding rules remain those of the shared engine.
+- Fingerprinted processing options over claim review, exact balances, valuation
+  heads, original invoice prices/tax and debt-first value allocation.
+- Exact original-balance RETURN movement into quarantine; reservations do not
+  reopen and serial/cross-store returns fail closed.
+- Cumulative proportional restoration of the original HANDOVER ISSUE value into
+  the current cost-pool head, including exact final residual conservation.
+- Immutable SCR credit note and lines; outstanding invoice debt is reduced first,
+  then surplus creates an append-only non-expiring customer-credit liability.
+- A physically valid reviewed return may issue an immutable SCR0.00 stock-only
+  credit note when cumulative currency rounding assigns no cent to that slice;
+  stock quarantine, cost restoration and case consumption still occur.
+- Stable operation IDs, transactional outbox events, tenant scoping, private/no-
+  store reads and paginated invoice return/credit-note histories.
+- Narrow View_Sale posted-invoice lookup by exact draft revision, so return-only
+  staff do not need Post_Sale or receive checkout configuration/account mappings.
+- No refund, credit redemption, replacement entitlement or direct sellable-stock
+  reclassification is introduced.
+
+Verification
+- Python compilation passed for all five new T18 implementation modules.
+- git diff --check passed for task-owned files.
+- Nine focused schema/cost/money/guard/router tests passed in an ephemeral Linux test
+  runner. Exact 1/3 cumulative cost allocation conserved value
+  (0.333333 + 0.333334 + 0.333333 = 1.000000).
+- The replay-safe T18 migration ran twice successfully against the isolated
+  containermgmt_test database; no preview or business database was used.
+- Ten isolated PostgreSQL integration checks passed. They exercise claim request,
+  independent review, processing, quarantine/valuation/customer-credit effects,
+  exact replay, foreign-company denial, forced deferred guards, direct money-child
+  rejection, competing pending quantity caps and migration replay. HTTP coverage
+  proves ordinary authorised access, missing action-permission denial,
+  unauthenticated denial and foreign-company non-disclosure.
+- The integration run found and verified fixes for JSON-safe operation receipts and
+  table-specific deferred-trigger field access. The combined affected T13/T16/T17/
+  T18 backend set passes 38 checks with 23 existing dependency warnings.
+- The contextual frontend passes 35 focused checks across six suites, and its
+  production build succeeds with the existing project warnings.
+- Fifty-three fresh-install and prerequisite-regression checks pass after the T18
+  model, permission, migration and router registrations were added.
+- A disposable PostgreSQL 16 database also completed the real application startup,
+  permission seeding and `/health` request from an empty schema. This caught and
+  removed one unescaped PL/pgSQL exception placeholder before republishing the PR.
+
+Shared integration edits
+- Register models/router/startup migration and three action permissions.
+- Extend StockMovement and InventoryValuation constraints with RETURN.
+- Apply the replay-safe T18 migration and deferred cross-ledger guards.
+- Register the replay-safe migration and keep deferred cross-ledger guards active on
+  fresh installation and migration replay.
+
+Outstanding gates
+- GitHub CI and browser acceptance.
+- A true independent-connection threaded claim-cap race remains pending. The
+  inherited sales fixture is intentionally rollback-only, so its uncommitted source
+  sale cannot be observed by a second connection; sequential committed-savepoint
+  competing claims are covered without pretending that they are a threaded test.
+- Real return policy wording, staff training and accounting export mapping.
+- Serial returns, cross-store returns, cash refunds and credit redemption remain
+  deliberately disabled future contracts.

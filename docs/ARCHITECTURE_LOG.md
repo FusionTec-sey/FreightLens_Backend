@@ -1,5 +1,19 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T18 reviewed returns and immutable credit notes
+
+- Linked every claim to exact T13 invoice lines and T16 handovers, with pending and
+  credited quantities sharing one cumulative cap and mandatory independent review.
+- Added replay-safe T09 `RETURN` movements into quarantine, exact original `ISSUE`
+  cost reversal and immutable original-term SCR credit notes. Available stock and
+  reservations are not increased or reopened.
+- Applied credit value to source-invoice debt first and created only the surplus as
+  an append-only non-expiring customer-credit liability. Refund and redemption are
+  not enabled; zero-value rounding still leaves a traceable stock-only credit note.
+- Added a contextual sale-detail returns workflow with scoped recovery and a narrow
+  posted-invoice projection for return-only staff. Serial and cross-store returns,
+  browser acceptance and accounting validation remain explicit gates.
+
 ## 2026-10-05 - T15 immutable sales-draft copy provenance
 
 - Extended only the existing initial sales-intent save with an optional exact

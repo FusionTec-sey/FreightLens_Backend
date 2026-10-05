@@ -984,8 +984,9 @@ changes from irrecoverable copy-identity conflicts. Eight focused T15 tests, 35
 affected backend draft/API/concurrency tests, 44 focused frontend checks and the
 production build pass. Evidence:
 evidence/20261005-safe-draft-copy-backend.txt.
-Next action: merge the paired backend/frontend PRs after CI, then finish the
-separately approved browser/recovery acceptance.
+Backend PR #15 and frontend PR #13 are merged at 54a2dec and ebb7385 after both
+GitHub workflows passed. Next action: finish the separately approved browser/
+recovery acceptance; no historical money or fulfilment state is copied.
 
 T16 | Implement physical collection
 Status: In progress
@@ -1005,7 +1006,7 @@ recovery. Exact serial assignment and reviewed other-store
 collection remain fail-closed follow-ups; browser/hardware acceptance stays open.
 
 T17 | Implement invoices and print queues
-Status: In progress
+Status: Implemented - verification pending
 Dependencies: T13
 Acceptance / evidence: Immutable invoice rendering, COPY reprints, failed/uncertain queue; automated checks distinct from Epson hardware gate.
 Generated invoice artifacts belong here. Generic sales attachments, price labels
@@ -1024,14 +1025,26 @@ Evidence: evidence/20261005-sales-invoice-printing.txt.
 The existing sale-detail screen now has a permission-aware invoice/print panel with
 stable create/handoff/resolve intents, paginated history and explicit uncertain-state
 recovery. Fifteen focused frontend tests and the production build pass with existing
-warnings. Backend PR #14 and frontend PR #12 are open as a paired integration gate.
-Next action: merge both after CI; actual browser/Epson validation remains pending.
+warnings. Backend PR #14 and frontend PR #12 are merged at a208783 and 891e77b
+after fresh-install, full backend, frontend and build CI passed. Actual browser/
+Epson validation remains pending and is not replaced by automated checks.
 
 T18 | Implement returns and credit notes
-Status: Blocked
+Status: Implemented—verification pending
 Dependencies: T12,T16
 Acceptance / evidence: Original invoice/actual handover links; previous/pending claims counted; debt settled before surplus credit.
-Next action: Build exact cumulative return eligibility.
+The pilot contract reuses T13 invoices, exact T16 handovers and the shared manager-
+case engine. All returns require independent review; pending and accepted claims
+count against eligibility. Processing restores the original location/batch into
+quarantine, reverses the exact original issue cost, issues an immutable original-
+term credit note, settles any source-invoice debt first and appends only the surplus
+as non-expiring customer credit. No refund, redemption, reservation reopening,
+serial return or cross-store return is included. Backend and contextual sale-detail
+UI are implemented. Local evidence: 9 focused backend checks; 10 isolated PostgreSQL
+lifecycle/guard/replay/auth checks; 38 combined T13/T16/T17/T18 checks; 35 focused
+frontend checks and production build. True threaded claim-cap verification, GitHub
+CI, browser acceptance and accounting-policy review remain pending. Evidence:
+planning/evidence/20261005-sales-returns-backend.txt.
 
 T19 | Implement damaged/display workflows
 Status: Blocked
