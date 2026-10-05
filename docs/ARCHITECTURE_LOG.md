@@ -1,5 +1,20 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T15 immutable sales-draft copy provenance
+
+- Extended only the existing initial sales-intent save with an optional exact
+  source document/revision and immutable same-company provenance.
+- Required new destination document/line identities and retained current source
+  validation; no price, approval, reservation, money, posting, invoice, collection
+  or print state is cloned.
+- Stable retries use a distinct immutable copy operation whose event binds the exact
+  source and destination, and rerun permissions. Service and deferred database
+  guards reject foreign/missing sources, retroactive origin claims, self-copy and
+  source line-key reuse; current and historical detail return the source reference.
+- Eight focused T15 and 35 affected draft/API/concurrency tests pass. Forty-four
+  focused frontend checks and the production build pass. Browser acceptance remains
+  open.
+
 ## 2026-10-05 - T17 immutable invoice artifacts and print queue
 
 - Added immutable ORIGINAL/COPY sales-invoice artifacts over the existing published

@@ -43,11 +43,31 @@ class SalesIntentInput(BaseModel):
         return self
 
 
+class SalesIntentSourceReference(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    document_key: UUID
+    version: int = Field(ge=1, strict=True)
+
+    @field_validator('document_key')
+    @classmethod
+    def nonzero_document_key(cls, value):
+        if value.int == 0:
+            raise ValueError('A nonzero source document identity is required')
+        return value
+
+
 class SalesIntentSave(BaseModel):
     model_config = ConfigDict(extra='forbid')
     operation_key: UUID
     expected_version: int = Field(ge=0, strict=True)
     draft: SalesIntentInput
+    source_reference: SalesIntentSourceReference | None = None
+
+    @model_validator(mode='after')
+    def copy_reference_is_initial_only(self):
+        if self.source_reference is not None and self.expected_version != 0:
+            raise ValueError('A source reference is allowed only on the initial draft save')
+        return self
 
 
 class SalesIntentSaved(BaseModel):
@@ -79,6 +99,7 @@ class SalesIntentRead(SalesIntentInput):
     document_key: UUID
     version: int
     status: Literal['DRAFT']
+    source_reference: SalesIntentSourceReference | None = None
     lines: list[SalesIntentLineRead]
 
 
@@ -106,6 +127,7 @@ class SalesIntentHistoryItem(BaseModel):
 
 class SalesIntentHistoryDetail(SalesIntentHistoryItem):
     branch_name: str | None = None
+    source_reference: SalesIntentSourceReference | None = None
     lines: list[SalesIntentHistoricalLine]
     read_only: Literal[True] = True
     catalogue_labels_current: Literal[True] = True
