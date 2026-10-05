@@ -47,7 +47,7 @@ from auth.security_guards import require_permission
 
 def return_access(policy: AccessPolicy = Depends(get_request_policy)):
     required = ("View_Sale", "View_Product", "View_Customer",
-                "View_Personal_Data", "View_Financial_Data")
+                "View_Personal_Data", "View_Financials")
     if (any(not policy.has(name) for name in required)
             or not policy.allows_field_class("PERSONAL")
             or not policy.allows_field_class("FINANCIAL")):
@@ -70,7 +70,7 @@ SalesReturnRouter = APIRouter(
 def _authorize(policy, action_permission=None):
     def authorize(db):
         required = ("View_Sale", "View_Product", "View_Customer",
-                    "View_Personal_Data", "View_Financial_Data")
+                    "View_Personal_Data", "View_Financials")
         if (any(not policy.has(name) for name in required)
                 or not policy.allows_field_class("PERSONAL")
                 or not policy.allows_field_class("FINANCIAL")

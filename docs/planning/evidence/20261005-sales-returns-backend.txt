@@ -33,13 +33,15 @@ Verification
   (0.333333 + 0.333334 + 0.333333 = 1.000000).
 - The replay-safe T18 migration ran twice successfully against the isolated
   containermgmt_test database; no preview or business database was used.
-- Six isolated PostgreSQL integration checks passed. They exercise claim request,
+- Ten isolated PostgreSQL integration checks passed. They exercise claim request,
   independent review, processing, quarantine/valuation/customer-credit effects,
   exact replay, foreign-company denial, forced deferred guards, direct money-child
-  rejection, competing pending quantity caps and migration replay.
+  rejection, competing pending quantity caps and migration replay. HTTP coverage
+  proves ordinary authorised access, missing action-permission denial,
+  unauthenticated denial and foreign-company non-disclosure.
 - The integration run found and verified fixes for JSON-safe operation receipts and
   table-specific deferred-trigger field access. The combined affected T13/T16/T17/
-  T18 backend set passes 34 checks with 23 existing dependency warnings.
+  T18 backend set passes 38 checks with 23 existing dependency warnings.
 - The contextual frontend passes 35 focused checks across six suites, and its
   production build succeeds with the existing project warnings.
 - Fifty-three fresh-install and prerequisite-regression checks pass after the T18

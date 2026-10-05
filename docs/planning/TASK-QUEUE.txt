@@ -1040,8 +1040,8 @@ quarantine, reverses the exact original issue cost, issues an immutable original
 term credit note, settles any source-invoice debt first and appends only the surplus
 as non-expiring customer credit. No refund, redemption, reservation reopening,
 serial return or cross-store return is included. Backend and contextual sale-detail
-UI are implemented. Local evidence: 9 focused backend checks; 6 isolated PostgreSQL
-lifecycle/guard/replay checks; 34 combined T13/T16/T17/T18 checks; 35 focused
+UI are implemented. Local evidence: 9 focused backend checks; 10 isolated PostgreSQL
+lifecycle/guard/replay/auth checks; 38 combined T13/T16/T17/T18 checks; 35 focused
 frontend checks and production build. True threaded claim-cap verification, GitHub
 CI, browser acceptance and accounting-policy review remain pending. Evidence:
 planning/evidence/20261005-sales-returns-backend.txt.
