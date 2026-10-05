@@ -298,6 +298,28 @@ These answer the T19 owner gates for disposition, display saleability, return
 condition routing and value treatment. Supplier claims, disclosure and discount
 remain unaddressed and stay fail closed until decided.
 
+BD-20261005-06 | Damaged stock IS written down (supersedes BD-20261005-05) | T19,T06,T18
+Owner corrected the value treatment on 2026-10-05. Damaged stock DOES take a
+write-down. This SUPERSEDES the "damaged stock keeps its cost" clause of
+BD-20261005-05; every other clause of that decision stands unchanged.
+
+Damage therefore changes BOTH condition and value: moving stock to a damaged
+condition reduces its carried value, and the reduction must be recorded against the
+existing immutable valuation contracts rather than by editing an earlier value.
+
+OPEN SUB-DECISION, still required before implementation: the write-down BASIS.
+The owner has confirmed that a write-down happens, not how much. One of:
+  (a) full write-down to zero value;
+  (b) a fixed percentage of carried cost, configurable per company or branch;
+  (c) a value entered per event by the authorised user, within permission limits;
+  (d) written down to an expected recovery or seconds-sale value.
+Until the basis is decided, damaged-stock valuation stays FAIL CLOSED: record the
+condition change and leave value untouched rather than guessing an amount.
+
+Also required with the basis: whether a write-down needs independent review above a
+threshold, or whether the existing damaged-stock permission is sufficient, matching
+the permission-access rule in BD-20261005-05.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration
