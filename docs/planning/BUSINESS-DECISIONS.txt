@@ -269,6 +269,35 @@ Downstream tasks must not wait for the future accounting module:
   Cash handling is covered by the manual reception procedure, which staff
   acceptance should still cover as an operational step.
 
+BD-20261005-05 | Damaged/display rules, close authority skipped, mapping under Sales | T19,T20,T06,T18
+Owner decisions recorded 2026-10-05.
+
+CLOSE AUTHORITY: not required for now. No system-enforced day close, close
+permission, cash-variance approval or supervisor sign-off. Recorded in
+SKIPPED-SCOPE-REGISTER.md and revisited with the future accounting module.
+
+ACCOUNT MAPPING: keep the existing fail-closed T20A mapping foundation, but surface
+and own it under SALES configuration for now rather than a separate accounting area.
+No real account seed and no financial activation. When the accounting module is
+developed it takes ownership of mapping, and the Sales placement is revisited.
+
+DAMAGED AND DISPLAY STOCK (T19):
+- Disposition is controlled by PERMISSION ACCESS. Who may move damaged stock, and
+  which dispositions they may choose, is decided by the permissions a user holds.
+  No separate approval workflow is required beyond that permission check.
+- DISPLAY UNITS ARE SELLABLE. Display stock remains saleable rather than being held
+  in a separate non-saleable pool. Count treatment follows ordinary stock.
+- RETURN CONDITION is NOT decided automatically. A returned product is VERIFIED BY
+  THE SALESPERSON first; the salesperson then selects the action to take for that
+  particular product. The system must present the available dispositions and record
+  who chose which one, and must not auto-route a return to saleable or damaged.
+- DAMAGED STOCK KEEPS ITS COST. No write-down, revaluation or zeroing on damage.
+  This binds T06: damage changes condition, never value.
+
+These answer the T19 owner gates for disposition, display saleability, return
+condition routing and value treatment. Supplier claims, disclosure and discount
+remain unaddressed and stay fail closed until decided.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration

@@ -342,6 +342,8 @@ acceptance remains pending; previous demo records retained, no new proposal samp
 
 T06 | Persist inventory valuation
 Status: In progress
+BD-20261005-05: damaged stock KEEPS ITS COST. Damage changes condition, never value;
+no write-down, revaluation or zeroing on damage.
 Latest: the public approved-cost adapter/UI and cloud-derived central runtime are
 implemented but disabled without operator configuration. The runtime derives pool
 authority from one server-owned node identity and never accepts client claims or
@@ -1056,6 +1058,9 @@ Epson validation remains pending and is not replaced by automated checks.
 
 T18 | Implement returns and credit notes
 Status: Implemented—verification pending
+BD-20261005-05: a returned product is verified by the salesperson, who then selects
+the disposition for that particular product. Do not auto-route a return to saleable
+or damaged; record who chose the disposition.
 Dependencies: T12,T16
 Acceptance / evidence: Original invoice/actual handover links; previous/pending claims counted; debt settled before surplus credit.
 The pilot contract reuses T13 invoices, exact T16 handovers and the shared manager-
@@ -1074,6 +1079,13 @@ and frontend build CI passed. Evidence: planning/evidence/20261005-sales-returns
 
 T19 | Implement damaged/display workflows
 Status: In progress
+BD-20261005-05 answers the open owner gates: damaged-stock disposition is controlled
+by PERMISSION ACCESS, not a separate approval workflow; DISPLAY UNITS REMAIN
+SELLABLE; a returned product is VERIFIED BY THE SALESPERSON who then selects the
+action for that product, so the system must offer the dispositions and record the
+chooser rather than auto-routing; and DAMAGED STOCK KEEPS ITS COST, with no
+write-down or revaluation. Supplier claims, disclosure and discount remain undecided
+and stay fail closed.
 Dependencies: T04,T09,T18
 Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.
 BD-20261005-03 starts T19A with one reviewed non-serial T18 return disposition:
@@ -1092,6 +1104,10 @@ opening display saleability, disclosure/discount, supplier claim or write-off sl
 
 T20 | Implement close and accounting export
 Status: In progress
+BD-20261005-05: CLOSE AUTHORITY is not required for now - no system-enforced close,
+close permission, variance approval or supervisor sign-off. Account mapping stays
+fail-closed and is surfaced under SALES configuration until the future accounting
+module takes ownership. Skipped items are tracked in SKIPPED-SCOPE-REGISTER.md.
 BD-20261005-04: cash counting is a MANUAL procedure by the cashier at reception; no
 till reconciliation, opening-float, blind-count or cash-deposit feature is required
 now. The accounting module is FUTURE scope, retained not cancelled. The implemented
