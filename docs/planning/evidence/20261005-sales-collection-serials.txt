@@ -10,7 +10,8 @@ Scope
   handover operation; it does not copy a mutable serial snapshot.
 - The deferred collection allocation guard requires the serial movement count,
   stock movement, product, balance and operation to match the exact allocation.
-- Other-store collection remains denied and the frontend selector remains pending.
+- Other-store collection remains denied. The existing frontend collection panel now
+  provides explicit serial selection without adding a duplicate workflow.
 
 Verification
 - Python compilation: passed for changed schema, model, service and test modules.
@@ -20,7 +21,11 @@ Verification
   Utils.migrate_20261005_sales_collection.ensure_sales_collection_schema before
   the focused run so the CREATE OR REPLACE guard matched current code.
 - git diff --check: passed (line-ending notices only).
-- Full GitHub CI and fresh-install: pending PR.
+- Backend PR #24 full pytest and fresh-install CI: passed; merged as 3505672.
+- Frontend PR #17 full tests and production-build CI: passed; merged as 828a327.
+- Frontend focused sales collection/detail/checkout tests: 24 passed.
+- Local preview serves the selector and serial-history bundle text; native browser
+  layout acceptance remains pending.
 
 Synthetic-data boundary
 - Tests use generated companies, products, reservations and serial numbers only.
