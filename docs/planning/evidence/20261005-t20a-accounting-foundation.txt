@@ -45,8 +45,11 @@ Verification
   and float/unbalanced rejection.
 - `git diff --check` is clean apart from platform line-ending notices.
 
+Integration result
+- Backend PR #17 passed the full pytest and fresh-install GitHub checks and merged
+  into `codex/pos-development` at 3597d625253441bdb1ef584e9f8be3f62b31b647.
+
 Outstanding gates
-- GitHub PR CI and integration merge are pending at this evidence revision.
 - Real chart-of-account mappings must be supplied and accepted; none are invented.
 - Owner/accounting choices remain required for opening float and counted-cash
   semantics, till cash-bank deposits versus T27 customer deposits, provisional

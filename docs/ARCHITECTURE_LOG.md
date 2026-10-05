@@ -1,5 +1,15 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T19A reviewed return-stock condition
+
+- Added an exact independently reviewed non-serial `QUARANTINED -> DAMAGED`
+  transition bound to processed T18 credit-note-line and return-movement lineage.
+- CONDITION movements conserve on-hand/reserved/valuation and declare no pricing or
+  accounting effect. Deferred database guards enforce the approval, source cap,
+  posting receipt, current balance and tenant boundary.
+- Display saleability, discounts, supplier claims, write-offs and loss accounting
+  remain separate fail-closed T19 decisions.
+
 ## 2026-10-05 - T20A fail-closed accounting configuration
 
 - Added immutable versioned mappings for seven bounded logical roles at the exact
@@ -13,6 +23,7 @@
   checks and a disposable empty-PostgreSQL application startup pass. Real mappings,
   till semantics, accounting acceptance and all final
   close/export behavior remain blocked by BD-20261005-02.
+- Backend PR #17 passed full-suite and fresh-install CI and merged at 3597d62.
 
 ## 2026-10-05 - T18 reviewed returns and immutable credit notes
 
