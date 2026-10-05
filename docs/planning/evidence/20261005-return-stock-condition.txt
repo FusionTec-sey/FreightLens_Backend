@@ -35,9 +35,13 @@ Verification
   issues before this checkpoint.
 
 Outstanding gates
-- GitHub full-suite/fresh-install CI and merge.
-- Contextual Sales return action, dedicated Inventory review queue, durable frontend
-  operation recovery and browser acceptance.
+- Browser acceptance.
+- Backend PRs #18/#19 passed full pytest and fresh-install CI and merged at
+  2b2dfcc76b01d0977058f8411fc4d8d99430f69f. Frontend PR #15 passed full test/build
+  CI and merged at 0e232c0860cf2026a9f50b653467e448b41dd223.
+- The contextual Sales action, dedicated Inventory review queue and durable frontend
+  operation recovery are implemented. The local preview bundle exposes the route,
+  menu and approved-execution action; native browser visual acceptance is pending.
 - T18 currently enforces one return operation per credit-note line. T19 aggregation
   checks are forward-safe, but no artificial multi-line/single-operation regression
   is claimed without a separate T18 contract decision.

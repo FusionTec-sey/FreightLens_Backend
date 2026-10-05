@@ -1060,8 +1060,10 @@ The bounded backend contract is implemented and locally verified: 110 affected t
 pass, replay-safe migration/startup succeeds from an empty isolated PostgreSQL database,
 the health check is green and all four private API paths are registered. Evidence:
 planning/evidence/20261005-return-stock-condition.txt.
-Next action: publish the backend contract, then add the contextual return action and
-dedicated Inventory review queue without opening later T19 policies.
+Backend PRs #18/#19 and frontend PR #15 passed their full CI gates and merged at
+2b2dfcc and 0e232c0. The local preview serves the new menu, route and execution UI.
+Next action: keep browser acceptance pending and obtain policy decisions before
+opening display saleability, disclosure/discount, supplier claim or write-off slices.
 
 T20 | Implement close and accounting export
 Status: In progress
