@@ -342,11 +342,12 @@ acceptance remains pending; previous demo records retained, no new proposal samp
 
 T06 | Persist inventory valuation
 Status: In progress
-BD-20261005-06 SUPERSEDES BD-20261005-05 here: damaged stock IS WRITTEN DOWN, so
-damage changes both condition and value. The reduction records against the existing
-immutable valuation contracts, never by editing an earlier value. The write-down
-BASIS is still an open owner decision, so damaged-stock valuation stays fail closed
-until it is given.
+BD-20261005-06 and BD-20261005-07: damaged stock IS WRITTEN DOWN, to its EXPECTED
+RECOVERY VALUE, entered per event by the authorised user because recovery value is
+item-specific. It must be <= carried cost, zero is valid, and the reduction records
+against the existing immutable valuation contracts with the user who entered it,
+never by editing an earlier value. A later sale of the damaged item is an ordinary
+sale against the written-down value, with no second write-down.
 Latest: the public approved-cost adapter/UI and cloud-derived central runtime are
 implemented but disabled without operator configuration. The runtime derives pool
 authority from one server-owned node identity and never accepts client claims or
@@ -1086,8 +1087,8 @@ BD-20261005-05 answers the open owner gates: damaged-stock disposition is contro
 by PERMISSION ACCESS, not a separate approval workflow; DISPLAY UNITS REMAIN
 SELLABLE; a returned product is VERIFIED BY THE SALESPERSON who then selects the
 action for that product, so the system must offer the dispositions and record the
-chooser rather than auto-routing; and DAMAGED STOCK IS WRITTEN DOWN per
-BD-20261005-06, whose basis is still an open owner decision. Supplier claims, disclosure and discount remain undecided
+chooser rather than auto-routing; and DAMAGED STOCK IS WRITTEN DOWN to its
+expected recovery value per BD-20261005-07, entered per event within permission. Supplier claims, disclosure and discount remain undecided
 and stay fail closed.
 Dependencies: T04,T09,T18
 Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.

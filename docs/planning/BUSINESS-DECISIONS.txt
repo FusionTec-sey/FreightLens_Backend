@@ -320,6 +320,28 @@ Also required with the basis: whether a write-down needs independent review abov
 threshold, or whether the existing damaged-stock permission is sufficient, matching
 the permission-access rule in BD-20261005-05.
 
+BD-20261005-07 | Damaged write-down basis is expected recovery value | T19,T06,T18
+Owner decided on 2026-10-05 that damaged stock is written down to its EXPECTED
+RECOVERY VALUE: what the business expects to realise from the item in its damaged
+condition, such as a seconds sale. This completes the open basis question in
+BD-20261005-06; a write-down happens, and this is how much.
+
+Implementation rules that follow from the basis:
+- Recovery value is ITEM-SPECIFIC, so it cannot be a fixed configured constant. The
+  authorised user records the expected recovery value at the time of the damage
+  disposition, under the permission-access rule of BD-20261005-05.
+- The value must be LESS THAN OR EQUAL TO the carried cost. This is a write-down
+  only; a damage event must never increase carried value.
+- ZERO is a valid recovery value, meaning nothing is expected to be realised.
+- The reduction records against the existing immutable valuation contracts, never by
+  editing an earlier value, and records WHO entered it alongside the condition change.
+- Selling the damaged item later is an ordinary sale against the written-down value.
+  No second write-down and no automatic revaluation if the realised price differs.
+
+STILL OPEN, the last damaged-stock gate: whether a write-down above a threshold needs
+independent review, or whether the damaged-stock permission alone is sufficient. Until
+that is decided, apply the permission check only and do not invent a threshold.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration

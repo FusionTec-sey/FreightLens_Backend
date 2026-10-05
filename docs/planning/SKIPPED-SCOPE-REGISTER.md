@@ -28,7 +28,6 @@ decision that resumed it.
 
 | Needed | For | Note |
 |---|---|---|
-| Damaged-stock write-down **basis** | T19, T06 | BD-20261005-06 confirms a write-down happens, not how much. Zero, a configurable percentage, a per-event entered value, or expected recovery value. Valuation stays fail closed until given |
 | Whether a write-down needs review above a threshold | T19 | Or is the damaged-stock permission sufficient, per BD-20261005-05 |
 | Supplier claims, disclosure, approved discount on damaged stock | T19 | Listed in T19 acceptance; still fail closed |
 
