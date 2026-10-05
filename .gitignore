@@ -87,3 +87,7 @@ scratch/
 BLOB/
 *.mp4
 *.webm
+
+# Real product listing exports are business data, not repository content
+INV_ProductListing.xlsx
+INV_ProductListing_Enrichment_Template.xlsx
