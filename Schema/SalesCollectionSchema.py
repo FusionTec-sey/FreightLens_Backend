@@ -21,6 +21,7 @@ class SalesCollectionAllocationInput(BaseModel):
     reservation_key: UUID
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
     expected_stock_version: int = Field(gt=0)
+    serial_keys: list[UUID] = Field(default_factory=list, max_length=500)
 
     @field_validator("line_key", "reservation_key")
     @classmethod
@@ -36,6 +37,15 @@ class SalesCollectionAllocationInput(BaseModel):
         if not quantity.is_finite() or quantity <= 0:
             raise ValueError("Collection quantity must be positive")
         return quantity
+
+    @field_validator("serial_keys")
+    @classmethod
+    def unique_serial_keys(cls, values: list[UUID]) -> list[UUID]:
+        if any(not value.int for value in values):
+            raise ValueError("Serial UUID must be nonzero")
+        if len(set(values)) != len(values):
+            raise ValueError("A serial identity may appear only once per allocation")
+        return values
 
 
 class SalesCollectionCreate(BaseModel):
@@ -85,6 +95,11 @@ class SalesCollectionLineOption(BaseModel):
     base_unit: str
 
 
+class SalesCollectionSerialOption(BaseModel):
+    serial_key: UUID
+    serial_number: str
+
+
 class SalesCollectionReservationOption(BaseModel):
     line_key: UUID
     reservation_key: UUID
@@ -93,7 +108,7 @@ class SalesCollectionReservationOption(BaseModel):
     location_id: int
     location_code: str
     location_name: str
-    tracking_policy: Literal["UNTRACKED", "BATCH"]
+    tracking_policy: Literal["UNTRACKED", "BATCH", "SERIAL"]
     batch_key: UUID | None
     batch_code: str | None
     shade: str | None
@@ -103,6 +118,7 @@ class SalesCollectionReservationOption(BaseModel):
     collected: str
     remaining: str
     stock_version: int
+    serials: list[SalesCollectionSerialOption] = Field(default_factory=list)
 
 
 class SalesCollectionOptionsRead(BaseModel):
@@ -129,6 +145,7 @@ class SalesCollectionAllocationRead(BaseModel):
     handover_operation_key: UUID
     quantity: str
     base_unit: str
+    serials: list[SalesCollectionSerialOption] = Field(default_factory=list)
 
 
 class SalesCollectionRead(BaseModel):

@@ -2,8 +2,9 @@
 
 This is the T09 pilot movement seam consumed later by T16. It owns no invoice,
 collector, payment or collection eligibility policy. A trusted outer caller must
-authorize those rules on every attempt. Serial stock remains blocked until the
-identity-specific movement gateway can record exact assignment history.
+authorize those rules on every attempt. Serial stock requires one exact available
+identity per base unit and records the assignment through the immutable movement
+gateway; public callers remain responsible for invoice and handover eligibility.
 """
 from decimal import Decimal
 from uuid import UUID
