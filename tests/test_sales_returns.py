@@ -1,5 +1,6 @@
 from decimal import Decimal
-from uuid import uuid4
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -127,6 +128,43 @@ def test_credit_header_and_physical_lines_may_round_to_zero():
                 if constraint.name == "ck_sales_credit_note_line_values")
     assert "gross_credit_scr >= 0" in str(header.sqltext)
     assert "gross_credit_scr >= 0" in str(line.sqltext)
+
+
+def test_credit_operation_effect_is_json_safe_for_replay():
+    from Services.sales_return_service import _credit_effect_snapshot
+
+    keys = [uuid4() for _ in range(5)]
+    snapshot = _credit_effect_snapshot(dict(
+        credit_note_key=keys[0],
+        credit_note_number="CN-TEST-0001",
+        return_key=keys[1],
+        invoice_key=keys[2],
+        invoice_number="INV-TEST-0001",
+        branch_id=1,
+        customer_key=keys[3],
+        currency="SCR",
+        gross_credit_scr="0.00",
+        net_credit_scr="0.00",
+        tax_credit_scr="0.00",
+        invoice_debt_applied_scr="0.00",
+        customer_credit_scr="0.00",
+        issued_at=datetime(2026, 10, 5, 1, 2, 3, tzinfo=timezone.utc),
+        issued_by=7,
+        lines=[dict(
+            invoice_line_key=keys[4],
+            handover_allocation_key=uuid4(),
+            quantity="1.000000",
+            base_unit="EA",
+            gross_credit_scr="0.00",
+            net_credit_scr="0.00",
+            tax_credit_scr="0.00",
+        )],
+    ))
+
+    assert snapshot["credit_note_key"] == str(keys[0])
+    assert snapshot["issued_at"] == "2026-10-05T01:02:03Z"
+    assert isinstance(snapshot["lines"][0]["invoice_line_key"], str)
+    assert not any(isinstance(value, UUID) for value in snapshot.values())
 
 
 def test_return_database_guards_bind_review_stock_value_and_credit():

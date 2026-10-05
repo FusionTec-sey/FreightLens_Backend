@@ -35,6 +35,7 @@ from Model.containermgmt.Orders.SalesReturn import (
     SalesReturnClaim,
 )
 from Schema.SalesReturnSchema import (
+    SalesCreditNoteRead,
     SalesReturnClaimCreate,
     SalesReturnClaimRead,
     SalesReturnCreditNoteCreate,
@@ -761,6 +762,11 @@ def _credit_read(db, context, credit):
     )
 
 
+def _credit_effect_snapshot(value):
+    """Return the immutable credit-note result in operation-safe JSON form."""
+    return SalesCreditNoteRead.model_validate(value).model_dump(mode="json")
+
+
 def read_credit_note(db, context, credit_note_key, *, authorize):
     _guard(context, authorize, db)
     credit = _owned(db, SalesCreditNote, context).filter_by(
@@ -970,7 +976,7 @@ def process_return_credit(factory, context, actor_id, return_key, payload, *,
                 created_by=actor_id,
             ))
         db.flush()
-        result = _credit_read(db, context, credit)
+        result = _credit_effect_snapshot(_credit_read(db, context, credit))
         return PostingEffect(result, {
             "kind": "sales.return.credited",
             "return_key": str(return_key),
