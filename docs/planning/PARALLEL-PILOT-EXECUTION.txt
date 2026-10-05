@@ -31,7 +31,8 @@ MIGRATION RESERVATIONS
 Integrator/core: migrate_20261005_sales_posting.py,
 migrate_20261005_stock_movements.py, migrate_20261005_collections.py,
 migrate_20261005_returns.py, migrate_20261005_till_close.py and
-migrate_20261005_sales_intent_copy_origins.py.
+migrate_20261005_sales_intent_copy_origins.py,
+migrate_20261005_accounting_configuration.py.
 Programmer: migrate_20261005_payment_methods.py,
 migrate_20261005_branch_receiving_accounts.py and
 migrate_20261005_invoice_print_queue.py.

@@ -1,5 +1,19 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - T20A fail-closed accounting configuration
+
+- Added immutable versioned mappings for seven bounded logical roles at the exact
+  organisation/branch boundary, with no real account seeds or cross-branch fallback.
+- Reused T12 receiving-account references for captured payment debits and added a
+  pure exact-Decimal balanced-journal composer; no journal, close or export is posted.
+- Enforced SALES, finance permission and FINANCIAL field-class access on every read,
+  write and retry. Branch/key/target locking covers concurrent identity and target
+  races; database checks reject malformed immutable audit rows.
+- Thirty-four focused PostgreSQL checks, six application registration/startup
+  checks and a disposable empty-PostgreSQL application startup pass. Real mappings,
+  till semantics, accounting acceptance and all final
+  close/export behavior remain blocked by BD-20261005-02.
+
 ## 2026-10-05 - T18 reviewed returns and immutable credit notes
 
 - Linked every claim to exact T13 invoice lines and T16 handovers, with pending and

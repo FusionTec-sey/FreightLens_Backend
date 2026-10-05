@@ -2,6 +2,34 @@
 
 ## Status
 
+### Fail-closed branch accounting configuration (2026-10-05; implemented)
+
+T20A introduces one versioned logical account mapping per organisation, branch and
+role. The seven bounded pilot roles cover revenue, output tax, customer-credit
+liability, COGS, inventory, cash over/short and till cash-deposit clearing. Payment
+debits continue to use the exact immutable T12 receiving-account reference captured
+by T13; no second payment or bank catalogue is created. The paid-only T13 pilot has
+no accounts-receivable role, and later credit sales must extend this contract under
+their approved T28 policy.
+
+Headers and revisions are tenant-owned, append-only and audit-constrained. A stable
+operation key, expected version, active branch and current finance authorization are
+rechecked on every write and replay. Branch, mapping-identity and target locks turn
+same-target and same-key races into deterministic domain conflicts. Reads are
+paginated, private/no-store and require the SALES module, financial permissions and
+the FINANCIAL field class. Exact lookup never falls back to another branch and
+returns a typed blocked state when a mapping is absent, disabled or its branch is
+disabled. Callers that compose financial effects must pin and lock the exact mapping
+key and revision.
+
+`accounting_journal_service` provides only pure immutable composition of positive
+two-decimal SCR debit/credit lines. It rejects floats, invalid account references,
+missing sides and unbalanced totals. It does not resolve accounts, persist a journal,
+close a till or period, export files or activate financial posting. The additive
+migration creates no configuration rows. Real account values, till opening-float and
+count semantics, cash-bank deposit treatment, provisional COGS/inventory policy and
+accounting approval remain explicit fail-closed T20 gates under BD-20261005-02.
+
 ### Reviewed sales returns and credit notes (2026-10-05; in progress)
 
 T18 extends the existing T13 invoice and T16 physical-handover records; it does

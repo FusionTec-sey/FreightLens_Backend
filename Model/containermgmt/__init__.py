@@ -61,6 +61,9 @@ from .Orders.SalesReturn import (
     SalesCreditNoteLine, SalesInvoiceDebtApplication,
     CustomerCreditLiabilityEntry,
 )
+from .Accounting.AccountingConfiguration import (
+    BranchAccountMapping, BranchAccountMappingRevision,
+)
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
@@ -119,6 +122,7 @@ __all__ = [
     "SalesReturnClaim", "SalesReturnAllocation", "SalesCreditNote",
     "SalesCreditNoteLine", "SalesInvoiceDebtApplication",
     "CustomerCreditLiabilityEntry",
+    "BranchAccountMapping", "BranchAccountMappingRevision",
     "ReportTemplate", "ReportTemplateVersion", "ReportRenderJob",
     "OrgPrintProfile", "ReportFieldClass", "ReportTemplateAssignment",
     "MasterDocumentType"

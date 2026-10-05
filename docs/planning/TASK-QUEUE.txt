@@ -1042,9 +1042,10 @@ as non-expiring customer credit. No refund, redemption, reservation reopening,
 serial return or cross-store return is included. Backend and contextual sale-detail
 UI are implemented. Local evidence: 9 focused backend checks; 10 isolated PostgreSQL
 lifecycle/guard/replay/auth checks; 38 combined T13/T16/T17/T18 checks; 35 focused
-frontend checks and production build. True threaded claim-cap verification, GitHub
-CI, browser acceptance and accounting-policy review remain pending. Evidence:
-planning/evidence/20261005-sales-returns-backend.txt.
+frontend checks and production build. True threaded claim-cap verification,
+browser acceptance and accounting-policy review remain pending. Backend PR #16 and
+frontend PR #14 are merged at 03e6d1d and 325356e after full-suite, fresh-install
+and frontend build CI passed. Evidence: planning/evidence/20261005-sales-returns-backend.txt.
 
 T19 | Implement damaged/display workflows
 Status: Blocked
@@ -1053,10 +1054,21 @@ Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/wr
 Next action: Extend condition movement and case workflows.
 
 T20 | Implement close and accounting export
-Status: Blocked
+Status: In progress
 Dependencies: T12,T13,T18
 Acceptance / evidence: Till reconciliation/discrepancy approval/deposit match; repeatable balanced branch journals.
-Next action: Build configuration-driven export and review UI.
+BD-20261005-02 permits a fail-closed T20A foundation: versioned per-branch logical
+account mappings and exact balanced journal composition, with no real account seed,
+cross-branch fallback or financial activation. Till opening-float/count/deposit
+semantics and provisional COGS/inventory treatment remain owner/accounting gates.
+T20A is implemented and locally verified: immutable/audited revisions, stable
+operation replay, expected versions, exact-branch typed lookup, finance field-class
+enforcement, deterministic same-key/target races and pure no-float balanced SCR
+composition. Thirty-four focused PostgreSQL checks and six startup/registration
+checks pass; application startup also succeeds against a disposable empty PostgreSQL
+database. Evidence: planning/evidence/20261005-t20a-accounting-foundation.txt.
+Next action: merge the frozen T20A contract, then obtain the explicit till/count,
+cash-deposit, account-mapping and provisional-cost choices before final close/export.
 
 T21 | Package store/cloud runtimes
 Status: Blocked

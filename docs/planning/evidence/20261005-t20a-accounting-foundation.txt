@@ -1,0 +1,55 @@
+T20A FAIL-CLOSED ACCOUNTING FOUNDATION — 2026-10-05
+
+Scope
+- Versioned, immutable and tenant-owned logical account configuration for one exact
+  branch and role. No mapping row or real account reference is seeded.
+- Supported pilot roles: SALES_REVENUE, OUTPUT_TAX_PAYABLE,
+  CUSTOMER_CREDIT_LIABILITY, COST_OF_GOODS_SOLD, INVENTORY_ASSET,
+  CASH_OVER_SHORT and CASH_DEPOSIT_CLEARING.
+- T12 remains authoritative for exact payment-method receiving-account references.
+- Pure immutable SCR journal composition only. No journal persistence, till close,
+  period fence, file export or financial activation is included.
+
+Safety contract
+- SALES subscription, View_Financials/Manage_Financials and the FINANCIAL field
+  class are enforced at HTTP and service retry boundaries.
+- Stable operation IDs, expected versions, active-branch checks and exact tenant
+  ownership are required. Reads are private/no-store and server-paginated.
+- Lookup never chooses another branch. Missing, disabled and disabled-branch states
+  are explicit and callers may lock an exact mapping key/version before composition.
+- Branch, mapping-key and target locks serialize competing identities/targets.
+- Database triggers make configuration history append-only and constraints reject
+  missing actors or soft-deleted/deleted immutable rows.
+- Journal values must be exact positive Decimal SCR cents; binary floats,
+  unsupported roles, invalid account references and unbalanced journals fail.
+
+Verification
+- Isolated PostgreSQL focused gate:
+  tests/test_accounting_configuration.py
+  tests/test_accounting_configuration_api.py
+  tests/test_payment_configuration.py
+  tests/test_payment_configuration_api.py
+  tests/test_inventory_posting.py
+  Result: 34 passed.
+- Application registration/startup contract gate:
+  tests/test_fresh_install_contract.py and tests/test_test_environment.py
+  Result: 6 passed.
+- Disposable empty PostgreSQL 16 startup gate: the real `containerMgmt.startup_event`
+  completed with all migrations and seeding, including T20A registration. Optional
+  local RustFS/Meilisearch endpoints were deliberately absent and emitted their
+  existing non-fatal warnings; database startup completed successfully.
+- Focused coverage includes stable replay/changed-intent conflict, stale versions,
+  tenant/branch isolation, missing-field/module/permission denial, pagination,
+  immutable history, malformed direct inserts, migration replay, exact locked
+  revisions, same-key two-connection race, no-fallback states, balanced composition
+  and float/unbalanced rejection.
+- `git diff --check` is clean apart from platform line-ending notices.
+
+Outstanding gates
+- GitHub PR CI and integration merge are pending at this evidence revision.
+- Real chart-of-account mappings must be supplied and accepted; none are invented.
+- Owner/accounting choices remain required for opening float and counted-cash
+  semantics, till cash-bank deposits versus T27 customer deposits, provisional
+  COGS/inventory inclusion and rounding.
+- Final till close, accounting export, frontend, browser and supervised-pilot
+  acceptance are not part of T20A and remain disabled.
