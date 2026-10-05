@@ -31,7 +31,7 @@ from Services.inventory_posting_service import PostingConflict
 from Services.payment_configuration_service import save_mapping, save_method
 from Services.sales_posting_service import (
     append_card_confirmation, create_posting_attempt, finalize_posting_attempt,
-    read_posting_options,
+    read_invoice_for_draft, read_posting_options,
 )
 from Services.staff_store_assignment_service import save_staff_store_assignment
 from Routes.Inventory.BranchCounterRouter import save_counter
@@ -205,6 +205,55 @@ def test_cash_attempt_and_invoice_post_once_without_handover(posting):
     balance = f.db.get(StockBalance, hold.balance_id)
     assert hold.released == 0 and balance.on_hand == Decimal("24")
     assert f.db.query(SalesInvoice).filter_by(org_id=f.org_a).count() == 1
+
+
+def test_exact_posted_draft_revision_resolves_without_posting_authority(posting):
+    f = posting
+    _create(f); _finalize(f)
+    f.db.connection()
+    invoice = read_invoice_for_draft(
+        f.db, f.context, f.attempt.document_key, 1,
+        authorize=lambda db: None)
+    assert invoice["invoice_key"] == f.posting_invoice_key
+    assert invoice["document_key"] == f.attempt.document_key
+    assert invoice["draft_version"] == 1
+    with pytest.raises(LookupError):
+        read_invoice_for_draft(
+            f.db, f.context, f.attempt.document_key, 2,
+            authorize=lambda db: None)
+
+
+def test_posted_invoice_reference_route_is_read_only_and_minimal(posting):
+    from Routes.Orders.SalesPostingRouter import SalesPostingRouter
+
+    f = posting
+    if not any(route.path.startswith("/sales/posting-attempts/")
+            for route in f.app.routes):
+        f.app.include_router(SalesPostingRouter)
+    f.permissions |= {"View_Sale"}
+    f.permissions.difference_update({"Post_Sale", "View_Financials"})
+    base = f.user.access_policy
+    f.user.access_policy = replace(base,
+        permission_names=frozenset(f.permissions),
+        module_names=frozenset(set(base.module_names) | {"SALES"}),
+        field_permissions={**base.field_permissions,
+            "PERSONAL": "View_Personal_Data"})
+
+    before = f.client.get(
+        f"/sales/drafts/{f.attempt.document_key}/posted-invoice-reference"
+        "?draft_version=1")
+    assert before.status_code == 404
+    _create(f); _finalize(f)
+    response = f.client.get(
+        f"/sales/drafts/{f.attempt.document_key}/posted-invoice-reference"
+        "?draft_version=1")
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "invoice_key": str(f.posting_invoice_key),
+        "document_key": str(f.attempt.document_key),
+        "draft_version": 1,
+    }
+    assert "payments" not in response.text
 
 
 def test_changed_retry_fails_closed(posting):

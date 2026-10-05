@@ -783,3 +783,35 @@ def read_invoice(db, context, invoice_key, *, authorize):
         reservations=[dict(line_key=row.line_key,
             reservation_key=row.reservation_key,
             quantity=_quantity(row.quantity)) for row in reservations])
+
+
+def _posted_invoice_for_draft(db, context, document_key, draft_version, *, authorize):
+    _guard(context, authorize, db)
+    if type(draft_version) is not int or draft_version <= 0:
+        raise ValueError("Positive exact draft version required")
+    invoice = _owned(db, SalesInvoice, context).filter_by(
+        document_key=UUID(str(document_key)),
+        draft_version=draft_version,
+    ).one_or_none()
+    if invoice is None:
+        raise LookupError("Posted sales invoice not found for this draft revision")
+    return invoice
+
+
+def read_invoice_reference_for_draft(
+        db, context, document_key, draft_version, *, authorize):
+    """Return only the exact posted identity needed by post-sale workspaces."""
+    invoice = _posted_invoice_for_draft(
+        db, context, document_key, draft_version, authorize=authorize)
+    return {
+        "invoice_key": invoice.invoice_key,
+        "document_key": invoice.document_key,
+        "draft_version": invoice.draft_version,
+    }
+
+
+def read_invoice_for_draft(db, context, document_key, draft_version, *, authorize):
+    """Resolve one exact posted draft revision without requiring posting authority."""
+    invoice = _posted_invoice_for_draft(
+        db, context, document_key, draft_version, authorize=authorize)
+    return read_invoice(db, context, invoice.invoice_key, authorize=authorize)

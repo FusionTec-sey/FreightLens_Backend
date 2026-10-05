@@ -30,13 +30,13 @@ from Services.sales_return_service import (
     list_invoice_returns,
     process_return_credit,
     read_credit_note,
-    read_posted_invoice_for_draft,
     read_return_claim,
     read_return_options,
     read_return_processing_options,
     request_return_claim,
     review_return_claim,
 )
+from Services.sales_posting_service import read_invoice_for_draft
 from Services.stock_runtime_service import StockRuntimeUnavailable, server_stock_runtime
 from Utils.org_filter import OrgContext, apply_org_filter
 from auth.dependencies import get_org_context
@@ -131,7 +131,7 @@ def posted_invoice_for_draft(document_key: UUID,
         context: OrgContext = Depends(get_org_context),
         policy: AccessPolicy = Depends(return_access),
         user=Depends(require_permission("View_Sale"))):
-    return _call(db, lambda: read_posted_invoice_for_draft(
+    return _call(db, lambda: read_invoice_for_draft(
         db, context, document_key, draft_version,
         authorize=_authorize(policy)))
 

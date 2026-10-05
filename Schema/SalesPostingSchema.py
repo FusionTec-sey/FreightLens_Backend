@@ -269,6 +269,14 @@ class SalesInvoiceReservationRead(BaseModel):
     quantity: str
 
 
+class SalesPostedInvoiceReferenceRead(BaseModel):
+    """Minimum exact identity needed to resume post-sale work from a draft."""
+
+    invoice_key: UUID
+    document_key: UUID
+    draft_version: int
+
+
 class SalesInvoiceRead(BaseModel):
     invoice_key: UUID
     attempt_key: UUID

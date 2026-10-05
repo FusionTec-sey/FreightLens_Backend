@@ -335,21 +335,6 @@ def read_return_options(db, context, invoice_key, *, authorize):
     )
 
 
-def read_posted_invoice_for_draft(db, context, document_key, draft_version, *, authorize):
-    """Narrow View_Sale lookup without checkout/posting authority or account data."""
-    _guard(context, authorize, db)
-    if type(draft_version) is not int or draft_version <= 0:
-        raise ValueError("Positive exact draft version required")
-    invoice = _owned(db, SalesInvoice, context).filter_by(
-        document_key=UUID(str(document_key)),
-        draft_version=draft_version,
-    ).one_or_none()
-    if invoice is None:
-        raise LookupError("Posted sales invoice not found for this draft revision")
-    return read_invoice(
-        db, context, invoice.invoice_key, authorize=authorize)
-
-
 def return_binding(db, context, return_key, *, authorize, lock=True):
     _guard(context, authorize, db)
     query = _owned(db, SalesReturnClaim, context).filter_by(return_key=return_key)
