@@ -36,6 +36,8 @@ MOVEMENT_KIND_CHECK = """(kind = 'OPENING' AND reservation_id IS NULL AND versio
                         AND on_hand_delta = 0 AND reserved_delta < 0) OR
                         (kind = 'HANDOVER' AND reservation_id IS NOT NULL AND version > 1
                         AND on_hand_delta < 0 AND reserved_delta = on_hand_delta) OR
+                        (kind = 'RETURN' AND reservation_id IS NULL AND version > 1
+                        AND on_hand_delta > 0 AND reserved_delta = 0) OR
                         (kind = 'ADJUSTMENT' AND reservation_id IS NULL AND version > 1
                         AND reserved_delta = 0)"""
 

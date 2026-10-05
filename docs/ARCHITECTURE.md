@@ -2,6 +2,42 @@
 
 ## Status
 
+### Reviewed sales returns and credit notes (2026-10-05; in progress)
+
+T18 extends the existing T13 invoice and T16 physical-handover records; it does
+not introduce a second sales ledger. A return claim binds exact invoice lines and
+handover allocations, with cumulative eligibility calculated as handed-over less
+already credited and still-pending quantities. Requested and approved claims hold
+that eligibility until rejection or processing. Every claim requires a current
+independently reviewed ManagerCase, and the processing operation consumes that
+exact approval so it cannot be reused after a material change.
+
+Processing is one stable, tenant-scoped operation. It appends a T09 `RETURN`
+movement into the original branch/location/batch balance, increasing on-hand and
+quarantined by the same exact quantity so available stock does not increase. It
+also restores the proportional original `ISSUE` cost into the same valuation pool,
+using the final residual on complete reversal rather than recomputing cost from a
+current average. Reservation state is never reopened. Serial-controlled and
+cross-store returns remain fail closed pending their explicit contracts.
+
+The operation issues an immutable SCR credit note using the original invoice
+line's net/tax/gross terms. Concurrent claims lock the invoice, source issue and
+eligible handovers; deferred database guards bind every credit line to the return,
+invoice, physical movement and valuation entry and enforce cumulative quantity and
+money caps. Credit value first appends an application against any remaining source-
+invoice debt. Only the surplus creates an append-only, non-expiring customer-credit
+liability entry; refund and credit redemption are deliberately absent. A return
+whose final proportional value rounds to SCR0.00 still creates a traceable stock-
+only credit note but no debt or liability child.
+
+The contextual sale-detail frontend uses the narrow posted-invoice projection and
+return permissions, so authorised returns staff do not also require `Post_Sale`.
+It captures the returner/contact, reason, condition and exact handover quantities,
+then shows server-calculated debt and surplus-credit outcomes. Recovery keys are
+scoped by organisation, user and invoice, and uncertain retries retain stable
+claim/credit operation identities. Browser acceptance and real accounting policy
+validation remain release gates.
+
 ### Source-linked safe sales draft copies (2026-10-05; implemented, verification pending)
 
 The existing initial sales-intent save may now carry one exact source document and
