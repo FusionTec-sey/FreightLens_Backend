@@ -82,7 +82,8 @@ def _pending_quantity(db, context, line_id, *, exclude_case_key=None):
     return total.quantize(Decimal("0.000001"))
 
 
-def list_return_condition_sources(db, context, *, page, limit):
+def list_return_condition_sources(db, context, *, page, limit,
+                                  invoice_key=None, credit_note_key=None):
     """Return only current, eligible T18 sources; never expose guessed identities."""
     if context.org_id not in context.allowed_org_ids:
         raise PermissionError("Stock-condition company denied")
@@ -208,6 +209,10 @@ def list_return_condition_sources(db, context, *, page, limit):
         SalesCreditNoteLine.quantity - transitioned > 0,
         StockBalance.quarantined > 0,
     )
+    if invoice_key is not None:
+        query = query.filter(SalesCreditNoteLine.invoice_key == invoice_key)
+    if credit_note_key is not None:
+        query = query.filter(SalesCreditNoteLine.credit_note_key == credit_note_key)
     total = query.count()
     rows = query.with_entities(
         SalesCreditNoteLine,

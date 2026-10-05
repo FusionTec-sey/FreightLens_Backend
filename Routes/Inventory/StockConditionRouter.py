@@ -85,6 +85,8 @@ def source_access(policy):
 )
 def list_condition_sources(page: int = Query(1, ge=1),
                            limit: int = Query(25, ge=1, le=100),
+                           invoice_key: UUID | None = Query(None),
+                           credit_note_key: UUID | None = Query(None),
                            db: Session = Depends(get_db),
                            context: OrgContext = Depends(get_org_context),
                            policy: AccessPolicy = Depends(get_request_policy),
@@ -92,7 +94,8 @@ def list_condition_sources(page: int = Query(1, ge=1),
     source_access(policy)
     try:
         total, items = list_return_condition_sources(
-            db, context, page=page, limit=limit)
+            db, context, page=page, limit=limit,
+            invoice_key=invoice_key, credit_note_key=credit_note_key)
         return {"items": items, "total": total, "page": page, "limit": limit,
                 "pages": max(1, (total + limit - 1) // limit)}
     except Exception as error:
