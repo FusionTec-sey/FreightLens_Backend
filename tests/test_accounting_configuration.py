@@ -1,6 +1,8 @@
 """T20A exact branch account configuration and pure journal composition."""
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -8,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from Model.containermgmt.Accounting.AccountingConfiguration import ACCOUNT_ROLES
+from Model.containermgmt.Inventory.Location import InventoryBranch
 from Schema.AccountingConfigurationSchema import (
     AccountMappingConfig,
     AccountMappingSave,
@@ -286,6 +289,73 @@ def test_exact_locked_revision_and_permission_guard(accounting):
             limit=10,
             authorize=lambda session: (_ for _ in ()).throw(PermissionError()),
         )
+
+
+def test_same_mapping_key_race_is_a_domain_conflict(accounting):
+    f = accounting
+    with f.factory.begin() as db:
+        branch = InventoryBranch(
+            org_id=f.orgs[0],
+            code=f"RACE{uuid4().hex[:8].upper()}",
+            name="Synthetic race branch",
+            kind="STORE",
+            created_by=f.actor,
+        )
+        db.add(branch)
+        db.flush()
+        second_branch = branch.id
+    barrier = Barrier(2, timeout=10)
+
+    def save(branch_id, role):
+        barrier.wait()
+        try:
+            return write(
+                f,
+                lambda db: save_account_mapping(
+                    db,
+                    f.context,
+                    f.actor,
+                    f.mapping_key,
+                    mapping_payload(f, branch=branch_id, role=role),
+                    authorize=f.authorize,
+                ),
+            )
+        except PostingConflict:
+            return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda args: save(*args),
+                (
+                    (f.branches[0], "SALES_REVENUE"),
+                    (second_branch, "INVENTORY_ASSET"),
+                ),
+            )
+        )
+    assert results.count("conflict") == 1
+    assert sum(result != "conflict" for result in results) == 1
+
+
+def test_database_rejects_malformed_immutable_audit_rows(accounting):
+    f = accounting
+    with f.factory.begin() as db:
+        with pytest.raises(DBAPIError, match="ck_branch_account_mapping_audit"):
+            db.execute(
+                text(
+                    """INSERT INTO containermgmt.branch_account_mappings
+                    (org_id, mapping_key, branch_id, account_role,
+                     creation_operation_key, created_by)
+                    VALUES (:org, :key, :branch, 'SALES_REVENUE', :operation, NULL)"""
+                ),
+                {
+                    "org": f.orgs[0],
+                    "key": uuid4(),
+                    "branch": f.branches[0],
+                    "operation": uuid4(),
+                },
+            )
+        db.rollback()
 
 
 def test_exact_balanced_journal_is_immutable():

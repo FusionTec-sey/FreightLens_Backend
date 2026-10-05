@@ -58,6 +58,15 @@ def _lock_target(db, context, branch_id: int, account_role: str) -> None:
     )
 
 
+def _lock_mapping_key(db, context, mapping_key: UUID) -> None:
+    """Serialize one client identity after the branch row and before target locks."""
+    db.execute(text("SET LOCAL lock_timeout = '5s'"))
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"account-mapping:{context.org_id}:{mapping_key}"},
+    )
+
+
 def _mapping(db, context, mapping_key: UUID, *, lock: bool = False):
     query = apply_org_filter(
         db.query(BranchAccountMapping).filter(
@@ -223,6 +232,7 @@ def save_account_mapping(
             raise LookupError("Account mapping not found")
 
     def effect(session):
+        _lock_mapping_key(session, context, mapping_key)
         _lock_target(session, context, payload.branch_id, payload.account_role)
         header = _mapping(session, context, mapping_key, lock=True)
         if header is None:

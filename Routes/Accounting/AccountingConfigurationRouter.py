@@ -30,7 +30,10 @@ from auth.security_guards import require_permission
 
 
 def accounting_access(policy: AccessPolicy = Depends(get_request_policy)):
-    if not policy.has("View_Financials"):
+    if (
+        not policy.has("View_Financials")
+        or not policy.allows_field_class("FINANCIAL")
+    ):
         raise HTTPException(403, "Accounting configuration access required")
     return policy
 
@@ -52,8 +55,12 @@ AccountingConfigurationRouter = APIRouter(
 
 def _guard(policy: AccessPolicy, manage: bool = False):
     def authorize(db):
-        if not policy.has("View_Financials") or (
-            manage and not policy.has("Manage_Financials")
+        if (
+            not policy.has("View_Financials")
+            or not policy.allows_field_class("FINANCIAL")
+            or (
+                manage and not policy.has("Manage_Financials")
+            )
         ):
             raise PermissionError("Accounting configuration access required")
 

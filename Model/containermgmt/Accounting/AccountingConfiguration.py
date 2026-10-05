@@ -23,6 +23,8 @@ ACCOUNT_ROLES = (
     "CASH_DEPOSIT_CLEARING",
 )
 
+AUDIT_CHECK = "created_by IS NOT NULL AND NOT is_deleted AND deleted_at IS NULL"
+
 
 class BranchAccountMapping(OrgMixin, AuditMixin, Base):
     __tablename__ = "branch_account_mappings"
@@ -48,6 +50,7 @@ class BranchAccountMapping(OrgMixin, AuditMixin, Base):
             "account_role IN (" + ",".join(f"'{role}'" for role in ACCOUNT_ROLES) + ")",
             name="ck_branch_account_mapping_role",
         ),
+        CheckConstraint(AUDIT_CHECK, name="ck_branch_account_mapping_audit"),
         {"schema": "containermgmt"},
     )
 
@@ -88,6 +91,7 @@ class BranchAccountMappingRevision(OrgMixin, AuditMixin, Base):
             "account_ref ~ '^[A-Z0-9][A-Z0-9_.:-]{0,63}$'",
             name="ck_branch_account_revision_ref",
         ),
+        CheckConstraint(AUDIT_CHECK, name="ck_branch_account_revision_audit"),
         {"schema": "containermgmt"},
     )
 

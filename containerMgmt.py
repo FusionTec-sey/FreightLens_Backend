@@ -206,6 +206,8 @@ async def startup_event():
     ensure_payment_methods_schema()
     from Utils.migrate_20261005_branch_receiving_accounts import ensure_branch_receiving_accounts_schema
     ensure_branch_receiving_accounts_schema()
+    from Utils.migrate_20261005_accounting_configuration import ensure_accounting_configuration_schema
+    ensure_accounting_configuration_schema()
     from Utils.migrate_20261003_sales_reservation_sources import ensure_sales_reservation_sources_schema
     ensure_sales_reservation_sources_schema()
     from Utils.migrate_20261003_reservation_deadlines import ensure_reservation_deadlines_schema
@@ -397,6 +399,8 @@ from Routes.Orders.SalesPricingRouter import SalesPricingRouter
 app.include_router(SalesPricingRouter)
 from Routes.Orders.PaymentConfigurationRouter import PaymentConfigurationRouter
 app.include_router(PaymentConfigurationRouter)
+from Routes.Accounting.AccountingConfigurationRouter import AccountingConfigurationRouter
+app.include_router(AccountingConfigurationRouter)
 from Routes.Orders.SalesPostingRouter import SalesPostingRouter
 app.include_router(SalesPostingRouter)
 from Routes.Orders.SalesCollectionRouter import SalesCollectionRouter

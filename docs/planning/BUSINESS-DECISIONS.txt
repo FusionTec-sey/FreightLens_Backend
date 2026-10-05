@@ -215,6 +215,22 @@ and till close. Cheques, deposits, contract credit, promotions, full reporting,
 provider delivery and T21-T24 offline work remain later. No deployment, real account
 mapping, live financial posting or customer messaging is authorised by this decision.
 
+BD-20261005-02 | T20 accounting foundation remains fail closed | T12,T13,T18,T20
+Recorded 2026-10-05 under the owner's approved accelerated plan and standing rule
+that unresolved mandatory values remain configurable and disabled. T20 may now add
+versioned per-branch logical account-role configuration and exact, balanced journal
+composition primitives. It must seed no real account identifiers, choose no account
+for another branch, export no guessed mapping and activate no financial posting.
+
+Till opening-float/count/deposit semantics, the distinction between a till cash-bank
+deposit and T27 customer deposits, the accepted chart-of-accounts mappings, and the
+policy for provisional COGS/inventory entries remain unresolved acceptance gates.
+Until those are approved, final till close and accounting export must fail closed;
+independent configuration and deterministic arithmetic work may continue. Existing
+T12 receiving-account references are reused for their exact captured payment side,
+not duplicated into a second payment catalogue. This decision starts a safe T20A
+foundation without claiming accounting acceptance or altering real business data.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration

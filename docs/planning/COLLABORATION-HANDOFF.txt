@@ -1,18 +1,26 @@
 FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-05
-Decision revision: BD-20261005-01
-Wave 2 checkpoint: T13 backend PR #12 merged as d0d4f44 and its existing-checkout
-frontend consumer PR #10 merged as c903117; both GitHub checks passed. T16 backend
-PR #13 merged as ea1a890 and frontend PR #11 merged as 5e8c3dc; both checks passed.
-T17 invoice/print work is now in progress on the integrator branch against that pair.
-Serial assignment and reviewed other-store collection remain fail closed. Read
-TASK-QUEUE.txt and evidence/20261005-sales-collection.txt before extending it.
+Decision revision: BD-20261005-02
+Current paired integration baseline: backend 03e6d1d40e4ade7a87a336fbdc1bac1d593ce002
+and frontend 325356e24fc7e98decfdc42bf58fe10958771dc5 on
+`codex/pos-development`. T18 backend PR #16 and frontend PR #14 are merged after
+focused, full-suite, fresh-install and frontend build CI passed. T18 reuses T13
+invoices and T16 handovers for reviewed quarantine returns, original-cost reversal,
+debt-first credit notes and non-expiring surplus credit. Serial/cross-store returns,
+refund and credit redemption remain fail closed. The local preview is on this pair.
+
+The integration lane has implemented the bounded T20A accounting-configuration and
+exact-journal foundation under BD-20261005-02 on `codex/t20-accounting-config`;
+its paired integration SHA remains the T18 baseline until the PR merges. Till close, real account mappings,
+exports and financial activation remain blocked by their explicit owner/accounting
+gates. Do not start a competing T20 implementation or edit shared registration,
+permission, posting-fence or menu files without coordination. Read TASK-QUEUE.txt
+and evidence/20261005-t20a-accounting-foundation.txt before extending sales accounting.
 Current execution map: PARALLEL-PILOT-EXECUTION.txt. The integration owner must
 publish the paired baseline SHAs before either feature worktree begins.
 Completed collaborator assignment: PROGRAMMER-T12A-HANDOFF.txt (cloud payment and
 receiving-account configuration), merged through backend PR #10/frontend PR #9.
-Remaining unassigned bounded work is T10 acceptance. Do not start a second T17
-implementation while the integrator T17 branch is active; coordinate against its
-published contract after merge. The previous PROGRAMMER-T21-HANDOFF.txt package
+Remaining unassigned bounded work is T10 acceptance. T17 is merged; extend its
+published invoice/print contract instead of rebuilding it. The previous PROGRAMMER-T21-HANDOFF.txt package
 is owner-deferred and historical until offline/store-node work is reactivated.
 Application starting revisions remain CHECKPOINT-20261004-UI.txt until the open
 paired baseline PRs are updated, verified and merged. The integrator must then

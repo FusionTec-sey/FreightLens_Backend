@@ -31,7 +31,7 @@ def accounting_api(api):
         org_ids=(f.org_a,),
         permission_names=frozenset(f.permissions),
         module_names=frozenset({"SALES"}),
-        field_permissions={},
+        field_permissions={"FINANCIAL": "View_Financials"},
     )
     f.mapping_key = uuid4()
     f.body = {
@@ -99,6 +99,8 @@ def test_accounting_api_permissions_module_stale_and_tenant_scope(accounting_api
         f"{base}/{uuid4()}", json={**f.body, "operation_key": str(uuid4())}
     ).status_code == 403
     f.user.access_policy = replace(policy, module_names=frozenset())
+    assert f.client.get(base).status_code == 403
+    f.user.access_policy = replace(policy, field_permissions={})
     assert f.client.get(base).status_code == 403
     f.user.access_policy = policy
     f.context.current_org_id = f.org_b
