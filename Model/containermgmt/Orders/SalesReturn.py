@@ -18,6 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -726,6 +727,21 @@ event.listen(CustomerCreditLiabilityEntry.__table__, "after_create", DDL(MONEY_C
 event.listen(CustomerCreditLiabilityEntry.__table__, "after_create", DDL(CREDIT_CHILD_GUARD_TRIGGER))
 event.listen(SalesCreditNoteLine.__table__, "after_create", DDL(LINEAGE_GUARD_FUNCTION))
 event.listen(SalesCreditNoteLine.__table__, "after_create", DDL(LINEAGE_GUARD_TRIGGER))
+# This guard spans the T18 return ledger and the inventory ledger. Install it
+# after the final source table on fresh metadata creation; runtime upgrades use
+# the replay-safe migration registered by the application startup.
+from Utils.migrate_20261005_stock_conditions import (  # noqa: E402
+    CONDITION_GUARD_FUNCTION,
+    CONDITION_GUARD_TRIGGER,
+)
+
+
+@event.listens_for(SalesCreditNoteLine.__table__, "after_create")
+def install_stock_condition_guard(target, connection, **kwargs):
+    connection.execute(text(CONDITION_GUARD_FUNCTION))
+    connection.execute(text(CONDITION_GUARD_TRIGGER))
+
+
 event.listen(StockMovement.__table__, "after_create", DDL(RETURN_MOVEMENT_GUARD_FUNCTION))
 event.listen(StockMovement.__table__, "after_create", DDL(RETURN_MOVEMENT_GUARD_TRIGGER))
 event.listen(InventoryValuation.__table__, "after_create", DDL(RETURN_VALUATION_GUARD_FUNCTION))

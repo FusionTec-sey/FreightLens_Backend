@@ -254,6 +254,10 @@ async def startup_event():
     ensure_sales_invoice_printing_schema()
     from Utils.migrate_20261005_sales_returns import ensure_sales_returns_schema
     ensure_sales_returns_schema()
+    from Utils.migrate_20261005_stock_conditions import ensure_stock_condition_schema
+    ensure_stock_condition_schema()
+    from Utils.migrate_20261005_stock_condition_permissions import ensure_stock_condition_permissions
+    ensure_stock_condition_permissions()
     from Utils.migrate_20261003_cost_allocation import ensure_cost_allocation_schema
     ensure_cost_allocation_schema()
     from Utils.migrate_20261003_cost_charge_uses import ensure_cost_charge_uses_schema
@@ -409,6 +413,8 @@ from Routes.Orders.SalesInvoicePrintRouter import SalesInvoicePrintRouter
 app.include_router(SalesInvoicePrintRouter)
 from Routes.Orders.SalesReturnRouter import SalesReturnRouter
 app.include_router(SalesReturnRouter)
+from Routes.Inventory.StockConditionRouter import StockConditionRouter
+app.include_router(StockConditionRouter)
 from Routes.Orders.SalesSourceRouter import SalesSourceRouter
 app.include_router(SalesSourceRouter)
 from Routes.Inventory.ReservationReleaseCaseRouter import ReservationReleaseCaseRouter

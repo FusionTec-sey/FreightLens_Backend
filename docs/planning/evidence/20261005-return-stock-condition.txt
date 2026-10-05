@@ -1,0 +1,43 @@
+T19A reviewed return-stock condition transition — implementation evidence
+Date: 2026-10-05
+
+Bounded scope
+- An exact processed T18 credit-note line may request an independently reviewed,
+  non-serial QUARANTINED to DAMAGED transition.
+- The transition preserves on-hand, reserved, available, valuation, reservations,
+  pricing and accounting. It cannot create sellable stock or reuse a return source.
+- Display saleability, disclosure and discounts, supplier claims, write-offs and
+  loss accounting remain outside this slice and fail closed.
+
+Implementation
+- Tenant-scoped paginated source and manager-case reads expose server-derived return,
+  handover, branch, location, product, batch and quantity lineage.
+- Stable operation IDs, expected stock versions, runtime branch authority and the
+  shared T04 request/review/consume lifecycle protect execution and replay.
+- CONDITION movements preserve quantity while shifting the exact approved amount
+  from quarantine to damaged. The execution result declares no valuation,
+  accounting or pricing effect.
+- The replay-safe migration installs the movement constraint, exact T18 lineage,
+  approval/use, posting-receipt, cumulative-cap and current-balance database guard.
+- Fresh metadata creation installs the same cross-ledger guard only after the final
+  T18 source table exists; application startup registers schema, permissions and
+  the four private API paths.
+
+Verification
+- Seven task-owned PostgreSQL checks passed before shared registration.
+- The combined affected T19/T18/stock-ledger/adjustment/manager-case/permission set
+  passed 110 tests with 23 existing dependency warnings.
+- A disposable empty PostgreSQL 16 database completed real application startup and
+  permission seeding. `/health` reported ok/connected, OpenAPI exposed four
+  `/inventory/stock-condition-cases` paths, and the deferred database trigger was
+  present. Temporary test databases and the runner were removed afterward.
+- The fresh-install rehearsal found and fixed two metadata-listener ordering/DDL
+  issues before this checkpoint.
+
+Outstanding gates
+- GitHub full-suite/fresh-install CI and merge.
+- Contextual Sales return action, dedicated Inventory review queue, durable frontend
+  operation recovery and browser acceptance.
+- T18 currently enforces one return operation per credit-note line. T19 aggregation
+  checks are forward-safe, but no artificial multi-line/single-operation regression
+  is claimed without a separate T18 contract decision.

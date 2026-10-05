@@ -1048,10 +1048,20 @@ frontend PR #14 are merged at 03e6d1d and 325356e after full-suite, fresh-instal
 and frontend build CI passed. Evidence: planning/evidence/20261005-sales-returns-backend.txt.
 
 T19 | Implement damaged/display workflows
-Status: Blocked
+Status: In progress
 Dependencies: T04,T09,T18
 Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.
-Next action: Extend condition movement and case workflows.
+BD-20261005-03 starts T19A with one reviewed non-serial T18 return disposition:
+QUARANTINED to DAMAGED while on-hand, reserved, valuation, reservations, pricing and
+accounting remain unchanged. Exact return lineage, cumulative caps, runtime authority,
+independent review, retry and tenant boundaries are mandatory. Display saleability,
+disclosure/discount, supplier claims and write-off/value treatment remain fail closed.
+The bounded backend contract is implemented and locally verified: 110 affected tests
+pass, replay-safe migration/startup succeeds from an empty isolated PostgreSQL database,
+the health check is green and all four private API paths are registered. Evidence:
+planning/evidence/20261005-return-stock-condition.txt.
+Next action: publish the backend contract, then add the contextual return action and
+dedicated Inventory review queue without opening later T19 policies.
 
 T20 | Implement close and accounting export
 Status: In progress
@@ -1067,8 +1077,9 @@ enforcement, deterministic same-key/target races and pure no-float balanced SCR
 composition. Thirty-four focused PostgreSQL checks and six startup/registration
 checks pass; application startup also succeeds against a disposable empty PostgreSQL
 database. Evidence: planning/evidence/20261005-t20a-accounting-foundation.txt.
-Next action: merge the frozen T20A contract, then obtain the explicit till/count,
-cash-deposit, account-mapping and provisional-cost choices before final close/export.
+Backend PR #17 merged at 3597d62 after full-suite and fresh-install CI passed.
+Next action: obtain the explicit till/count, cash-deposit, account-mapping and
+provisional-cost choices before final close/export.
 
 T21 | Package store/cloud runtimes
 Status: Blocked

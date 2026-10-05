@@ -231,6 +231,18 @@ T12 receiving-account references are reused for their exact captured payment sid
 not duplicated into a second payment catalogue. This decision starts a safe T20A
 foundation without claiming accounting acceptance or altering real business data.
 
+BD-20261005-03 | First damaged-stock slice uses reviewed return disposition | T04,T09,T18,T19
+Recorded 2026-10-05 under the approved T19 damaged/display workflow. T19A may move
+an exact, non-serial quantity from a processed T18 return's quarantine quantity to
+damaged only after independent review. The operation must preserve total on-hand,
+reserved quantity, valuation quantity/value, reservations, pricing and accounting;
+it must bind the exact return movement/credit line and prevent cumulative reuse.
+
+This does not decide whether damaged or display stock is saleable, reservable or
+discountable. It does not create display stock, customer disclosure, supplier claim,
+write-off, loss expense or accounting behavior. Those remain separate policy and
+acceptance gates. General stock adjustment is not a substitute for this disposition.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration
