@@ -227,6 +227,9 @@ or counters seeded. Verified backend contracts permit T04 development to proceed
 
 T04 | Build reusable manager cases
 Status: In progress
+DO NOT REBUILD: durable case notification delivery is implemented at
+b0045366441534004de7084e80987c1d2da5fd90 on codex/pos-wip-checkpoint and is not
+yet merged here. See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T03
 Acceptance / evidence: Request/review/approve/reject audit; exact scope/version binding; reject self approval and changed/reused approvals.
 Implemented foundation: immutable request/decision/single-use history, transactional
@@ -489,6 +492,11 @@ fingerprints in generic financial-only case reads. Browser acceptance pending.
 
 T07 | Complete reservation lifecycle
 Status: Implemented—verification pending
+PARTIALLY UNMERGED: register display labels and the counter/work-area seed
+fixture live at d9798a310b8452e4bbec3a080fa481334ab0ab20 on
+codex/pos-wip-checkpoint. Without that fixture no counter exists in any
+company, so the work-area preview cannot be exercised.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T04,T05,T13A
 Acceptance / evidence: Authoritative source links, approved release/reallocation/deadline review; protected paid holds and explicit multi-location approval.
 Saved-document/line/version links, exact caps and draft-edit protection now extend
@@ -561,6 +569,12 @@ commitments. Browser acceptance and real runtime configuration remain pending.
 
 T08 | Replace legacy stock writers
 Status: In progress
+DO NOT REBUILD: both C12 defects are already fixed and the legacy writer
+inventory is complete at f12794ce654134f010c7cea91b73eec8ab780695 on
+codex/pos-wip-checkpoint, not yet merged here. T08 work on this branch is
+building on a base that still clamps negative stock and allows stock
+replacement through a product metadata save. Merge that commit first.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T06,T07
 Acceptance / evidence: All product opening/adjustment/receiving/import writers use Inventory; no direct totals or clamp; two C12 xfails pass.
 Writer/reader audit complete: LEGACY-STOCK-WRITER-AUDIT.txt. Product metadata and
@@ -1202,6 +1216,12 @@ price labels after T11. Do not rebuild the collaborator's count workspace.
 
 T33A | Cycle-count planning and blind-count workspace
 Status: In progress
+DO NOT REBUILD: T33A is fully implemented at
+b0045366441534004de7084e80987c1d2da5fd90 (backend) and on the frontend branch
+codex/pos-ui-theme, neither merged here. Roughly 1,900 verified lines: six
+append-only tables, twelve endpoints, six permissions, the blind-sheet
+projection and a four-screen workspace. Confirm with the integrator before
+starting any count work. See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 2026-10-04 latest owner instruction: integrator to fix reviewed T33A defects.
 Located backend b6f888e (T33A b004536) and frontend 4b6705f (T33A 3260838).
 Selectively integrated count files and minimal migration/router/menu wiring;
