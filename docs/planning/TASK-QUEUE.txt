@@ -1092,6 +1092,12 @@ opening display saleability, disclosure/discount, supplier claim or write-off sl
 
 T20 | Implement close and accounting export
 Status: In progress
+BD-20261005-04: cash counting is a MANUAL procedure by the cashier at reception; no
+till reconciliation, opening-float, blind-count or cash-deposit feature is required
+now. The accounting module is FUTURE scope, retained not cancelled. The implemented
+T20A foundation stays exactly as built: fail-closed, no real account seed, no
+activation. Remaining T20 scope (till reconciliation, discrepancy approval, deposit
+match, journal export) moves to that future module with its own gates.
 Dependencies: T12,T13,T18
 Acceptance / evidence: Till reconciliation/discrepancy approval/deposit match; repeatable balanced branch journals.
 BD-20261005-02 permits a fail-closed T20A foundation: versioned per-branch logical
@@ -1145,6 +1151,8 @@ as an external gate. Do not depend on store synchronization.
 
 T26 | Build import and recovery rehearsals
 Status: Blocked
+BD-20261005-04: keep import, opening reconciliation and backup restore; the
+accounting export rehearsal is out of scope while the accounting module is future.
 Dependencies: T08,T20
 Acceptance / evidence: Repeatable inFlow mapping/exceptions/opening reconciliation/backup restore; synthetic or approved sanitized data.
 Next action: Develop cloud import, backup and restore adapters/rehearsals using
@@ -1189,6 +1197,8 @@ Next action: Extend returns without silent adjustments.
 
 T32 | Complete reporting
 Status: Blocked
+BD-20261005-04: proceed on sales, stock and customer data; accounting journals and
+ledger exports are excluded until the future accounting module exists.
 Dependencies: T20,T28,T29,T31
 Acceptance / evidence: Existing reports/dashboard drill-down, backend access and visibly provisional/unreconciled costs.
 Next action: Extend existing reporting, not another reporting database.
@@ -1249,6 +1259,9 @@ Movement-aware adjustment interface remains T09/T33, not guessed in this slice.
 
 T34 | Complete readiness and supervised pilot gates
 Status: Blocked
+BD-20261005-04: till reconciliation and accounting export acceptance drop out. Cash
+handling is the manual reception procedure; staff acceptance should still cover it
+as an operational step.
 Dependencies: T14E,T15,T19,T25,T26,T27,T28,T29,T31,T32,T33
 Acceptance / evidence: Cloud availability, hardware/configuration/import/accounting/staff acceptance; explicit owner pilot approval.
 Next action: Track real acceptance separately; never infer pilot authority.

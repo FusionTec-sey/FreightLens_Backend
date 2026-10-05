@@ -243,6 +243,32 @@ discountable. It does not create display stock, customer disclosure, supplier cl
 write-off, loss expense or accounting behavior. Those remain separate policy and
 acceptance gates. General stock adjustment is not a substitute for this disposition.
 
+BD-20261005-04 | Manual till count; accounting module is future scope | T20,T26,T32,T34
+Owner decided on 2026-10-05 that cash counting is a manual procedure performed by
+the cashier at reception. No till reconciliation, opening-float, blind-count or
+cash-deposit feature is required in the software for the current delivery.
+
+The accounting module is explicitly FUTURE scope: it will be developed later, so
+it is retained in the plan and not cancelled. Do not expand accounting work now.
+The T20A foundation already implemented (versioned per-branch logical account
+mappings and exact balanced journal composition) STAYS IN PLACE exactly as built:
+fail-closed, no real account seed, no cross-branch fallback and no financial
+activation. Do not remove or weaken it, and do not seed real accounts or activate
+posting against it.
+
+Current T20 scope therefore reduces to that inert foundation. Till reconciliation,
+discrepancy approval, deposit matching and journal export move to the future
+accounting module together with their own accounting, provider and owner gates.
+
+Downstream tasks must not wait for the future accounting module:
+- T26 import and recovery rehearsals keep import, opening reconciliation and
+  backup restore; accounting export rehearsal is out of scope while deferred.
+- T32 reporting proceeds on sales, stock and customer data; accounting journals
+  and ledger exports are excluded until the future module exists.
+- T34 pilot gates drop till reconciliation and accounting export acceptance.
+  Cash handling is covered by the manual reception procedure, which staff
+  acceptance should still cover as an operational step.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration
