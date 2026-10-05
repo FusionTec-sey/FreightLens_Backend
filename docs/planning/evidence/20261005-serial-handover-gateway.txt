@@ -1,0 +1,30 @@
+T09 EXACT SERIAL HANDOVER GATEWAY — 2026-10-05
+
+Scope
+- Extend the existing internal HANDOVER/ISSUE operation for SERIAL stock only.
+- Require one exact available serial identity per base unit.
+- Keep invoice, payment, collector and collection eligibility in T16.
+
+Contract
+- Stable operation intent includes a sorted exact serial-key set.
+- Identity rows are locked in stable order on the exact balance and must be AVAILABLE.
+- Immutable serial movement rows link identity, opening position, stock movement and
+  posting operation. Current serial reads exclude identities after handover.
+- Deferred database guards require the serial count to equal the physical movement
+  quantity. Both stock-movement and serial-movement inserts schedule the check, so
+  a late extra identity cannot change an already completed handover.
+- Non-serial operations reject serial keys. Serial fractional or count-mismatched
+  operations fail closed.
+
+Verification
+- 40 affected handover, serial opening and serial read tests pass on isolated
+  PostgreSQL.
+- Coverage includes stable reordered replay, unavailable/damaged identities,
+  competing operations, immutable history, late extra-identity rejection and
+  migration replay.
+- Python compilation and git diff checks pass.
+
+Outstanding
+- T16 must bind serial keys to exact invoice allocations and collector history.
+- Serial returns/transfers are not enabled by this handover-only slice.
+- Full GitHub CI, fresh-install verification and merge are pending.

@@ -12,7 +12,9 @@ from Model.containermgmt.Inventory.StockLedger import StockBalance, StockBatch
 from Model.containermgmt.Orders.Product import Product
 from Schema.InventoryStockSchema import StockBalanceRead
 from Services.inventory_quantity_service import QuantityBreakdown
-from Model.containermgmt.Inventory.StockSerial import StockSerialIdentity, StockSerialPosition
+from Model.containermgmt.Inventory.StockSerial import (
+    StockSerialIdentity, StockSerialMovement, StockSerialPosition,
+)
 from Schema.InventorySerialSchema import StockSerialRead
 
 LocationRouter = APIRouter(prefix="/inventory/branches", tags=["Inventory Locations"])
@@ -143,7 +145,11 @@ def list_stock_serials(branch_id: int, location_id: int, balance_id: int,
         & (StockSerialPosition.product_id == StockSerialIdentity.product_id)).filter(
         StockSerialPosition.balance_id == balance.id, StockSerialPosition.org_id == branch.org_id,
         StockSerialPosition.product_id == balance.product_id, StockSerialPosition.is_deleted.is_(False),
-        StockSerialIdentity.is_deleted.is_(False))
+        StockSerialIdentity.is_deleted.is_(False),
+        ~db.query(StockSerialMovement.id).filter(
+            StockSerialMovement.org_id == branch.org_id,
+            StockSerialMovement.serial_id == StockSerialIdentity.id,
+            StockSerialMovement.is_deleted.is_(False)).exists())
     query = apply_org_filter(query, StockSerialIdentity, context)
     total = query.count()
     rows = query.order_by(StockSerialIdentity.id).offset((page - 1) * limit).limit(limit).all()

@@ -33,6 +33,7 @@ migrate_20261005_stock_movements.py, migrate_20261005_collections.py,
 migrate_20261005_returns.py, migrate_20261005_till_close.py and
 migrate_20261005_sales_intent_copy_origins.py,
 migrate_20261005_accounting_configuration.py,
+migrate_20261005_stock_serial_handovers.py,
 migrate_20261005_stock_conditions.py and
 migrate_20261005_stock_condition_permissions.py.
 Programmer: migrate_20261005_payment_methods.py,

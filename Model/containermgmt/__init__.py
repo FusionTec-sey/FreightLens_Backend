@@ -83,7 +83,7 @@ from .Inventory.BranchCounter import BranchCounter, CounterSettingsRevision
 from .Inventory.StaffStoreAssignment import StaffStoreAssignment
 from .Inventory.ManagerCase import ManagerCase, ManagerCaseDecision, ManagerCaseUse
 from .Inventory.StockLedger import StockBalance, StockReservation, StockMovement
-from .Inventory.StockSerial import StockSerialIdentity, StockSerialPosition
+from .Inventory.StockSerial import StockSerialIdentity, StockSerialPosition, StockSerialMovement
 from .Inventory.ProductPolicyDraft import ProductPolicyDraft
 from .Inventory.ProductPolicyActivation import ProductPolicyActivation
 from .Inventory.UnitBarcode import UnitBarcode
