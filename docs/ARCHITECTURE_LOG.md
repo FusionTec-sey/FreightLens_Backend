@@ -1,5 +1,14 @@
 # FreightLens Architecture Log
 
+## 2026-10-05 - Direct post-sale work reuses fulfilment panels
+
+- An exact draft revision resolves to a minimal posted-invoice reference without
+  sale-posting or return-specific financial authority.
+- The reference contains only invoice, document and draft-version identities.
+  Collection and printing retain their independent permissions and service guards.
+- Sales details reuse the existing T16 collection and T17 invoice/print panels;
+  no second post-sale workspace or invoice record was introduced.
+
 ## 2026-10-05 - T19A reviewed return-stock condition
 
 - Added an exact independently reviewed non-serial `QUARANTINED -> DAMAGED`

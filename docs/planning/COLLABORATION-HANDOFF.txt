@@ -1,7 +1,7 @@
 FREIGHTLENS PARALLEL DEVELOPMENT HANDOFF — reconciled 2026-10-05
 Decision revision: BD-20261005-03
-Current paired integration baseline: backend 2b2dfcc76b01d0977058f8411fc4d8d99430f69f
-and frontend 0e232c0860cf2026a9f50b653467e448b41dd223 on
+Current paired integration baseline: backend c21b7026e5cfe5682680edfd5cfcc6e42c021bce
+and frontend a373c8f76a91f255e172cdb5cd9dd45b766f9a6f on
 `codex/pos-development`. T18 backend PR #16 and frontend PR #14 are merged after
 focused, full-suite, fresh-install and frontend build CI passed. T18 reuses T13
 invoices and T16 handovers for reviewed quarantine returns, original-cost reversal,
@@ -12,6 +12,10 @@ The bounded T20A accounting-configuration and exact-journal foundation under
 BD-20261005-02 is merged through backend PR #17 after full-suite and fresh-install
 CI passed. T19A is merged under BD-20261005-03 with its contextual Sales action,
 standalone Inventory review queue and exact document-filtered source contract.
+Sales details now resolve a minimal exact posted-invoice reference and open the
+existing collection or invoice/print panels directly. This read does not require
+posting authority and returns no payment, account or stock details; each panel
+retains its own action permission and backend guard.
 Till close, real account mappings,
 exports and financial activation remain blocked by their explicit owner/accounting
 gates. Do not start a competing T20 implementation or edit shared registration,

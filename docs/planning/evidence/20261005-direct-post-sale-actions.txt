@@ -1,0 +1,26 @@
+DIRECT POST-SALE COLLECTION AND PRINT ENTRY — 2026-10-05
+
+Scope
+- Resolve one exact posted invoice identity from a saved draft revision.
+- Open the existing collection or invoice/print workspace directly from Sales details.
+- Do not require Post_Sale, prepared pricing or a return-specific financial lookup.
+
+Safety
+- The new read returns only invoice_key, document_key and draft_version.
+- Normal Sales/draft/customer/product/personal-data reads remain mandatory.
+- Collection and printing retain their existing independent permissions and backend guards.
+- The read has no payment, stock, collection, printing or financial effect.
+- Exact returned identities are checked again by the frontend before opening either panel.
+
+Verification
+- Backend affected posting and return tests: 19 passed locally.
+- Frontend focused Sales detail/page/API suites: 30 passed locally.
+- Backend PR #21 passed full pytest and fresh-install CI, merged at
+  c21b7026e5cfe5682680edfd5cfcc6e42c021bce.
+- Frontend PR #16 passed full test/build CI, merged at
+  a373c8f76a91f255e172cdb5cd9dd45b766f9a6f.
+- Local preview API health is green and the served frontend bundle contains the
+  direct collection, printing and posted-reference controls.
+
+Outstanding gate
+- Native browser visual/role acceptance remains separate.
