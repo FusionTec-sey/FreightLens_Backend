@@ -227,6 +227,11 @@ or counters seeded. Verified backend contracts permit T04 development to proceed
 
 T04 | Build reusable manager cases
 Status: In progress
+DO NOT REBUILD: durable case notification delivery is ready to merge as
+codex/t04-case-notifications (234b8c8), built on this exact baseline and verified
+with the full backend suite (515 passed). It also fixes a pre-existing access defect
+where any user could read every user's notifications.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T03
 Acceptance / evidence: Request/review/approve/reject audit; exact scope/version binding; reject self approval and changed/reused approvals.
 Implemented foundation: immutable request/decision/single-use history, transactional
@@ -495,6 +500,11 @@ fingerprints in generic financial-only case reads. Browser acceptance pending.
 
 T07 | Complete reservation lifecycle
 Status: Verified (automated evidence; owner-waived browser acceptance per BD-20261005-09)
+PARTIALLY UNMERGED: register display labels and the counter/work-area seed
+fixture live at d9798a310b8452e4bbec3a080fa481334ab0ab20 on
+codex/pos-wip-checkpoint. Without that fixture no counter exists in any
+company, so the work-area preview cannot be exercised.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T04,T05,T13A
 Acceptance / evidence: Authoritative source links, approved release/reallocation/deadline review; protected paid holds and explicit multi-location approval.
 Saved-document/line/version links, exact caps and draft-edit protection now extend
@@ -567,6 +577,12 @@ commitments. Browser acceptance and real runtime configuration remain pending.
 
 T08 | Replace legacy stock writers
 Status: In progress
+CORRECTED 2026-10-05: both C12 defects are already fixed ON THIS BRANCH, more
+thoroughly than the earlier external fix - adjust-stock is a retired route returning
+400, current_stock reads from the ledger, and no xfail markers remain. The earlier
+warning to merge f12794c is withdrawn; merging it would revert a stronger fix. Its
+evidence file remains useful background.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T06,T07
 Acceptance / evidence: All product opening/adjustment/receiving/import writers use Inventory; no direct totals or clamp; two C12 xfails pass.
 Writer/reader audit complete: LEGACY-STOCK-WRITER-AUDIT.txt. Product metadata and
@@ -710,6 +726,9 @@ no real opening balances or inFlow data were loaded.
 
 T09 | Complete transfers and stock movements
 Status: In progress
+PARTIALLY UNMERGED: exact serial handover history exists at 715dcc5 on
+codex/t09-serial-handover, not merged here.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T08
 Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments with batch/serial history; destination available only after receipt.
 Accelerated pilot slice: internal reserved `HANDOVER` and central-pool `ISSUE` now
@@ -828,6 +847,10 @@ rendering consume it.
 
 T14 | Build tablet checkout
 Status: In progress
+PARTIALLY UNMERGED: posted invoice reference (970e7f2, codex/t14-direct-
+fulfilment-read), its record (1d5e828) and the frontend posted-sale actions
+(codex/t14-posted-sale-actions) are not merged here. Merge code and record together.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T13,T15A,T14D
 Acceptance / evidence: Customer/cart, scan/images/units/split payments/parked carts, distinct payment/fulfilment status.
 The existing draft detail now opens one integrated checkout panel rather than a
@@ -1006,6 +1029,10 @@ recovery acceptance; no historical money or fulfilment state is copied.
 
 T16 | Implement physical collection
 Status: In progress
+PARTIALLY UNMERGED: serial binding at collection exists at 7ae40e2 on
+codex/t16-serial-collection with its record at 9b687d4, and the serial selector UI
+on frontend codex/t16-serial-selector. None merged here.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T09,T13,T14
 Acceptance / evidence: Line locations/partial pickup/collector/serial assignment; payment eligibility and quantity/duplicate caps.
 The first safe backend slice persists immutable collection headers and allocations,
@@ -1091,6 +1118,9 @@ chooser rather than auto-routing; and DAMAGED STOCK IS WRITTEN DOWN to its
 expected recovery value per BD-20261005-07, entered per event within permission. BD-20261005-08 parks the rest: the damaged-stock permission alone
 is sufficient with no review threshold, and supplier claims, disclosure and approved
 discount are handled administratively OUTSIDE the software and are not built.
+PARTIALLY UNMERGED: the merged T19A checkpoint record exists at a8780e3 on
+codex/t19-integration-record, not merged here.
+See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 Dependencies: T04,T09,T18
 Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.
 BD-20261005-03 starts T19A with one reviewed non-serial T18 return disposition:
@@ -1234,6 +1264,10 @@ price labels after T11. Do not rebuild the collaborator's count workspace.
 
 T33A | Cycle-count planning and blind-count workspace
 Status: In progress
+CORRECTED 2026-10-05: the T33A backend IS already merged here via 7b7a71e;
+CycleCount.py is byte-identical to the original implementation. Only the frontend
+Stock Counts workspace on codex/pos-ui-theme is still unmerged, so the API exists
+with no screens. See docs/planning/UNMERGED-WORK-REGISTER-20261005.md.
 2026-10-04 latest owner instruction: integrator to fix reviewed T33A defects.
 Located backend b6f888e (T33A b004536) and frontend 4b6705f (T33A 3260838).
 Selectively integrated count files and minimal migration/router/menu wiring;
