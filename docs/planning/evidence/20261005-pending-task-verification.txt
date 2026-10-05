@@ -1,0 +1,70 @@
+IMPLEMENTED-PENDING TASK VERIFICATION â€” 2026-10-05
+
+Scope
+-----
+Verification only for T03, T05, T07, T10A, T11, T13A, T15, T15A, T17 and T18.
+No application code, runtime configuration, provider, hardware or business data was
+changed. Revisions tested: backend 021ae5b and frontend a373c8f.
+
+Shared automated results
+------------------------
+Frontend full suite: 78 suites / 387 tests passed.
+Frontend production build: passed with the repository's existing ESLint and stale
+Browserslist warnings.
+Backend full suite without a required database: 512 passed / 1134 skipped.
+Backend required-database run: stopped during fixture setup because the local
+PostgreSQL service rejected the isolated `test` credentials. Docker was unavailable
+to provide the CI PostgreSQL service. This is an environment gate, not an
+application assertion failure.
+
+Task verification matrix
+------------------------
+T03 â€” Automated executable subset: 20 passed / 49 database-backed skipped.
+Required before Verified: isolated PostgreSQL suite and browser/layout acceptance.
+
+T05 â€” Automated executable subset: 17 passed / 149 database-backed skipped.
+Required before Verified: isolated PostgreSQL policy/concurrency suite and proposal
+screen browser acceptance.
+
+T07 â€” Automated executable subset: 89 database-backed skipped; the related
+frontend reservation/allocation suites passed in the full frontend run.
+Required before Verified: isolated PostgreSQL reservation/retry/concurrency suite,
+real configured cloud runtime acceptance and browser acceptance.
+
+T10A â€” Automated executable subset: 18 passed / 35 database-backed skipped.
+Required before Verified: isolated PostgreSQL API/isolation suite plus live search
+provider and browser acceptance.
+
+T11 â€” Automated executable subset: 16 passed / 29 database-backed skipped.
+Required before Verified: isolated PostgreSQL pricing/configuration/API suite and
+owner configuration acceptance for tax, currencies, store prices and floors.
+
+T13A â€” Automated executable subset: 7 passed / 33 database-backed skipped.
+Required before Verified: isolated PostgreSQL persistence/concurrency/API suite and
+the recorded visual/provider acceptance.
+
+T15 â€” Backend copy tests: 8 database-backed skipped; frontend copy and recovery
+tests passed in the full frontend run.
+Required before Verified: isolated PostgreSQL copy/retry suite and native browser
+navigation/recovery acceptance.
+
+T15A â€” Frontend recovery/navigation tests passed in the full frontend run.
+Required before Verified: native browser reload and multi-tab acceptance.
+
+T17 â€” Backend invoice/print tests: 5 database-backed skipped; frontend invoice and
+print tests passed in the full frontend run.
+Required before Verified: isolated PostgreSQL invoice/queue suite and the separate
+Epson hardware validation.
+
+T18 â€” Automated executable subset: 9 passed / 10 database-backed skipped; frontend
+return/recovery tests passed in the full frontend run.
+Required before Verified: isolated PostgreSQL return/credit integration suite,
+browser acceptance and accounting-policy review.
+
+Conclusion
+----------
+No product failure was found in the checks that executed. No task is promoted:
+every listed task still has an explicit uncompleted acceptance gate. Their correct
+state remains `Implementedâ€”verification pending` (the queue's ASCII-hyphen spelling
+for T15/T17 has the same meaning).
+
