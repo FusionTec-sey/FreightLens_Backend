@@ -9,6 +9,9 @@
   posting receipt, current balance and tenant boundary.
 - Display saleability, discounts, supplier claims, write-offs and loss accounting
   remain separate fail-closed T19 decisions.
+- Backend PRs #18/#19 and frontend PR #15 passed CI and merged at paired revisions
+  2b2dfcc and 0e232c0. The UI reuses T18 Sales and T04 review contracts, adds exact
+  document-filtered source reads and keeps durable action-scoped retry recovery.
 
 ## 2026-10-05 - T20A fail-closed accounting configuration
 
