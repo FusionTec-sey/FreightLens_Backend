@@ -1088,8 +1088,9 @@ by PERMISSION ACCESS, not a separate approval workflow; DISPLAY UNITS REMAIN
 SELLABLE; a returned product is VERIFIED BY THE SALESPERSON who then selects the
 action for that product, so the system must offer the dispositions and record the
 chooser rather than auto-routing; and DAMAGED STOCK IS WRITTEN DOWN to its
-expected recovery value per BD-20261005-07, entered per event within permission. Supplier claims, disclosure and discount remain undecided
-and stay fail closed.
+expected recovery value per BD-20261005-07, entered per event within permission. BD-20261005-08 parks the rest: the damaged-stock permission alone
+is sufficient with no review threshold, and supplier claims, disclosure and approved
+discount are handled administratively OUTSIDE the software and are not built.
 Dependencies: T04,T09,T18
 Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.
 BD-20261005-03 starts T19A with one reviewed non-serial T18 return disposition:
@@ -1108,7 +1109,8 @@ opening display saleability, disclosure/discount, supplier claim or write-off sl
 
 T20 | Implement close and accounting export
 Status: In progress
-BD-20261005-05: CLOSE AUTHORITY is not required for now - no system-enforced close,
+BD-20261005-08 also parks provisional COGS/inventory treatment and till opening-float
+semantics with the future accounting module. BD-20261005-05: CLOSE AUTHORITY is not required for now - no system-enforced close,
 close permission, variance approval or supervisor sign-off. Account mapping stays
 fail-closed and is surfaced under SALES configuration until the future accounting
 module takes ownership. Skipped items are tracked in SKIPPED-SCOPE-REGISTER.md.

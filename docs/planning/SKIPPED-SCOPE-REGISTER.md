@@ -23,13 +23,15 @@ decision that resumed it.
 | 7 | Accounting module: journal export, ledger posting, discrepancy approval | BD-20261005-04 | Future module, developed later | Owner starts the accounting module |
 | 8 | Accounting export rehearsal within import/recovery (T26) | BD-20261005-04 | No accounting module to rehearse against | Item 7 resumes |
 | 9 | Ledger and journal reporting (T32) | BD-20261005-04 | Reporting proceeds on sales, stock and customer data | Item 7 resumes |
+| 10 | **Write-down review threshold** for damaged stock | BD-20261005-08 | Permission alone is sufficient for now; no second-person review or approval workflow | Future work |
+| 11 | **Supplier claims, disclosure, approved discount** on damaged stock | BD-20261005-08 | Handled administratively by the owner/admin outside the software | Only if the owner later wants it in the system |
+| 12 | Provisional COGS and inventory treatment | BD-20261005-08 | Set aside with the future accounting module | Accounting module is developed |
+| 13 | Till opening-float semantics | BD-20261005-08 | Closed by manual counting; cashier at reception handles cash | Accounting module is developed |
+
 
 ## Open owner decisions blocking implementation
 
-| Needed | For | Note |
-|---|---|---|
-| Whether a write-down needs review above a threshold | T19 | Or is the damaged-stock permission sufficient, per BD-20261005-05 |
-| Supplier claims, disclosure, approved discount on damaged stock | T19 | Listed in T19 acceptance; still fail closed |
+**None.** All outstanding gates were parked by BD-20261005-08 on 2026-10-05.
 
 ## Already built and parked — do not remove
 

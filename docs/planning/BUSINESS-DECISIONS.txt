@@ -342,6 +342,32 @@ STILL OPEN, the last damaged-stock gate: whether a write-down above a threshold 
 independent review, or whether the damaged-stock permission alone is sufficient. Until
 that is decided, apply the permission check only and do not invent a threshold.
 
+BD-20261005-08 | Remaining damaged-stock and accounting gates parked | T19,T20,T06
+Owner closed the outstanding gates on 2026-10-05 by parking all of them. No owner
+decision now blocks implementation.
+
+1. WRITE-DOWN REVIEW THRESHOLD: open for future work. For now the damaged-stock
+   PERMISSION ALONE is sufficient to record a write-down. Do not invent a threshold,
+   a second-person review or an approval workflow for write-downs.
+
+2. SUPPLIER CLAIMS, DISCLOSURE AND APPROVED DISCOUNT on damaged stock: NOT INCLUDED
+   IN THE SOFTWARE. These are handled administratively by the owner/admin outside the
+   system. Do not build claim tracking, disclosure prompts or a discount-approval
+   workflow for damaged stock. T19 acceptance is read accordingly: these criteria are
+   satisfied by the administrative process, not by a feature.
+
+3. PROVISIONAL COGS AND INVENTORY TREATMENT: set aside, to be developed with the
+   future accounting module. Confirms the reading of BD-20261005-04. The T20A
+   foundation stays fail closed and inert in the meantime.
+
+4. TILL OPENING-FLOAT SEMANTICS: set aside. Closed by the manual counting decision in
+   BD-20261005-04; the cashier at reception handles cash, and no float semantics are
+   implemented.
+
+Effect: the damaged-stock slice needs only condition change plus a recovery-value
+write-down under permission, per BD-20261005-05 and BD-20261005-07. Everything else
+listed above is recorded in SKIPPED-SCOPE-REGISTER.md rather than left as an open gate.
+
 CHANGE PROTOCOL
 Append dated stable IDs with affected tasks and superseded decisions. Only record
 agreed requirements; mark unresolved proposals explicitly. Publish to integration
