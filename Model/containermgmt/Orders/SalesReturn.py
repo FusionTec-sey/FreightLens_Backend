@@ -529,7 +529,7 @@ ELSIF TG_TABLE_NAME='customer_credit_liability_entries' THEN
  IF NEW.customer_key<>credit.customer_key THEN
   RAISE EXCEPTION 'Return liability must target its credit-note customer'; END IF;
 ELSE
- RAISE EXCEPTION 'Unsupported return money child table %', TG_TABLE_NAME;
+ RAISE EXCEPTION 'Unsupported return money child table';
 END IF;
 SELECT gross_total_scr INTO invoice FROM containermgmt.sales_invoices
  WHERE org_id=NEW.org_id AND invoice_key=credit.invoice_key FOR UPDATE;

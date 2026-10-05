@@ -185,6 +185,7 @@ def test_return_database_guards_bind_review_stock_value_and_credit():
             " IF NEW.customer_key" in MONEY_CHILD_GUARD_FUNCTION)
     assert ("TG_TABLE_NAME='sales_invoice_debt_applications'\n AND NEW.invoice_key"
             not in MONEY_CHILD_GUARD_FUNCTION)
+    assert "%" not in MONEY_CHILD_GUARD_FUNCTION
     assert "inventory.return.receive.v1" in RETURN_MOVEMENT_GUARD_FUNCTION
     assert "matches<>1" in RETURN_MOVEMENT_GUARD_FUNCTION
     assert "inventory_stock_balances" in RETURN_MOVEMENT_GUARD_FUNCTION

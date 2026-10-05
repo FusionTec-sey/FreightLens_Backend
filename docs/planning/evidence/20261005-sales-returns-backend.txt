@@ -44,6 +44,9 @@ Verification
   production build succeeds with the existing project warnings.
 - Fifty-three fresh-install and prerequisite-regression checks pass after the T18
   model, permission, migration and router registrations were added.
+- A disposable PostgreSQL 16 database also completed the real application startup,
+  permission seeding and `/health` request from an empty schema. This caught and
+  removed one unescaped PL/pgSQL exception placeholder before republishing the PR.
 
 Shared integration edits
 - Register models/router/startup migration and three action permissions.
