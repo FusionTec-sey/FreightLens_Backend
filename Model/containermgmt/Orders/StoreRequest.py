@@ -36,6 +36,7 @@ class StoreRequestItem(AuditMixin, Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     request_id = Column(Integer, ForeignKey("containermgmt.store_requests.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("containermgmt.products.id", ondelete="SET NULL"), nullable=True, index=True)
     
     item_code = Column(String(100), nullable=True)
     description = Column(Text, nullable=False)
@@ -51,4 +52,5 @@ class StoreRequestItem(AuditMixin, Base):
 
     # Relationships
     request = relationship("StoreRequest", back_populates="items")
+    product = relationship("Product", foreign_keys=[product_id])
     po_items = relationship("POItem", back_populates="request_item")

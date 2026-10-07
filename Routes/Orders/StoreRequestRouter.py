@@ -8,12 +8,13 @@ import math
 
 from Model.db import get_db
 from Model.containermgmt.Orders.StoreRequest import StoreRequest, StoreRequestItem
+from Model.containermgmt.Orders.Product import Product
 from Model.containermgmt.Orders.OrderStatusHistory import OrderStatusHistory
 from Model.containermgmt.Orders.Notification import Notification
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import is_financial_user
-from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from Utils.blob_storage import blob_storage
 
 logger = logging.getLogger("containerMgmt.orders.requests")
@@ -25,6 +26,28 @@ def _signed_item_image(image_url: Optional[str]) -> Optional[str]:
     if not image_url or image_url.startswith(("http://", "https://", "blob:", "data:")):
         return image_url
     return blob_storage.signed_url(image_url, ttl=24 * 60 * 60)
+
+def _catalog_identity(db: Session, product_id, org_context: OrgContext):
+    if product_id in (None, ""):
+        return None
+    try:
+        normalized_id = int(product_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Invalid catalogue product ID")
+    query = db.query(Product).filter(
+        Product.id == normalized_id,
+        Product.is_deleted.is_(False),
+        Product.status == "active",
+    )
+    product = apply_shared_or_org_filter(query, Product, org_context).first()
+    if not product:
+        raise HTTPException(status_code=422, detail="Selected catalogue product is unavailable")
+    return {
+        "product_id": product.id,
+        "item_code": product.sku or product.code,
+        "description": product.name,
+        "unit": product.unit or "PCS",
+    }
 
 def format_request(req: StoreRequest, is_accounts: bool = True) -> dict:
     return {
@@ -44,6 +67,7 @@ def format_request(req: StoreRequest, is_accounts: bool = True) -> dict:
         "items": [
             {
                 "id": item.id,
+                "product_id": item.product_id,
                 "item_code": item.item_code,
                 "description": item.description,
                 "quantity_requested": float(item.quantity_requested or 0),
@@ -190,15 +214,17 @@ async def create_store_request(
     # Add items
     items_data = payload.get("items", [])
     for item in items_data:
-        desc_text = item.get("description", "").strip()
+        identity = _catalog_identity(db, item.get("product_id"), org_context)
+        desc_text = identity["description"] if identity else (item.get("description", "").strip())
         if not desc_text:
             continue
         req_item = StoreRequestItem(
             request_id=new_req.id,
-            item_code=item.get("item_code", "").strip() or None,
+            product_id=identity["product_id"] if identity else None,
+            item_code=identity["item_code"] if identity else (item.get("item_code", "").strip() or None),
             description=desc_text,
             quantity_requested=float(item.get("quantity_requested") or 1.0),
-            unit=item.get("unit", "PCS"),
+            unit=identity["unit"] if identity else item.get("unit", "PCS"),
             required_date=datetime.strptime(item["required_date"][:10], "%Y-%m-%d").date() if item.get("required_date") else None,
             notes=item.get("notes", "").strip() or None,
             image_url=item.get("image_url"),
@@ -248,15 +274,17 @@ async def update_store_request(
             old_item.is_deleted = True
         
         for item in payload["items"]:
-            desc_text = item.get("description", "").strip()
+            identity = _catalog_identity(db, item.get("product_id"), org_context)
+            desc_text = identity["description"] if identity else (item.get("description", "").strip())
             if not desc_text:
                 continue
             req_item = StoreRequestItem(
                 request_id=req.id,
-                item_code=item.get("item_code", "").strip() or None,
+                product_id=identity["product_id"] if identity else None,
+                item_code=identity["item_code"] if identity else (item.get("item_code", "").strip() or None),
                 description=desc_text,
                 quantity_requested=float(item.get("quantity_requested") or 1.0),
-                unit=item.get("unit", "PCS"),
+                unit=identity["unit"] if identity else item.get("unit", "PCS"),
                 required_date=datetime.strptime(item["required_date"][:10], "%Y-%m-%d").date() if item.get("required_date") else None,
                 notes=item.get("notes", "").strip() or None,
                 image_url=item.get("image_url"),

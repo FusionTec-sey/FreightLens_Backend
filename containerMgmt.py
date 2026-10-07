@@ -150,6 +150,8 @@ async def startup_event():
     ensure_template_activation_and_tabular_schema()
     from Utils.migrate_sourcing_and_quote_templates import ensure_sourcing_and_quote_templates_schema
     ensure_sourcing_and_quote_templates_schema()
+    from Utils.migrate_20261007_store_request_product import ensure_store_request_product_schema
+    ensure_store_request_product_schema()
     from Utils.migrate_reporting_foundation import ensure_reporting_foundation_schema
     ensure_reporting_foundation_schema()
     from Utils.migrate_reporting_worker import ensure_reporting_worker_schema
