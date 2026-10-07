@@ -19,7 +19,7 @@ Local ports are PostgreSQL `5433`, RustFS `9005`, RustFS console `9006`, and Mei
 
 ## Backend
 
-Copy `.env.example` to `.env`, replace every placeholder with a unique local value, and never commit the result. `JWT_SECRET_KEY`, `MEDIA_SIGNING_KEY`, and `CMA_CGM_WEBHOOK_SECRET` must be separate random values.
+Copy `.env.example` to `.env`, replace every placeholder with a unique local value, and never commit the result. `JWT_SECRET_KEY` and `MEDIA_SIGNING_KEY` must be separate random values. CMA CGM push webhooks are disabled by default; when enabling them with `CMA_CGM_WEBHOOK_ENABLED=true`, also configure a separate random `CMA_CGM_WEBHOOK_SECRET`.
 
 Generate a signing key once per environment:
 

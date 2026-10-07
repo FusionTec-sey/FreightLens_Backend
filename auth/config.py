@@ -10,6 +10,36 @@ logger = logging.getLogger("auth.config")
 DEPLOYED_ENVIRONMENTS = {"staging", "production"}
 
 
+def read_boolean_setting(name: str, default: bool = False) -> bool:
+    """Read a strict boolean environment setting."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off", ""}:
+        return False
+    raise ValueError(f"{name} must be a boolean value")
+
+
+def required_security_secrets(
+    jwt_secret_key: str,
+    media_signing_key: str,
+    cma_cgm_webhook_enabled: bool,
+    cma_cgm_webhook_secret: str,
+) -> dict:
+    """Return secrets required for the enabled production features."""
+    secrets = {
+        "JWT_SECRET_KEY": jwt_secret_key,
+        "MEDIA_SIGNING_KEY": media_signing_key,
+    }
+    if cma_cgm_webhook_enabled:
+        secrets["CMA_CGM_WEBHOOK_SECRET"] = cma_cgm_webhook_secret
+    return secrets
+
+
 def validate_security_settings(environment: str, secrets: dict) -> None:
     """Fail closed when a deployed environment is missing required secrets."""
     if environment.strip().lower() not in DEPLOYED_ENVIRONMENTS:
@@ -45,6 +75,7 @@ class Settings:
     CMA_CGM_TRACK_AND_TRACE_URL = os.getenv("CMA_CGM_TRACK_AND_TRACE_URL", "")
     CMA_CGM_SHIPEMENTS_URL = os.getenv("CMA_CGM_SHIPEMENTS_URL", "")
     CMA_CGM_TOKEN_URL = os.getenv("CMA_CGM_OAUTH", "")
+    CMA_CGM_WEBHOOK_ENABLED = read_boolean_setting("CMA_CGM_WEBHOOK_ENABLED")
     CMA_CGM_WEBHOOK_SECRET = os.getenv("CMA_CGM_WEBHOOK_SECRET", "")
 
     MEARSK_CLIENT_ID = os.getenv("MEARSK_CLIENT_ID", "")
@@ -63,11 +94,12 @@ class Settings:
     # ── Security validation ───────────────────────────────────────────────────
     validate_security_settings(
         ENVIRONMENT,
-        {
-            "JWT_SECRET_KEY": JWT_SECRET_KEY,
-            "MEDIA_SIGNING_KEY": MEDIA_SIGNING_KEY,
-            "CMA_CGM_WEBHOOK_SECRET": CMA_CGM_WEBHOOK_SECRET,
-        },
+        required_security_secrets(
+            JWT_SECRET_KEY,
+            MEDIA_SIGNING_KEY,
+            CMA_CGM_WEBHOOK_ENABLED,
+            CMA_CGM_WEBHOOK_SECRET,
+        ),
     )
     if ENVIRONMENT.strip().lower() not in DEPLOYED_ENVIRONMENTS and not JWT_SECRET_KEY:
         logger.warning(

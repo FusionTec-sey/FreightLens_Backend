@@ -248,7 +248,8 @@ app.include_router(ContainerRouter, dependencies=[Depends(require_module("LOGIST
 app.include_router(CreadentialsInfo, dependencies=[Depends(get_request_policy)])
 app.include_router(TrackingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(logistics_router, dependencies=[Depends(require_module("LOGISTICS"))])
-app.include_router(logistics_webhook_router)  # Carrier-authenticated push events
+if settings.CMA_CGM_WEBHOOK_ENABLED:
+    app.include_router(logistics_webhook_router)  # Carrier-authenticated push events
 app.include_router(BillOfLandingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(SettingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(OrganisationRouter)
