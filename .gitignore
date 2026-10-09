@@ -91,3 +91,7 @@ BLOB/
 # Working data files kept locally, not in the repository
 /INV_ProductListing.xlsx
 /INV_ProductListing_Enrichment_Template.xlsx
+
+# Local environment files are never committed (they hold real credentials)
+local-dev.env.example
+*.env.local
