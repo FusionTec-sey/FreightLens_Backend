@@ -245,6 +245,10 @@ class ReportPreviewRequest(BaseModel):
     header_html: Optional[str] = None
     footer_html: Optional[str] = None
     resolver_key: Optional[str] = None
+    # Orientation and paper size belong to the page, so a preview rendered
+    # without them is always A4 portrait however the editor is set.
+    page_size: Optional[str] = Field(None, max_length=20)
+    orientation: Optional[str] = Field(None, pattern="^(portrait|landscape)$")
     # Bills of Lading and containers are addressed by their business numbers
     # (e.g. "MEDU1234567"), so the identifier may be text as well as an integer.
     # max_length sits on the str member, not the union: on the union Pydantic

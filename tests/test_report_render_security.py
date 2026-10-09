@@ -95,6 +95,8 @@ def test_preview_rejects_unsafe_html_before_resolving_data(monkeypatch):
         resolver_key="purchase_order",
         entity_id=None,
         params=None,
+        page_size=None,
+        orientation=None,
     )
 
     with pytest.raises(HTTPException) as exc:
