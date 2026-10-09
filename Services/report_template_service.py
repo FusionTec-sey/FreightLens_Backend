@@ -536,6 +536,17 @@ def list_active_templates_for_entity(
 
     templates = query.all()
     _apply_assignment_state(db, templates, current_org_id)
+    # The print modal preselects the first template, so order by what the user
+    # most likely wants. is_default_for_org is set by _apply_assignment_state
+    # above and is not a column, so this cannot be an ORDER BY.
+    templates.sort(
+        key=lambda t: (
+            not getattr(t, "is_default_for_org", False),
+            t.entity_type != entity_type,
+            bool(t.is_system),
+            (t.name or "").lower(),
+        )
+    )
     return templates
 
 

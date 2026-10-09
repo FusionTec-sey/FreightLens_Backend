@@ -3,7 +3,7 @@ Schema/ReportSchema.py
 Pydantic schemas for the Customer-Configurable Report & Print Template System.
 """
 from pydantic import AliasChoices, BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, List, Dict, Any, Literal
+from typing import Annotated, Optional, List, Dict, Any, Literal, Union
 from datetime import datetime
 
 
@@ -162,13 +162,34 @@ class ReportTemplatePaginatedResponse(BaseModel):
     limit: int
 
 
+def _numeric_entity_ids_stay_integers(value):
+    """Keep a numeric identifier an int, as it was before text ids were allowed.
+
+    Screens that read the id from the URL hand over a string ("123"), and the
+    smart union would keep it one. psycopg2 compares that to an integer column
+    happily, but the resolvers are typed int and another driver would not, so the
+    old behaviour is preserved and only genuinely non-numeric ids stay text.
+    """
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return value
+
+
 class ReportRenderRequest(BaseModel):
     template_id: Optional[int] = None
     template_slug: Optional[str] = None
     entity_type: Optional[str] = None
-    entity_id: Optional[int] = None
+    # Bills of Lading and containers are addressed by their business numbers
+    # (e.g. "MEDU1234567"), so the identifier may be text as well as an integer.
+    # max_length sits on the str member, not the union: on the union Pydantic
+    # applies it to integers too and every numeric render fails with a 500.
+    entity_id: Optional[Union[int, Annotated[str, Field(min_length=1, max_length=100)]]] = None
     format: Optional[str] = Field("pdf", description="'pdf' or 'html'")
     params: Optional[Dict[str, Any]] = None
+    _coerce_entity_id = field_validator("entity_id", mode="before")(
+        _numeric_entity_ids_stay_integers
+    )
+
 
 
 class OrgPrintProfileUpdate(BaseModel):
@@ -224,8 +245,16 @@ class ReportPreviewRequest(BaseModel):
     header_html: Optional[str] = None
     footer_html: Optional[str] = None
     resolver_key: Optional[str] = None
-    entity_id: Optional[int] = None
+    # Bills of Lading and containers are addressed by their business numbers
+    # (e.g. "MEDU1234567"), so the identifier may be text as well as an integer.
+    # max_length sits on the str member, not the union: on the union Pydantic
+    # applies it to integers too and every numeric render fails with a 500.
+    entity_id: Optional[Union[int, Annotated[str, Field(min_length=1, max_length=100)]]] = None
     params: Optional[Dict[str, Any]] = None
+    _coerce_entity_id = field_validator("entity_id", mode="before")(
+        _numeric_entity_ids_stay_integers
+    )
+
 
 
 class ReportValidateRequest(BaseModel):
