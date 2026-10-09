@@ -252,7 +252,7 @@ async def health_check(db: Session = Depends(get_db)):
 # ── Route registration ────────────────────────────────────────────────────────
 from auth.module_guard import require_module
 from auth.policy import get_request_policy
-from auth.security_guards import require_root_admin
+from auth.security_guards import require_any_permission, require_root_admin
 
 from LogisticsAPI import logistics_router, logistics_webhook_router
 
@@ -283,11 +283,31 @@ app.include_router(PackingListRouter, dependencies=[Depends(require_module("ORDE
 app.include_router(ReceivingRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(DefectRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS"))])
-app.include_router(InventoryRouter, dependencies=[Depends(require_module("INVENTORY"))])
+# Inventory also feeds the product picker on order screens, so the floor is
+# "may see products or orders" rather than the Product Master permission alone.
+app.include_router(
+    InventoryRouter,
+    dependencies=[
+        Depends(require_module("INVENTORY")),
+        Depends(require_any_permission("View_Product", "View_Order")),
+    ],
+)
 app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORDERS"))])
-app.include_router(MasterDataRouter)
+# Reference data is managed from Master Data but also read by the order screens
+# for their supplier, currency, payment-term and document-type pickers, so either
+# permission grants read access. Only those screens call it; a user with neither
+# no longer reaches supplier or currency records.
+app.include_router(
+    MasterDataRouter,
+    dependencies=[
+        Depends(require_any_permission("View_MasterData", "View_Order", "View_Product"))
+    ],
+)
 app.include_router(BlobRouter)
-app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
+app.include_router(
+    DashboardRouter,
+    dependencies=[Depends(get_request_policy), Depends(require_any_permission("View_Dashboard"))],
+)
 app.include_router(MenuRouter, dependencies=[Depends(get_request_policy)])
 
 

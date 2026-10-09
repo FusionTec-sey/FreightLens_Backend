@@ -7,6 +7,7 @@ from typing import List, Optional, Union
 from fastapi import Depends, HTTPException, status
 from Model.Credentials.users import User
 from Utils.org_filter import OrgContext
+from auth.policy import AccessPolicy, get_request_policy
 from auth.dependencies import get_current_user, get_org_context
 
 # Explicit permissions that grant financial visibility / mutation
@@ -203,6 +204,22 @@ def require_permission(permission_name: str):
             )
         return current_user
     return dependency
+
+def require_any_permission(*permission_names: str):
+    """FastAPI dependency that passes when the user holds any one of the names.
+
+    Used where a router serves two audiences: the screen that owns the data and
+    other screens that read it. Reference data, for example, is managed from
+    Master Data but also read by order entry, so requiring only the managing
+    permission would break ordinary work. Platform administrators bypass it via
+    the access policy, as everywhere else.
+    """
+    def dependency(policy: AccessPolicy = Depends(get_request_policy)):
+        policy.require_any(*permission_names)
+        return True
+
+    return dependency
+
 
 def require_sourcing_permission(permission_name: str):
     """

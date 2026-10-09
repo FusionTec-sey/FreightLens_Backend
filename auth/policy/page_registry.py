@@ -64,7 +64,8 @@ GROUP_BY_KEY = {group.group_key: group for group in PAGE_GROUPS}
 # the registry documents today's behaviour and never silently tightens a route.
 PAGE_REGISTRY = [
     # Core
-    PageSpec("DASHBOARD", "/dashboard", "Dashboard", "LayoutDashboard", "CORE", (), (), 10),
+    PageSpec("DASHBOARD", "/dashboard", "Dashboard", "LayoutDashboard", "CORE",
+             ("View_Dashboard",), (), 10),
     PageSpec("DASHBOARD_TEMPLATES", "/dashboard/templates", "Template Studio", "LayoutTemplate",
              "CORE", ("Manage_DashboardTemplate",), (), 20),
 
@@ -101,7 +102,7 @@ PAGE_REGISTRY = [
     PageSpec("CONTAINERS_COMPLETE", "/Complete", "Completed Containers", "PackageCheck", "LOGISTICS",
              ("View_Container",), ("LOGISTICS",), 30),
     PageSpec("INVENTORY_PRODUCTS", "/inventory", "Product Master", "Boxes", "LOGISTICS",
-             (), ("INVENTORY",), 40),
+             ("View_Product", "View_Order"), ("INVENTORY",), 40),
 
     # Reporting
     PageSpec("REPORTS", "/reports", "Print & Reports", "Printer", "REPORTING",
@@ -111,13 +112,13 @@ PAGE_REGISTRY = [
 
     # Master data
     PageSpec("MASTER_SUPPLIERS", "/master-data/suppliers", "Suppliers & Vendors", "Truck",
-             "MASTER_DATA", (), (), 10),
+             "MASTER_DATA", ('View_MasterData', 'View_Order', 'View_Product'), (), 10),
     PageSpec("MASTER_CURRENCIES", "/master-data/currencies", "Currencies & FX Rates", "Coins",
-             "MASTER_DATA", (), (), 20),
+             "MASTER_DATA", ('View_MasterData', 'View_Order', 'View_Product'), (), 20),
     PageSpec("MASTER_PAYMENT_TERMS", "/master-data/payment-terms", "Payment Terms", "Receipt",
-             "MASTER_DATA", (), (), 30),
+             "MASTER_DATA", ('View_MasterData', 'View_Order', 'View_Product'), (), 30),
     PageSpec("MASTER_DOCUMENT_TYPES", "/master-data/document-types", "Document Types", "Files",
-             "MASTER_DATA", (), (), 40),
+             "MASTER_DATA", ('View_MasterData', 'View_Order', 'View_Product'), (), 40),
 
     # System
     PageSpec("TENANT_CONSOLE", "/admin", "Tenant Console", "Shield", "SYSTEM",
