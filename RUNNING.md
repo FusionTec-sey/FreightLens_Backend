@@ -1,5 +1,31 @@
 # Running FreightLens Locally
 
+## Docker development (hot reload)
+
+From `Backend`, copy the development-only environment template and start the
+isolated local stack:
+
+```powershell
+Copy-Item local-dev.env.example .env.local
+docker compose --env-file .env.local -p freightlens-dev -f docker-compose.dev.yml up --build
+```
+
+Open the React app at `http://localhost:13000`; the API is at
+`http://localhost:19000` (`/docs` and `/health`). Backend and frontend source are
+bind-mounted for reload. PostgreSQL, Meilisearch, and RustFS data persist in named
+volumes. All published ports bind to loopback; this stack is local-development only
+and must not use staging or production secrets.
+
+Stop without deleting data using:
+
+```powershell
+docker compose --env-file .env.local -p freightlens-dev -f docker-compose.dev.yml down
+```
+
+Do not add `-v` unless you intentionally want to delete the local database, search,
+and object-storage volumes. After changing the React dependency lockfile, rebuild with
+`docker compose --env-file .env.local -p freightlens-dev -f docker-compose.dev.yml up --build frontend`.
+
 ## Prerequisites
 
 - Python 3.11

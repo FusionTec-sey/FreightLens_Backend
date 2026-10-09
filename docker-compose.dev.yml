@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: containermgmt_pg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${LOCAL_POSTGRES_PASSWORD:?Set LOCAL_POSTGRES_PASSWORD in .env.local}
+    ports:
+      - "127.0.0.1:15433:5432"
+    volumes:
+      - freightlens_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d containermgmt_pg"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [freightlens-dev]
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    environment:
+      MEILI_MASTER_KEY: ${LOCAL_MEILI_MASTER_KEY:?Set LOCAL_MEILI_MASTER_KEY in .env.local}
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: development
+    ports:
+      - "127.0.0.1:17700:7700"
+    volumes:
+      - freightlens_dev_meili:/meili_data
+    networks: [freightlens-dev]
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${LOCAL_RUSTFS_ACCESS_KEY:?Set LOCAL_RUSTFS_ACCESS_KEY in .env.local}
+      RUSTFS_SECRET_KEY: ${LOCAL_RUSTFS_SECRET_KEY:?Set LOCAL_RUSTFS_SECRET_KEY in .env.local}
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_CONSOLE_ADDRESS: :9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:19005:9000"
+      - "127.0.0.1:19006:9001"
+    volumes:
+      - freightlens_dev_rustfs:/data
+    networks: [freightlens-dev]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:${LOCAL_POSTGRES_PASSWORD:?Set LOCAL_POSTGRES_PASSWORD in .env.local}@postgres:5432/containermgmt_pg
+      LEGACY_MYSQL_HOST: ${LEGACY_MYSQL_HOST:-}
+      LEGACY_MYSQL_PORT: ${LEGACY_MYSQL_PORT:-3306}
+      LEGACY_MYSQL_USER: ${LEGACY_MYSQL_USER:-}
+      LEGACY_MYSQL_PASSWORD: ${LEGACY_MYSQL_PASSWORD:-}
+      LEGACY_MYSQL_SSL_CA: ${LEGACY_MYSQL_SSL_CA:-}
+      JWT_SECRET_KEY: ${LOCAL_JWT_SECRET_KEY:?Set LOCAL_JWT_SECRET_KEY in .env.local}
+      MEDIA_SIGNING_KEY: ${LOCAL_MEDIA_SIGNING_KEY:?Set LOCAL_MEDIA_SIGNING_KEY in .env.local}
+      JWT_ALGORITHM: HS256
+      ENVIRONMENT: development
+      ALLOWED_ORIGINS: http://localhost:13000,http://127.0.0.1:13000
+      HOST_IP: 0.0.0.0
+      HOST_PORT: 9000
+      RUSTFS_ENDPOINT_URL: http://rustfs:9000
+      RUSTFS_ACCESS_KEY: ${LOCAL_RUSTFS_ACCESS_KEY:?Set LOCAL_RUSTFS_ACCESS_KEY in .env.local}
+      RUSTFS_SECRET_KEY: ${LOCAL_RUSTFS_SECRET_KEY:?Set LOCAL_RUSTFS_SECRET_KEY in .env.local}
+      RUSTFS_BUCKET_NAME: containermgmt-blobs
+      RUSTFS_REGION: us-east-1
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_MASTER_KEY: ${LOCAL_MEILI_MASTER_KEY:?Set LOCAL_MEILI_MASTER_KEY in .env.local}
+      CMA_CGM_WEBHOOK_ENABLED: "false"
+      CMA_CGM_WEBHOOK_SECRET: ""
+    ports:
+      - "127.0.0.1:19000:9000"
+    volumes:
+      - .:/app
+    command: ["uvicorn", "containerMgmt:app", "--host", "0.0.0.0", "--port", "9000", "--reload"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+      rustfs:
+        condition: service_started
+    networks: [freightlens-dev]
+
+  frontend:
+    build:
+      context: ../containermgmt
+      dockerfile: Dockerfile.dev
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      CHOKIDAR_USEPOLLING: "true"
+      REACT_APP_NETWORK: http://localhost:19000
+    ports:
+      - "127.0.0.1:13000:3000"
+    volumes:
+      - ../containermgmt:/app
+      - freightlens_dev_frontend_modules:/app/node_modules
+    depends_on:
+      - backend
+    networks: [freightlens-dev]
+
+volumes:
+  freightlens_dev_pgdata:
+  freightlens_dev_meili:
+  freightlens_dev_rustfs:
+  freightlens_dev_frontend_modules:
+
+networks:
+  freightlens-dev:
+    name: freightlens-dev
