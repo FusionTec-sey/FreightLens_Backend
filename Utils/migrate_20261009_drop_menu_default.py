@@ -1,7 +1,9 @@
 """Remove the default-menu concept: menus are served by role assignment only.
 
-A menu with no roles assigned reaches nobody, so the `is_published` flag and the
-one-published-per-organisation index it needed are gone. Idempotent.
+A menu with no roles assigned reaches nobody. Remove the uniqueness indexes so
+several menus can coexist, but retain any old `is_published` column and its values
+as historical data. Give that old column a default so new menu inserts still work
+when an earlier deployment created it as NOT NULL. New installs do not create it.
 """
 import logging
 
@@ -21,9 +23,19 @@ def ensure_menu_default_removed():
             DROP INDEX IF EXISTS usercredentials.ix_menus_org_id_published
         """))
         conn.execute(text("""
-            ALTER TABLE usercredentials.menus DROP COLUMN IF EXISTS is_published
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'usercredentials'
+                      AND table_name = 'menus'
+                      AND column_name = 'is_published'
+                ) THEN
+                    ALTER TABLE usercredentials.menus
+                    ALTER COLUMN is_published SET DEFAULT FALSE;
+                END IF;
+            END $$;
         """))
-    logger.info("usercredentials.menus default-menu flag removed.")
+    logger.info("usercredentials.menus default-menu indexes removed.")
 
 
 if __name__ == "__main__":

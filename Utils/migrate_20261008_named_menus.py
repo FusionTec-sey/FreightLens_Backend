@@ -4,9 +4,8 @@ Creates `usercredentials.menus`, attaches `menu_items.menu_id`, and adopts any
 rows written before this change into a "Main menu" per organisation, so no
 existing navigation is lost. Idempotent: safe on every startup.
 
-Menus are served by role assignment (see migrate_20261008_menu_roles); the
-default-menu flag this file once created is dropped by
-migrate_20261009_drop_menu_default.
+Menus are served by role assignment (see migrate_20261008_menu_roles). Any
+historical default-menu flag is retained for audit but no longer controls serving.
 """
 import logging
 
@@ -45,14 +44,14 @@ def ensure_named_menus_schema():
             ADD COLUMN IF NOT EXISTS menu_id INTEGER
         """))
 
-        # Adopt pre-existing items: one published menu per organisation that has
-        # orphan rows. Runs once; later restarts find nothing to adopt.
+        # Adopt all pre-existing items, including soft-deleted audit rows.
+        # Runs once; later restarts find nothing to adopt.
         orphan_orgs = [
             row[0]
             for row in conn.execute(text("""
                 SELECT DISTINCT org_id
                 FROM usercredentials.menu_items
-                WHERE menu_id IS NULL AND NOT is_deleted
+                WHERE menu_id IS NULL
             """)).fetchall()
         ]
         for org_id in orphan_orgs:
@@ -84,13 +83,6 @@ def ensure_named_menus_schema():
                 {"menu_id": menu_id, "org_id": org_id},
             )
             logger.info("Adopted menu items for org_id=%s into menu_id=%s", org_id, menu_id)
-
-        # Rows soft-deleted before this change have no menu to belong to; they
-        # are superseded history, so they are detached rather than adopted.
-        conn.execute(text("""
-            DELETE FROM usercredentials.menu_items
-            WHERE menu_id IS NULL AND is_deleted
-        """))
 
         conn.execute(text("""
             DO $$ BEGIN

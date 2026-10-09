@@ -11,6 +11,7 @@ is what surfaces them.
 import logging
 from typing import Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from Model.Credentials.menu import Menu
@@ -107,13 +108,14 @@ def seed_default_menu(
     *,
     user_id: Optional[int] = None,
     commit: bool = False,
+    include_shared_roles: bool = False,
 ) -> int:
     """Create the starter menu for an organisation that has none.
 
-    Assigned to every role the organisation already has, because a menu reaches
-    nobody until a role points at it and a new tenant would otherwise open with
-    no navigation at all. Roles created later are unassigned until an admin says
-    otherwise.
+    Assigned to every role the organisation already has. The root starter menu
+    also takes unassigned shared roles, since existing installations have only
+    shared roles and would otherwise show every user an empty sidebar.
+    Roles created later are unassigned until an admin says otherwise.
 
     No-op when the organisation already has a menu, so this is safe to call on
     every startup and from an org-creation path that may be retried.
@@ -126,16 +128,21 @@ def seed_default_menu(
         org_id=org_id,
         name=DEFAULT_MENU_NAME,
         description=DEFAULT_MENU_DESCRIPTION,
+        is_shared=include_shared_roles,
         created_by=user_id,
         updated_by=user_id,
     )
     db.add(menu)
     db.flush()
 
+    role_scope = (
+        or_(Role.org_id == org_id, Role.org_id.is_(None))
+        if include_shared_roles else Role.org_id == org_id
+    )
     org_role_ids = [
         row[0]
         for row in db.query(Role.id)
-        .filter(Role.is_deleted.is_(False), Role.org_id == org_id)
+        .filter(Role.is_deleted.is_(False), role_scope)
         .all()
     ]
     for role_id in org_role_ids:
@@ -169,7 +176,7 @@ def seed_root_organisation_menu() -> int:
         root = db.query(Organisation).filter(Organisation.id == 1).first()
         if root is None:
             return 0
-        return seed_default_menu(db, root.id, commit=True)
+        return seed_default_menu(db, root.id, commit=True, include_shared_roles=True)
     except Exception:
         db.rollback()
         logger.exception("Could not seed the root organisation menu")
