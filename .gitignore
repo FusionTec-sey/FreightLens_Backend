@@ -87,3 +87,7 @@ scratch/
 BLOB/
 *.mp4
 *.webm
+
+# Working data files kept locally, not in the repository
+/INV_ProductListing.xlsx
+/INV_ProductListing_Enrichment_Template.xlsx
