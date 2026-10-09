@@ -152,12 +152,24 @@ async def startup_event():
     ensure_sourcing_and_quote_templates_schema()
     from Utils.migrate_20261007_store_request_product import ensure_store_request_product_schema
     ensure_store_request_product_schema()
+    from Utils.migrate_20261008_legacy_sync import ensure_legacy_sync_schema
+    ensure_legacy_sync_schema()
     from Utils.migrate_reporting_foundation import ensure_reporting_foundation_schema
     ensure_reporting_foundation_schema()
     from Utils.migrate_reporting_worker import ensure_reporting_worker_schema
     ensure_reporting_worker_schema()
     from Utils.migrate_20260930_org_id_integrity import ensure_org_id_integrity
     ensure_org_id_integrity()
+    from Utils.migrate_20261008_menu_registry import ensure_menu_registry_schema
+    ensure_menu_registry_schema()
+    from Utils.migrate_20261008_named_menus import ensure_named_menus_schema
+    ensure_named_menus_schema()
+    from Utils.migrate_20261008_menu_roles import ensure_menu_roles_schema
+    ensure_menu_roles_schema()
+    from Utils.migrate_20261009_drop_menu_default import ensure_menu_default_removed
+    ensure_menu_default_removed()
+    from Utils.migrate_20261009_shared_menus_and_separators import ensure_shared_menus_and_separators
+    ensure_shared_menus_and_separators()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -168,6 +180,11 @@ async def startup_event():
         run_reporting_permissions_migration(db_session)
         from Utils.migrate_reporting_foundation import seed_reporting_foundation
         seed_reporting_foundation(db_session)
+        from auth.policy.page_registry import sync_page_registry
+        sync_page_registry(db_session)
+        db_session.commit()
+        from Services.navigation_service import seed_root_organisation_menu
+        seed_root_organisation_menu()
     except Exception as e:
         logger.error("Database seeding failed: %s", e)
     finally:
@@ -256,6 +273,8 @@ app.include_router(BillOfLandingRouter, dependencies=[Depends(require_module("LO
 app.include_router(SettingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(OrganisationRouter)
 app.include_router(AdminRouter, dependencies=[Depends(require_root_admin)])
+from Routes.LegacySyncRouter import LegacySyncRouter
+app.include_router(LegacySyncRouter, dependencies=[Depends(require_root_admin)])
 app.include_router(OrderTemplateRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(LifecycleRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(OrderRouter, dependencies=[Depends(require_module("ORDERS"))])
@@ -269,6 +288,7 @@ app.include_router(NotificationRouter, dependencies=[Depends(require_module("ORD
 app.include_router(MasterDataRouter)
 app.include_router(BlobRouter)
 app.include_router(DashboardRouter, dependencies=[Depends(get_request_policy)])
+app.include_router(MenuRouter, dependencies=[Depends(get_request_policy)])
 
 
 

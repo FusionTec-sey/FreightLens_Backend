@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Depends, HTTPException, Body, APIRouter, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -10,6 +12,9 @@ from Model.containermgmt import ContainerDetails, BillOfLanding
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import require_admin, require_root_admin
 from Utils.org_filter import OrgContext
+from Services.navigation_service import seed_default_menu
+
+logger = logging.getLogger("containerMgmt.organisation")
 
 OrganisationRouter = APIRouter(prefix="/organisations", tags=["Organisation Management"])
 
@@ -136,7 +141,16 @@ async def create_organisation(
     db.add(new_org)
     db.commit()
     db.refresh(new_org)
-    
+
+    # Give the new tenant a navigation menu it can edit straight away. Failing
+    # here must not fail the organisation: /navigation/my-menu falls back to the
+    # registry-derived default when an organisation has no rows.
+    try:
+        seed_default_menu(db, new_org.id, user_id=current_user.id, commit=True)
+    except Exception:
+        db.rollback()
+        logger.exception("Could not seed the default menu for org_id=%s", new_org.id)
+
     schema = OrganisationSchema.model_validate(new_org)
     schema.user_count = 0
     schema.container_count = 0
