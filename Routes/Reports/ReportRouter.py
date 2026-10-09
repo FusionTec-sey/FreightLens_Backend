@@ -768,6 +768,15 @@ def render_report_preview(
         timezone=org_timezone_name(db, org_context),
     )
 
+    if (req.format or "html").lower() == "pdf":
+        # The same pipeline the printed document goes through, so what the
+        # author sees in the editor is the file, not an approximation of it.
+        return Response(
+            content=compile_pdf_from_html(full_html),
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="preview.pdf"'},
+        )
+
     return {"html": full_html}
 
 
