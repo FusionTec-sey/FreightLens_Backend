@@ -9,7 +9,7 @@ import math
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -29,6 +29,7 @@ from Schema.ReportDatasetSchema import (
     DatasetResult,
     DatasetCatalogItem,
 )
+from limiter import limiter
 from Services.report_time_service import org_timezone_name, stamp_for_filename
 from Services.report_dataset_service import (
     list_dataset_catalog,
@@ -610,8 +611,10 @@ def get_report_render_job(
     return _render_job_payload(job)
 
 @ReportRouter.post("/render")
+@limiter.limit("20/minute")
 def render_report_pdf(
     req: ReportRenderRequest,
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
@@ -693,8 +696,10 @@ def render_report_pdf(
 
 
 @ReportRouter.post("/render/preview")
+@limiter.limit("30/minute")
 def render_report_preview(
     req: ReportPreviewRequest,
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),

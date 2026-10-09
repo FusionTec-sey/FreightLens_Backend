@@ -99,8 +99,16 @@ def test_preview_rejects_unsafe_html_before_resolving_data(monkeypatch):
         orientation=None,
     )
 
+    # The endpoint is rate limited, and slowapi's wrapper looks for a Request in
+    # the call arguments. This exercises the handler body, not the limiter.
+    preview = getattr(
+        report_router_module.render_report_preview,
+        "__wrapped__",
+        report_router_module.render_report_preview,
+    )
+
     with pytest.raises(HTTPException) as exc:
-        report_router_module.render_report_preview(
+        preview(
             request,
             db=SimpleNamespace(),
             current_user=SimpleNamespace(),
