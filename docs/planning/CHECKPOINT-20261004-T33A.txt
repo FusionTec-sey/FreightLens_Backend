@@ -1,0 +1,22 @@
+POS-20261004-T33A-REPAIR — paired development checkpoint
+Branch in both repositories: codex/local-area-scope
+Decision revision: BD-20261004-03
+Frontend: 2040542f7ca755b686fc6b61bdc8006b7187e963
+Backend: the commit introducing this manifest (resolve via git log -- this file).
+
+Includes accumulated sales/customer/inventory development plus selective T33A
+integration and repairs from backend b6f888e (count implementation b004536) and
+frontend4b6705f (count implementation3260838). Not a wholesale collaborator merge.
+Current canonical task statuses and remaining gates remain in TASK-QUEUE.txt.
+
+Owner requested push, retaining test/build pause. No automated tests, builds or
+browser checks performed for this checkpoint; commits request CI skip. Historical
+passing results do not verify this combined revision. This is not pilot-ready.
+Read-only source/private-file review performed; runtime .env/databases/generated
+assets remain excluded. .env.example contains disabled gates/placeholders only.
+GitHub REST hook lists were empty for both repositories immediately before push.
+Checked-in workflows run tests/build only; no deployment workflow changed.
+No deployment, real posting, business seed or customer messaging authorised here.
+
+Use matching revisions; update the collaborator before further overlapping edits.
+Unrelated collaborator notification/runtime changes were not integrated.

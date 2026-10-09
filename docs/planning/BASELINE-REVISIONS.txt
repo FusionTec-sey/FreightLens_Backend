@@ -1,0 +1,21 @@
+Paired baseline: parallel-checkpoint-20261003
+Decision revision: BD-20261003-05
+
+Frontend repository: https://github.com/FusionTec-sey/FreightLens_Frontend
+Frontend commit: 65a2769bce5ca88d64a40a11cc1b53a16fb6fe6a
+
+Backend repository: https://github.com/FusionTec-sey/FreightLens_Backend
+Backend commit: the commit that FIRST ADDS this manifest.
+Resolve its exact immutable SHA after fetching:
+git log --diff-filter=A --format=%H -1 -- docs/planning/BASELINE-REVISIONS.txt
+This avoids embedding a commit's own SHA inside itself. Later documentation or
+feature commits are not automatically part of this baseline. The integrator's
+handoff message supplies the resolved backend SHA and confirms both remote refs.
+
+Integration branch for BOTH repositories: codex/pos-development.
+Do not call this baseline published until both pushes and CI checks are verified.
+Use the paired source commits for new task branches; check newer decisions on
+integration before starting and before PR submission/merge.
+Collaborator assignment: T33A (cycle counts), NOT T10.
+Collaborator environment verification is separate and remains pending until the
+developer confirms their own checkouts, ports, services and isolated database.

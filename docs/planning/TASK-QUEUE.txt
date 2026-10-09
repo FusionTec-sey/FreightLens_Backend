@@ -1,0 +1,1203 @@
+FreightLens sequential development task queue
+Updated: 2026-10-05
+Phase crosswalk and delivery sequence: PHASE-ROADMAP.txt (BD-20261004-02).
+This queue alone records task status; roadmap and old Cxx plan are not backlogs.
+Full roadmap review 2026-10-04: 44 task IDs, no missing dependencies or cycles
+in a read-only document audit (not an application test). PHASE-ROADMAP.txt records
+slice-level readiness: listed dependencies gate full outcomes, not all independent
+preparation. Keep unverified integration disabled and preserve release gates.
+
+CURRENT PRIORITY — SALES SCREEN REVISION (BD-20261004-01)
+Owner requested revising this queue around the three inFlow-inspired concepts:
+sales register, desktop split-view workspace and tablet product/cart workspace.
+Owner approved the three concepts on 2026-10-04 (BD-20261004-03).
+Approval covers visual direction, not implemented sales capabilities or acceptance.
+Immediate sequence: T14A design confirmation -> T14B register -> T14C desktop
+workspace -> T14D tablet draft workspace. T14 remains full checkout integration
+after its backend dependencies; T14E records integrated acceptance separately.
+Reuse T13A/T15A and existing T07/T10 screens/services, not a second sales system.
+The visual confirmation and capability-map gates are resolved; continue the
+remaining T14B-D work and acceptance described in their current summaries. Existing T01-T34 IDs, ownership and evidence remain.
+Owner resumed full testing on 2026-10-04 (BD-20261004-04). Neither mockups nor
+coding nor a suite pass alone imply whole-task Verified status.
+Historical "Next" statements below do not override this priority or current status.
+
+ACCELERATED PILOT EXECUTION — BD-20261005-01
+Current objective is a supervised single-cloud sales pilot through T20 using three
+active lanes. Wave0 first updates and merges the paired local-area-scope PRs; no
+new feature branch starts from the current uncommitted checkout. After the exact
+baseline SHAs are published: integrator/core owns T08, the pilot T09 movement slice,
+T13 and backend T16/T18/T20; the programmer owns T12A, remaining T10 acceptance and
+T17; the checkout worktree owns T14B-D, T15 and frontend T16/T18. See
+PARALLEL-PILOT-EXECUTION.txt for protected files, migration reservations, merge
+order and wave gates. Focused tests run per PR; full suites run at baseline, T13
+and pilot acceptance. This scheduling change does not mark any task complete.
+
+PRIOR PARALLEL OWNERSHIP — BD-20261004-10
+Read BUSINESS-DECISIONS.txt and COLLABORATION-HANDOFF.txt before work.
+Integrator retains inventory/allocation/valuation/reservations/sales foundations.
+Next collaborator package is T12A payment/account configuration; see
+PROGRAMMER-T12A-HANDOFF.txt. T21 store/cloud packaging is owner-deferred. T33A is
+integrated; retain existing customer/count work. The new assignment requires
+contract inventory, negative scope/retry tests and complete revision/evidence manifest.
+No shared-file changes without interface coordination; linked PRs to integration.
+
+LATEST VERIFICATION
+2026-10-04 reconciled GitHub checkpoint: full isolated backend 1329 passed /
+2 known legacy xfailed; full frontend 278 passed / 52 suites; production build
+passed with existing warnings. Pairing: CHECKPOINT-20261004-UI.txt. GitHub CI
+status remains separate from local results. T14B-D stay In progress.
+
+2026-10-04 menu arrangement (BD-20261004-06): existing destinations regrouped
+by module; Customers under Sales, Counts under Inventory, grouped sales reviews.
+13 focused menu tests pass. Whole-menu browser acceptance remains pending;
+no change to task completion, posting authority or backend permission contracts.
+
+2026-10-04 populated demo: Utils/seed_workflow_demo.py applied to existing T05
+demo company only. Two customers, three drafts (one revised), three count plans,
+one admin-assigned open round and one submitted round/two discrepancy reviews.
+Four focused seed tests pass; repeat preview run creates nothing. No stock/money
+posting or full-phase completion. Populated list/detail/history and blind-sheet
+inspection passed; submission/decision E2E remains pending. Evidence:
+evidence/20261004-populated-workflows.txt.
+
+2026-10-04: backend 1325 passed / 2 known legacy xfailed; frontend 273 passed
+across 52 suites; production build passed with warnings. Fresh isolated install
+and second startup passed, with providers deliberately isolated. Sales/Counts
+read-only tablet navigation checked; populated workflows remain pending.
+See evidence/20261004-full-build-verification.txt for fixes, commands and exclusions.
+Local fixes are not pushed. Deferred statements below are historical chronology,
+not current instructions to stop testing or present verification status.
+
+T10 profile/history and duplicate-assessment implementation is connected and now
+focused-test verified. Append-only revisions, concurrency, API permissions, exact
+historical profile comparison, retained intents and assessment-only review pass
+53 backend and 23 frontend tests; the production build succeeds with existing
+warnings. No merge/execution control exists. Browser/provider acceptance, durable
+ordered search projection and broader source-linked customer history remain. See
+evidence/20261004-t10-customer-workspace.txt. The older unverified chronology was
+removed here so it cannot be mistaken for current task status.
+Owner clarification: extend existing sales rather than replace it; add missing
+agreed features while preserving historical records and original terms.
+Latest coding: T06 local central cost runtime, reviewed charge-posting API and
+frontend confirmation implemented with runtime blank/disabled. Entire slice
+unverified; evidence/t06-local-cost-runtime.txt. No tests/build/browser run.
+Latest coding: approved reallocation context/execute API and frontend confirmation
+added using existing atomic stock services. No tests/build/browser run; see
+evidence/t07-reallocation-runtime.txt. Public lifecycle paths remain disabled
+without explicit operator configuration and remain verification pending.
+Latest coding: other-store public runtime adapter and shared execution UI added.
+No tests/build/browser run; evidence/t07-other-store-runtime.txt. T07 remains
+In progress. Next: approved reallocation runtime/frontend, followed by remaining
+dependency-ready queue work. Deferred verification is not phase completion.
+REVISED OWNER EXECUTION INSTRUCTION (2026-10-04)
+Continue the full authorised dependency-ready backend/frontend implementation
+queue without routine proceed prompts. Do not launch automated tests until the
+owner explicitly asks to resume testing. Preserve existing tests; do not delete
+them or weaken application safety checks. Record new work as implementation with
+verification pending, not Verified or release-ready. Keep frontend screens current,
+preserve preview and existing work, and leave T33A to the collaborator. No real
+business posting, deployment, customer messaging or purchases are authorised.
+This instruction supersedes earlier requirements to run tests after each slice;
+the full implementation scope and deferred release/acceptance gates are unchanged.
+
+Owner instruction 2026-10-04: cancel further test runs and continue coding.
+New work remains Implemented—verification pending until deferred checks run.
+Approved release runtime/UI adapter added; evidence/t07-release-runtime.txt.
+21 backend/35 frontend tests ran before this instruction; later UI receipt/view
+changes and production build are unverified. No entire T07 completion claimed.
+Latest extension: compatible multi-location reviewed supplements. Backend52,
+frontend30 and production build passed; evidence/t07-multi-location-supplements.txt.
+Latest slice: staff working-store assignments. Backend66/frontend36 and production
+build passed; evidence/t07-staff-store-assignments.txt. Browser gate pending.
+Prior store-wide allocation: backend127/frontend22/build passed;
+evidence/t07-store-wide-allocation.txt. Full checkpoint below precedes both slices.
+Parallel integration checkpoint: backend1199 passed/2 known C12 xfails;
+frontend213 passed/41 suites; production build passed with existing warnings.
+Evidence: evidence/20261003-parallel-checkpoint.txt. Fixed legacy blob-test auth
+module leakage exposed by the first full run; production auth unchanged.
+No all-module completion or browser/provider acceptance claim. Earlier checkpoint
+counts, including T13A/T15A, remain historical.
+Focused checks do not increase that verified full-suite total.
+Safe reviewed alternate-unit extensions are usable
+against original stock snapshots. Authorised T05 demo/tablet checks passed for the
+recorded surfaces; this is not acceptance of every later workflow.
+Counts within older task entries are historical slice checkpoints.
+
+EXECUTION CONTRACT
+Owner correction BD-20261003-06: sell any eligible product across the authorised
+InventoryBranch. Counter/specialism is not a product or stock-access boundary.
+Prefer its optional picking area, then compatible same-store stock before shortage.
+Unset preference is valid; stale/invalid configuration still requires refresh.
+Other branches/separate warehouses require explicit choice and applicable approval.
+Staff assignment remains separate from counter preference and posting authority.
+Internal initial-allocation composition is implemented and focused tests pass;
+staff/store assignment now gates automatic allocation with an expected version.
+Trusted runtime/public integration remains pending.
+Owner clarification 2026-10-03: a verified slice is a progress checkpoint, not a
+reason to end execution. Continue to the next authorised dependency-ready item
+within the active turn. End for completion, explicit stop, a genuine required
+decision or an actual runtime limitation; state the precise reason. Do not require
+another "continue" after tests pass. Do not expand task acceptance by repeatedly
+adding unrelated later-phase infrastructure. Browser/hardware gates remain pending
+without blocking independent implementation. This does not authorise live posting,
+deployment, messaging or removal of safety/permission gates.
+This queue is the current execution order over the historical Cxx phase plan.
+Continue the next dependency-ready task without routine confirmation. Required
+backend contracts must be verified before dependent implementation; an independent
+deferred browser/hardware acceptance gate does not block unrelated development.
+Independent ready work may proceed when an
+external acceptance gate blocks another task. Blocked below means dependency-waiting
+unless an external blocker is explicitly named. No phase is declared complete here.
+States: Ready; In progress; Implemented—verification pending; Verified; Blocked.
+
+COMMON ACCEPTANCE FOR EVERY IMPLEMENTATION TASK
+Owner update 2026-10-03: use affected-feature tests and relevant shared-boundary
+checks during development. Full regression at task completion, major integration
+and before release, not after every slice. Frontend component checks when changed;
+production build for shared/dependency changes and milestones. Broaden checks for
+cross-cutting risk. Always record selected tests and deliberately deferred checks.
+Reuse FastAPI/React, existing catalogues, typed schemas and organisation helpers.
+Include usable frontend where applicable, additive replayable migrations, tests,
+architecture/progress updates and evidence. Check permission/tenant boundaries,
+expected versions, stable operation IDs, retries, concurrency, rollback and immutable
+history. Run affected backend tests and frontend tests/build. Do not substitute
+unit tests for skipped browser, hardware, accounting or pilot acceptance.
+The owner authorised T05 browser checks and synthetic sample data in an isolated
+demo company. Other deferred browser gates remain pending. Keep preview running.
+Only isolated test DBs and synthetic identities; no actual accounts, stock or serial
+seeds. No deploy, live posting, messaging, purchase or cutover without approval.
+
+RETAINED BASELINE
+Verified slices include branch/location setup, explicit initial cost-pool binding,
+policy drafts/conversion preview, exact units, internal stock opening/reserve/release,
+batch identities, serial identity/position and scoped paginated stock/serial UI.
+Latest recorded pre-queue verification: 444 backend passed / 2 known C12 xfails;
+42 frontend passed in 9 suites; production build passed with existing warnings.
+Evidence: planning/evidence/phase0/serial-stock-verification.txt.
+Internal writers are not public authorized sales posting. Policy activation,
+authority, persisted valuation, audited movement and legacy writer replacement remain.
+No fresh-install, distributed offline, Epson or live pilot completion is claimed.
+One operating company is confirmed; branches retain separate bank/licence settings.
+Explicit cost pools and independent store prices are retained. Shared-pool final
+valuation requires central reconciliation; disconnected cost is provisional.
+This canonical queue lives in FreightLens_Backend/docs/planning/TASK-QUEUE.txt.
+It is in the backend checkout but remains uncommitted with the implementation.
+The workspace planning/TASK-QUEUE.txt is a pointer, not a second status ledger.
+Historical evidence paths resolve from workspace planning/; new evidence lives
+alongside this queue in evidence/. PROGRESS.txt is a historical handoff log.
+
+T01 | Consolidate project tracking
+Status: Verified
+Dependencies: none
+Acceptance / evidence: Queue reconciled with current code and 444 backend / 42 frontend baseline; historical plans labelled.
+Next action: Maintain this queue and append verification evidence.
+
+T02 | Complete posting authority foundations
+Status: Verified
+Dependencies: T01
+Acceptance / evidence: Persist tenant/store node ownership and epochs; stale/foreign requests and retries denied; stock shares caller transaction; rollback and concurrency tests.
+Verified slice: caller-owned posting transaction, stock helper composition, mandatory
+guard on shared boundary before replay, immutable node identities/consecutive branch
+epochs and same-database branch-lock authority checks. Full backend473 passed/2 known
+C12 xfails; frontend42 passed; build passed with existing warnings.
+Evidence: planning/evidence/phase0/task-queue-authority-verification.txt.
+Completion evidence: mandatory exact-stock-scope authority and permission/source
+guard on ALL stock adapters, including factory calls and replays; authority-bound
+versioned fingerprints; cached ORM balances/holds refreshed under lock.
+Full backend510 passed/2 known C12 xfails; frontend42 passed and build passed.
+Evidence: planning/evidence/phase0/stock-authority-binding-verification.txt.
+Next action: retain these foundations in T03 onward. Runtime enrollment, reviewed
+transitions and disconnected failover are later gates, not claimed complete here.
+
+T03 | Establish branch settings and permissions
+Status: Implemented—verification pending
+Dependencies: T02
+Acceptance / evidence: Configurable branch/counter calendars, business dates and action permissions; absent mandatory settings block actions.
+Verified slice: pure configurable business-date calculation with timezone, weekday/
+weekend cutoffs, Saturday eligibility and explicit holiday overrides; missing
+settings block and collection eligibility remains separate.20 unit cases pass.
+Implementation: immutable branch settings/counter revisions, scoped typed APIs,
+backend permissions, stable-key retry and concurrent-version protection, server-side
+branch/counter/date guard, and Trading settings/Counters frontend panels.
+Automated verification: backend548 passed/2 known C12 xfails; frontend53 passed;
+build passed with existing warnings. Evidence: evidence/phase0/branch-settings-verification.txt.
+Remaining gate: browser/layout acceptance deferred by owner. No actual thresholds
+or counters seeded. Verified backend contracts permit T04 development to proceed.
+
+T04 | Build reusable manager cases
+Status: In progress
+Dependencies: T03
+Acceptance / evidence: Request/review/approve/reject audit; exact scope/version binding; reject self approval and changed/reused approvals.
+Implemented foundation: immutable request/decision/single-use history, transactional
+posting linkage, source-locked revalidation and policy request/review frontend.
+Engine/API31 targeted tests pass; implementation checkpoint full suite604 passed/2 known
+C12 xfails; frontend64 passed; build passed with existing warnings.
+Remaining: manager-profile notification integration and deferred browser acceptance.
+Personal queue slice implemented: profile shortcut, Needs my review / My requests /
+All cases filters, authenticated identity and exact company scope, exclusion of
+self/decided cases before pagination. Reuses the existing case register, not a
+second approval system. Evidence: evidence/personal-review-queue-verification.txt.
+Durable recipient/unread notification delivery remains outstanding. No task signoff.
+Verified request/review/consume contracts permit dependent T05 work.
+
+T05 | Activate reviewed inventory policies
+Status: Implemented—verification pending
+Dependencies: T04
+Acceptance / evidence: Reviewed activation/transitions and unit barcodes; immutable snapshots; ambiguous transitions blocked.
+Implementation complete for owner-restored scope (2026-10-03). New proposal-screen
+browser acceptance remains pending; existing automated contracts permit T06.
+Next action: Perform outstanding browser acceptance when confirmed; proceed to T06
+without rebuilding policies, barcodes or manager cases.
+Implemented slice: reviewed initial activation with exact immutable snapshot,
+single-use case consumption and posting receipt, no-stock eligibility gate,
+catalogue/SQL legacy-edit safeguards and active-policy opening compatibility.
+Frontend manager activation and separate active-policy summary are available.
+Full backend604 passed/2 known C12 xfails; frontend64 passed and build passed
+with existing warnings. Browser skipped.
+Evidence: evidence/phase0/manager-cases-policy-activation-verification.txt.
+Additional slice implemented: immutable unit-aware barcode registration, pagination
+and exact lookup with frontend setup/checking, bound to reviewed active policy.
+Automated verification: backend636 passed/2 known C12 xfails; frontend73 passed;
+production build passed with existing warnings. Browser acceptance remains skipped.
+Evidence: evidence/unit-barcodes-verification.txt.
+Additional slice implemented: reviewed no-history policy revisions reuse the case/
+activation pipeline, bind the exact predecessor, preserve immutable history and
+replay only the exact latest effect. Advisory saved-draft readiness API/frontend
+shows changes and blockers. Any stock history or barcode registration blocks this
+route; zero balances are not treated as history-free. Automated verification:
+backend651 passed/2 known C12 xfails; frontend78 passed; build passed with existing
+warnings. Evidence: evidence/policy-revisions-verification.txt. Browser skipped.
+Additional slice implemented: reviewed permanent barcode retirement with distinct
+request/review/execute permissions, immutable history, exact-source single-use
+approval and atomic retirement/receipt/outbox. Lookup and registration replay reject
+retired codes; original code stays reserved. Reused review panels and separate
+Barcode reviews navigation. Automated verification: backend679/2 known xfails;
+frontend103 tests/23 suites; build passed. Browser acceptance pending.
+Evidence: evidence/barcode-retirement-verification.txt.
+Follow-on verified slice: completed retirement of all codes now permits a separately
+reviewed no-stock policy revision. Pending retirement approval, any live code and
+all stock history still block. Existing APIs/UI/locks are reused; codes never regain
+eligibility or become reusable. Evidence: evidence/retired-barcode-revision-verification.txt.
+Historical follow-on target (superseded by owner scope correction below): physical
+existing-stock conversion. Never adopt legacy codes or reinterpret historical units.
+Preparation slice: existing readiness API/panel now shows typed active/proposed
+configuration side by side, retaining decimal factors and visible blockers. Results
+are aborted/cleared on product, API context or editing changes. No posting enabled.
+Evidence: evidence/policy-comparison-verification.txt; browser acceptance pending.
+Additional verified slice: reviewed alternate-unit additions with existing stock,
+preserving every original unit/factor/tracking rule, stock snapshot and barcode
+identity. Current compatible rules enable new-unit reservation/release; future
+openings use the new reviewed snapshot. Exact case/retry/concurrency guards remain.
+Authorised demo company DEMO ONLY - FreightLens T05 (local org2) includes ten products,
+stock conditions, serials, holds, policy reviews and barcode retirement states.
+Existing company selector restored; approval execution footer stays in tablet view.
+Evidence: evidence/t05-extension-demo-verification.txt. Demo guide: T05-DEMO.txt.
+Deferred to T06/T09 integration: structural conversion of existing stock is disabled.
+Reviewed retire/new-code correction is usable; old codes cannot be reassigned.
+Barcode reassignment is not a T05 requirement and remains prohibited.
+Next action: design explicit stock-reclassification reconciliation using original
+snapshots; do not infer missing batches, serials, factors or historical quantities.
+Correction-chain regression verified: a retired ancestor no longer blocks a later
+compatible extension after reviewed setup correction. One shared live-code query
+serves readiness/posting; missing/incompatible live source rules fail closed.
+Evidence: evidence/policy-live-barcode-verification.txt; no new screen or migration.
+Reclassification foundation: explicit same-base-unit ordinary-to-batch/serial
+manifest validator conserves physical/condition totals and blocks reserved stock.
+Reuses existing identity/quantity schemas; no posting/API/UI is enabled by it.
+Next integration: persist version-bound proposals and approved lineage, load locked
+source scope, enforce global identity uniqueness and atomic quantity/value transfer.
+Evidence: evidence/stock-reclassification-contract-verification.txt.
+Saved-proposal integration: immutable source/manifest records with scoped balance
+and posting receipt FKs; exact stock/draft/active versions, mandatory save guards,
+replay, product/balance locks and existing manager-case binding. No stock mutation.
+Migration replay, concurrent retries, rollback, foreign scope, stale source and
+self-review are tested. Evidence: evidence/reclassification-proposals-verification.txt.
+Next action: permission-guarded proposal API and usable manifest/review UI; keep
+conversion disabled until atomic lineage, authority, identities and value gates pass.
+Proposal API implemented: typed save, paginated summaries and UUID detail read with
+existing module/action permissions, exact company and visible parent checks. Reads
+are historical and conversion-disabled. Summary queries omit full manifests.
+Evidence: evidence/reclassification-api-verification.txt.
+Next action: usable proposal editor/register and public review adapter. Conversion
+remains disabled; no screen or full T05 completion claimed by this API slice.
+Read-only proposal register/detail now opens from each location-stock row, scoped to
+that balance. Reuses shared pagination/company-pinned API, exact decimal display and
+abortable requests. No approval status inferred from saved proposals; no write buttons.
+Evidence: evidence/reclassification-register-verification.txt. Browser check requested,
+pending reply. Next: proposal editor and public review adapter, then conversion gates.
+
+Proposal editor and public review adapter are implemented. Exact batch/serial
+manifests, source versions, stable failed-save retries, load retry and explicit
+discard controls connect to existing saved proposals. Scoped request/list/decision
+APIs reuse manager cases; independent review and stale-source rejection are tested.
+No stock conversion button/API is enabled. Evidence:
+evidence/t05-proposal-workflow-verification.txt.
+Owner approved restoring agreed T05 scope on2026-10-03: reviewed activation and safe
+transitions, unit-aware barcodes, immutable history and blocking unsafe transitions.
+Physical stock conversion is now tracked under T06/T09, removing the circular
+dependency. All validator/proposal/editor/review work is retained. Core implementation
+is complete; this is not physical conversion or blanket browser signoff. New browser
+acceptance remains pending; previous demo records retained, no new proposal samples.
+
+T06 | Persist inventory valuation
+Status: In progress
+Latest: the public approved-cost adapter/UI and cloud-derived central runtime are
+implemented but disabled without operator configuration. The runtime derives pool
+authority from one server-owned node identity and never accepts client claims or
+falls back from invalid cloud configuration. 64 authority/evidence/posting tests
+pass; evidence/20261004-cloud-cost-runtime.txt. No real charge posted. Continue the
+public reviewed-receipt composition and central reconciliation. Storage retention,
+real configuration and acceptance remain.
+Dependencies: T02,T05
+Acceptance / evidence: Immutable explicit-pool opening/receipt/freight valuation; exact conservation and reconciliation; prices unchanged.
+Next action: Persist existing pool-wac-v2 calculations. Include immutable valuation
+carry-forward/conservation contracts needed by future stock reclassification;
+physical conversion waits for T09 atomic movements and authority, not T05 closure.
+Implemented: source-linked immutable opening valuation using original movement
+quantity and explicit branch pool; weighted-average arithmetic, expected stream
+version, duplicate-source guard and atomic receipt/event reuse. Internal writer
+requires cost-evidence/authority callback and labels all entries UNRECONCILED.
+Financially protected paginated API and Cost pools history UI are available.
+Evidence: evidence/t06-opening-valuation-verification.txt.
+Next: approved receipt/freight source integration and central reconciliation;
+no public opening-cost posting, guessed values or final shared-pool costs enabled.
+Additional implementation: financial-only freight allocation preview over selected
+immutable opening sources. Reuses exact largest-remainder arithmetic and shared
+visibility query; original goods values or same-unit base quantities, max100 sources,
+no foreign/missing fallbacks, no allocation posting. Frontend selection/preview is
+connected and obsolete results are cancelled. Evidence:
+evidence/t06-cost-allocation-preview-verification.txt. Receipt costing still needs
+physical receipt/source integration; existing purchasing totals are not that ledger.
+Durable proposal workflow added: exact preview snapshot + declared charge reference
+and reason, stable operation retries, immutable history, financial-management save
+permission and financial-viewer register/detail. This is not verified evidence or
+charge posting. Evidence: evidence/t06-cost-proposals-verification.txt.
+Independent review implemented using existing manager cases, exact manifest/source
+binding, self/proxy-review denial, retries and one-effect concurrent decisions.
+Frontend request/decision/history are connected, with exact amounts and draft
+protection. Automated checks verified; browser acceptance pending. Evidence:
+evidence/t06-cost-review-verification.txt. Next: authoritative supplier-charge
+identity and duplicate-charge protection, evidence/FX and single-use consumption
+before financial capitalisation; integrate physical receipt sources and central
+reconciliation. No full T06 completion or final valuation claim.
+Internal duplicate-charge foundation added: whole organisation/supplier/invoice
+identity, unique proposal/document consumption, source/amount guards, exact evidence
+fingerprint and atomic deferred receipt linkage. Distinct pools/operation IDs or
+reference formatting cannot bypass an existing use; rollback releases failed uses.
+Existing supplier/document records reused; no second invoice store or public writer.
+Evidence: evidence/t06-charge-dedup-verification.txt. Next: connect authoritative
+supplier invoice/FX evidence and bind it to review before composing charge use,
+approval consumption and valuation. Current allocation approval is not that proof.
+Evidence-review internal adapter implemented: declared invoice/eligible amount/FX
+with exact conversion; locked document/supplier/PO state and distinct manager-case
+action. Approved current unconsumed evidence can populate the existing charge-use
+contract. No second invoice or approval system. Old allocation approvals remain
+insufficient. Evidence: evidence/t06-charge-evidence-review-verification.txt.
+Permission-aware supplier/document picker and evidence request/review API are now
+implemented with separate supplier/document/financial field gates. Explicit case
+projections never expose private keys; GENERAL/PO downloads have exact-company
+eligibility and no legacy fallback. Shared React picker, failed-save protection
+and existing manager-case review UI are connected; no duplicate records introduced.
+Evidence: evidence/t06-evidence-workspace-verification.txt.
+Version-pinned byte fingerprint primitive added to existing blob_storage: strict
+non-null version, bounded complete stream SHA256, mandatory size limit, no disk
+fallback, stream closure on errors. Internal only; no bucket configuration changes.
+Evidence: evidence/t06-versioned-blob-verification.txt.
+Internal version-2 review bindings now retain exact typed document content maps;
+current content identity is mandatory for approved financial evidence. Historical
+metadata-only cases cannot be upgraded implicitly. No parallel approval store or
+storage I/O inside transactions. Evidence: evidence/t06-content-review-binding-verification.txt.
+Two-stage preparation helper implemented: authorized detached source snapshot,
+transaction closed before strict storage reads, exact reviewed-version comparison,
+and mandatory later locked-source recheck. No new approval engine or persistence.
+Evidence: evidence/t06-content-preparation-verification.txt.
+Public two-stage request/review and exact-version reviewer downloads now connected.
+New cases use v2; original versions are retained on retry, current source is checked
+after storage I/O, and SHA256-verified full bytes are returned before any streaming.
+Legacy cases remain labelled metadata-only/ineligible for posting. Requires explicit
+COST_EVIDENCE_MAX_BYTES; no actual config or bucket settings changed.
+Evidence: evidence/t06-public-versioned-evidence-verification.txt.
+Local read-only inspection: RustFS bucket versioning NOT_ENABLED; capture limit
+absent. No configuration changed. This is a storage acceptance gate, not a reason
+to stop independent implementation. Own-operation evidence replay guard now requires
+matching actor, case/charge use, exact evidence and charge-domain receipt; ordinary
+consumed-case calls still reject. No valuation writer is implied.
+Evidence: evidence/t06-evidence-own-replay-verification.txt.
+Immutable additional-cost entries now extend the same valuation ledger, with
+zero added quantity, source links, exact allocation and case-use database guards.
+Caller-transaction append helper and atomic composition tests are implemented;
+frontend history distinguishes kinds and excludes charges from allocation sources.
+Evidence: evidence/t06-charge-valuation-verification.txt.
+Internal coordinator now composes prepared-content/source checks, case/charge use,
+valuation entries and receipt/outbox atomically. Explicit permission and central
+authority callbacks are mandatory on attempts and replays. Shared-session rollback
+and concurrent retries verified; no new UI/API action or schema.
+Evidence: evidence/t06-charge-posting-verification.txt.
+Factory-owned preparation-to-posting entry point now connects exact reviewed blob
+versions with the coordinator, rechecking permission/authority/source after I/O.
+Retries reread original versions; no transaction remains open during storage reads.
+Evidence: evidence/t06-prepared-posting-verification.txt.
+Persisted-case adapter now integrated: exact active-company/proposal/case lookup,
+shared approval/source checks before storage, no caller-supplied case binding.
+Evidence: evidence/t06-persisted-case-verification.txt.
+Durable central cost-pool authority now implemented using existing node identities,
+immutable consecutive epochs, same-company FKs and pool locks held through commit.
+Real guard tested with charge posting/replay; no node or pool activated.
+Evidence: evidence/t06-pool-authority-verification.txt.
+Typed central claims are now mandatory and their org/pool/node/epoch identity is
+bound into posting intent. Both entry points enforce persisted authority plus
+proposal/pool scope; extra callbacks cannot bypass those checks.
+Evidence: evidence/t06-authority-intent-verification.txt.
+Cost-pool list now shows read-only central writer state/epoch through the existing
+paginated API and table. No node identity, activation action or posting enablement.
+Evidence: evidence/t06-authority-status-verification.txt. Browser acceptance pending.
+Opening valuations now also require persisted central authority and bind the claim
+into retry intent, using the same pool-before-product lock order as charge posting.
+Evidence: evidence/t06-opening-authority-verification.txt. No UI/API activation.
+Internal receipt valuation now extends the same immutable `pool-wac-v2` stream.
+Central authority, exact consumed source, complete receipt movements, explicit
+branch pool mapping and prior physical/value consistency are mandatory. Exact
+server-reviewed SCR goods value is allocated across source movements; receipt rows
+can enter the existing reviewed landed-cost allocation. 120 affected backend tests,
+six focused frontend tests and production build pass (existing warnings). Evidence:
+evidence/20261004-receipt-valuation.txt. No FX derivation, public receipt posting or
+final reconciliation is enabled.
+Cloud central-runtime identity now derives exact pool authority independently from
+branch authority; invalid cloud configuration cannot fall back to local claims.
+Evidence: evidence/20261004-cloud-cost-runtime.txt. Runtime enrollment/fencing
+remains a release gate. Continue the public reviewed-receipt adapter and central
+reconciliation. Public financial posting remains off; validate actual RustFS
+version retention/configuration before enabling capture.
+The public reviewed-receipt cost adapter and Goods Receiving UI are now connected.
+Request/list/independent-review routes bind the official unit price, source currency,
+exact SCR rate and existing PO/FX document versions without exposing storage metadata.
+The reviewer downloads the reviewed version and decisions use the listed case version;
+stable retries retain their operation identity. Backend49/frontend9 and production
+build pass. Evidence: evidence/20261004-receipt-cost-public-review.txt. Approval still
+does not post stock, value, selling price or accounting. T06 remains In progress for
+immutable central reconciliation/close and external evidence-retention acceptance.
+Product-scoped immutable reconciliation checkpoints now bind the current valuation
+head plus every physical balance/version under independent manager review. Close
+requires exact one-unit quantity agreement and current server-derived central cost
+authority; it appends history without changing valuation, accounting or prices.
+Backend7/frontend18 and production build pass. Evidence:
+evidence/20261004-cost-reconciliation-checkpoints.txt. T06 remains In progress for
+external retention/runtime acceptance and broader period/accounting gates.
+Preserve source/permission guards and atomic own-operation retries. Do not expose private metadata
+fingerprints in generic financial-only case reads. Browser acceptance pending.
+
+T07 | Complete reservation lifecycle
+Status: Implemented—verification pending
+Dependencies: T04,T05,T13A
+Acceptance / evidence: Authoritative source links, approved release/reallocation/deadline review; protected paid holds and explicit multi-location approval.
+Saved-document/line/version links, exact caps and draft-edit protection now extend
+existing holds; read-only reserved-demand totals are in the frontend. Evidence:
+evidence/t07-source-linked-reservations.txt. Reviewed internal release now consumes
+an exact approval atomically; generic source-linked release stays blocked. Request/
+review APIs and the reused frontend review panel are implemented. Focused backend58,
+frontend23 and production build pass; evidence/t07-reviewed-release.txt. No public
+posting identity is inferred, and approval never automatically releases stock.
+Linked-hold list/request UI now joins the reviewed workflow through Sales drafts ->
+View -> Reserved stock. Backend17/frontend11 focused tests and build pass;
+evidence/t07-release-request-ui.txt. Browser acceptance pending.
+Reviewed follow-up requests/decisions and explicit schedule now append immutable
+deadline history with no stock release. Frontend reuses the request/review/action
+panels; linked holds show current dates and due flags. Backend45/frontend33 and
+build pass; evidence/t07-reservation-deadlines.txt. Browser acceptance pending.
+Company-wide due inbox now reuses the per-draft read projection and reservation UI;
+manager permissions, latest deadline/remaining filters and fresh draft drill-down
+are verified. Backend19/frontend16 and build pass; evidence/t07-due-followup-inbox.txt.
+Pull-based inbox does not claim T04 delivered notifications.
+Atomic same-bucket reallocation now composes release/reserve with exact reviewed
+source/target and immutable paired history. Request/review APIs plus permission-
+gated Sales drafts -> Reallocation reviews implemented. Backend73/19, frontend24
+focused checks and build pass; evidence/t07-approved-reallocation.txt. This is
+unconfirmed draft demand only; existing-target merge/top-up remains blocked.
+Request entry now reuses paginated saved drafts and fresh target-line selection;
+uncertain retry locks source/target/date/quantity and retains its exact operation.
+Affected frontend46/5 suites pass. Browser acceptance remains pending.
+Existing-target same-bucket supplements now append independently reviewed hold
+segments, preserving original quantity/date and enforcing combined demand caps.
+Exact history digest invalidates concurrent/stale reviews; deferred DB guard
+requires paired reallocation. Backend110/frontend38 and build pass; evidence:
+evidence/t07-reservation-segments.txt. Prior existing-target restriction is superseded.
+Counter area resolver now validates ancestry and scoped counter/version under a
+branch lock; read-only paginated frontend shows active area descendants. Evidence:
+evidence/t07-counter-area-scope.txt. This is not staff assignment or stock posting.
+BD-20261003-06 replaces counter-area restrictions with optional preference and
+same-store compatible splits. Internal atomic initial-allocation coordinator and
+counter UI wording implemented; backend127/frontend22/build pass (evidence:
+evidence/t07-store-wide-allocation.txt). Browser acceptance remains pending. Existing holds
+still require reviewed lifecycle; no initial-allocation top-up/replacement bypass.
+Authorised staff/store assignments now persist separately from optional counters;
+automatic allocation requires their current version. Backend66/frontend36/build
+pass; evidence/t07-staff-store-assignments.txt. No real assignments or public writer.
+Reviewed supplements now accept compatible same-store target locations with exact
+all-hold history binding and combined caps; evidence/t07-multi-location-supplements.txt.
+Internal exact other-store review binding implemented; request/decision engine
+reuse has no stock effect. Evidence: evidence/t07-other-store-review-foundation.txt.
+Scoped other-store request/review API and sales review queue now implemented;
+backend18/frontend26/build pass. Evidence: evidence/t07-other-store-review-api.txt.
+Explicit request-entry stock picker and self-only working-store read implemented;
+backend22/frontend27/build pass, evidence/t07-other-store-request-entry.txt.
+Internal reviewed execution now reuses reserve_stock with target-store authority,
+atomic case consumption, exact replay and protected compatible local holds.
+Backend58 pass: evidence/t07-other-store-execution.txt.
+Opt-in local runtime and same-store allocation API implemented (backend22 pass);
+evidence/t07-local-runtime-allocation-api.txt. No preview configuration enabled.
+Tablet allocation control and runtime-aware context read implemented locally;
+backend31/frontend15/build pass, evidence/t07-store-allocation-ui.txt. Browser
+acceptance pending; preview runtime remains disabled.
+Cloud-authoritative runtime follow-up implemented: same-store allocation, reviewed
+release and reviewed other-store execution now share a server-owned node resolver
+that derives only active epochs owned by that configured node. Invalid cloud
+configuration never falls back; explicit local-development compatibility is retained.
+Focused backend66 pass; evidence/t07-cloud-runtime.txt. Existing release binding
+already rejects confirmed/non-DRAFT demand, so later paid/credit-confirmed holds
+cannot enter the unconfirmed-draft release path. No automatic expiry or other-store
+allocation exists. T13 must preserve this boundary while creating confirmed
+commitments. Browser acceptance and real runtime configuration remain pending.
+
+T08 | Replace legacy stock writers
+Status: In progress
+Dependencies: T06,T07
+Acceptance / evidence: All product opening/adjustment/receiving/import writers use Inventory; no direct totals or clamp; two C12 xfails pass.
+Writer/reader audit complete: LEGACY-STOCK-WRITER-AUDIT.txt. Product metadata and
+catalogue creation cannot establish or replace stock totals, and the former clamp
+writer is retired. The controlled reviewed location-adjustment replacement is now
+implemented below. Receiving still updates purchasing totals only unless the
+separate reviewed Inventory coordinator is used. Opening/import composition and
+the public receipt runtime/retention gates remain.
+Internal receipt-source preparation now reuses submitted purchasing lines, exact
+parent/product scope, current reviewed units and explicit active branch/location.
+27 isolated backend tests pass; evidence/20261004-receipt-source.txt. No posting
+or public action. Next: immutable physical manifests, condition/batch/serial data,
+cumulative receipt-line use and receipt valuation extension before atomic writer.
+Full-line manifest preparation now shares batch/serial conservation with stock
+reclassification. Exact conditions and source totals are validated without writes.
+Evidence: evidence/20261004-receipt-manifest.txt. Next: persist immutable manifests
+with reviewed source binding, cumulative consumption and partial/location splits;
+then receipt movement/valuation integration. No public receipt posting enabled.
+Immutable receipt manifest store and replay-safe migration now added, reusing
+shared operation receipts and exact prepared snapshots. Saving does not consume
+received quantities. Evidence: evidence/20261004-receipt-manifest-store.txt.
+Next: reviewed source binding/read API and UI, cumulative source use and physical
+movement/valuation composition. Concurrency posting acceptance remains outstanding.
+Internal manager-case request/review now binds persisted classification and current
+source, denies self/proxy review and rejects stale source; eight review/store tests
+pass. Evidence: evidence/20261004-receipt-review.txt. Public API/UI and atomic source
+consumption remain next; classification approval is not physical/financial posting.
+Scoped paginated manifest summary/detail reads and a contained Goods Receiving
+inspector now expose saved historical classification without supplier/cost data or
+write controls. Seven isolated backend and four focused frontend tests pass; the
+production build passes with existing warnings. Evidence:
+evidence/20261004-receipt-manifest-read-ui.txt. Public save/review adapters, cumulative
+source use and atomic movement/valuation posting remain next. Browser acceptance is
+still a separate gate.
+Public stable-key proposal save and classification request/list/independent-decision
+routes now reuse the same services and manager-case history. Request-only users cannot
+browse other cases; summaries avoid identity-heavy binding JSON and use a scoped
+partial index. Goods Receiving review input retains uncertain retries and cannot imply
+posting. Twenty-eight backend and seven frontend tests pass; build passes. Evidence:
+evidence/20261004-receipt-manifest-public-review.txt. Next: usable manifest-entry UI,
+cumulative source-use authority and atomic movement/valuation composition. No stock,
+case consumption or financial posting is enabled; browser acceptance remains pending.
+Goods Receiving now has usable physical manifest entry: submitted line and linked
+product selection, server-paged branch/location choice, current reviewed policy,
+shared batch/serial controls, exact source/conservation previews and stable-key save.
+The source preview supplies the converted base total without inferring condition
+disposition. Save reruns authoritative conservation; none posts or consumes stock. Twenty-seven
+focused backend checks and fourteen frontend checks pass; production build passes
+with existing warnings. Evidence: evidence/20261004-receipt-manifest-entry.txt.
+Next: cumulative source-use authority, partial/location composition and atomic
+movement/valuation posting. Browser acceptance remains a separate gate.
+An immutable source-use table and internal transaction helper now bind the current
+full-line manifest, exact approved manager case and outer posting operation. Receipt
+line locking plus a database guard prevent sequential over-consumption and direct
+unapproved use; outer rollback releases both case use and capacity. A mandatory
+outer guard rechecks source and permission on replay. Seven focused
+PostgreSQL checks pass. Evidence: evidence/20261004-receipt-source-use.txt. There is
+no public adapter or standalone consumption action. Next: compose trusted node
+authority, partial/location design, inventory movement and T06 receipt valuation in
+one outer transaction, then verify competing committed postings.
+The remaining legacy product-total adjustment writer is now retired: its scoped,
+permission-checked compatibility route fails closed without mutation, and Product
+Master exposes no quick-adjust action. Ten focused prerequisite checks pass and the
+frontend production build passes with existing warnings. Evidence:
+evidence/20261004-legacy-adjustment-retired.txt. The original direct-stock regression
+expectations now pass; controlled reviewed location adjustments remain unfinished.
+The internal receipt movement layer now takes trusted branch authority before source
+locks, rebinds the exact approved full-line manifest, requires its same-operation
+source-use claim and appends exact location/batch/serial movements without committing.
+Database guards reject scope, identity, condition, quantity and direct-writer bypasses;
+the replay-safe migration performs no backfill. Six focused PostgreSQL tests pass.
+Evidence: evidence/20261004-receipt-movements.txt. This is not a public posting action.
+Internal atomic coordination is now implemented: one stable operation composes the
+classification case/source use, exact movements, receipt valuation and immutable
+receipt/outbox. Separate financial/stock permissions and central/branch authorities
+rerun on replays. Committed two-connection tests prove same-key replay and exactly
+one effect for competing distinct keys. Evidence:
+evidence/20261004-receipt-coordinator.txt. That lower-layer checkpoint used a private
+raw-value seam; the evidence-bound official path below supersedes its next step.
+Receipt cost evidence is now implemented internally. A separate independently
+reviewed case binds the official PO unit price, receipt-unit quantity, source currency,
+explicit SCR conversion and exact original PO-price/FX document versions and hashes.
+The official coordinator rereads pinned blobs outside the transaction, revalidates
+the complete binding under lock, derives SCR value server-side and consumes both
+approvals/source/movement/value/receipt atomically. Callers cannot supply the value;
+the raw-value seam is private and has a distinct operation kind. 141 affected backend
+tests pass. Evidence: evidence/20261004-receipt-cost-evidence.txt. Next: central
+reconciliation and an authenticated, permission-separated runtime adapter after
+RustFS version-retention acceptance. Public physical/financial posting remains off.
+Central reconciliation readiness is now visible without changing history: a scoped,
+paginated comparison reports each product's physical on-hand, latest valuation head,
+exact difference and missing/unit/quantity exceptions. 54 focused backend and 22
+focused frontend tests pass; the production build succeeds with existing warnings.
+Evidence: evidence/20261004-reconciliation-readiness.txt. This is diagnostic only:
+reviewed immutable close/checkpoint, synchronized completeness, evidence retention
+and accounting export remain before T06 completion.
+Product-level reads now project exact on-hand, reserved, available, damaged and
+quarantined totals from scoped location balances. Incompatible base units are never
+summed; catalogue, lookup/export, dashboard low-stock and current frontend consumers
+show an explicit unavailable state. Search no longer publishes the legacy total.
+Dashboard valuation now uses latest immutable cost-pool heads and is labelled
+provisional with coverage, rather than multiplying legacy stock by catalogue cost.
+63 focused backend and four frontend checks pass; the production build passes with
+existing warnings. Evidence: evidence/20261004-product-quantity-projection.txt.
+Exact reviewed location corrections now bind current balance/version, reviewed unit
+policy and before/target quantities; reservations cannot be edited or consumed.
+Independent review, server-owned branch authority, exact approval consumption and
+one immutable ADJUSTMENT ledger movement commit together. Separate request/review/
+execute permissions, stable retries and a database guard reject stale, foreign,
+self-reviewed or direct-writer attempts. Serial totals remain identity-specific.
+Location Stock exposes the permission-aware request/review/execute workflow and
+retains uncertain retry identity. 65 backend and 26 frontend focused tests pass;
+the production build passes with existing warnings. Evidence:
+evidence/20261004-reviewed-stock-adjustments.txt. T08 remains In progress for
+controlled opening/import composition and public receipt runtime/retention gates.
+The public receipt-cost evidence request/review workflow is now usable and verified,
+but the final physical/valuation execute route remains intentionally absent until
+RustFS retention and runtime acceptance are satisfied. Evidence:
+evidence/20261004-receipt-cost-public-review.txt. Opening/import composition remains.
+
+T09 | Complete transfers and stock movements
+Status: Blocked
+Dependencies: T08
+Acceptance / evidence: Dispatch/transit/receipt/write-off/controlled adjustments with batch/serial history; destination available only after receipt.
+Next action: Extend immutable movement gateway. Integrate retained reclassification
+proposals only with product-wide compatibility, global identity checks, node fencing,
+exact physical/condition/value conservation and immutable atomic movement lineage.
+
+T10 | Build customer workspace
+Status: In progress
+Dependencies: T03,T04,T10A
+Acceptance / evidence: Profiles/contacts, scoped history and controlled duplicate review; no automatic balance merge.
+Next action: Reuse implemented profile/contact revisions, protected history API,
+edit/history screens and controlled duplicate request/comparison/review screens
+in the revised sales workspace. Do not rebuild them. Automated verification now
+covers append-only/current/exact history, stable retries, concurrent edit exclusion,
+tenant/permission denial, migration replay, exact-profile duplicate assessment,
+independent review and the absence of any merge/use effect. 53 backend and 23
+frontend tests pass; production build succeeds with existing warnings. Evidence:
+evidence/20261004-t10-customer-workspace.txt. Concurrent external search projection
+ordering, broader source-linked sales history and browser/provider acceptance remain.
+Preserve original sales references and never merge balances automatically.
+Integrator owns T10; collaborator retains T33A. No runtime/financial activation.
+
+T11 | Implement pricing and tax
+Status: Implemented—verification pending
+Dependencies: T05,T10
+Acceptance / evidence: Independent store prices, agreed customer prices, tax-inclusive SCR/exemptions/floors; immutable original rules.
+If customer-facing freight is introduced, model it as versioned selling-price
+calculation/posting input distinct from T06 landed inventory cost. Never infer it
+from procurement freight or edit financial totals only in the client.
+Exact calculation foundation implemented: versioned selling-store price plus
+already-eligible customer agreements, lowest customer-beneficial selection, separate
+versioned STANDARD/ZERO_RATED/EXEMPT tax snapshot, explicit floor-approval flag and
+invoice-total-only SCR rounding with deterministic line/tax cents. Sixteen focused
+tests including 200 deterministic invoices pass. Evidence:
+evidence/20261004-t11-pricing-calculator.txt. No rate or classification is hard-coded
+into persistence; official SRC material was checked for the current 15% standard
+rate and separate invoice VAT display.
+Persistence and preview slice implemented: stable tenant-owned identities and
+consecutive immutable revisions for configurable tax rules, selling-store/product/
+unit prices, product tax assignments and customer/store/product/unit agreements;
+stable retry keys; protected paginated APIs; authoritative eligibility resolution;
+and a read-only draft pricing preview with exact SCR totals and source/version/floor
+details. The Sales > Pricing & tax frontend exposes four usable registers with
+version-aware forms and existing branch/product/customer selectors. No rate, price,
+classification or real record is seeded. 42 focused backend tests, 26 affected
+frontend tests and the production build pass with existing unrelated warnings.
+Evidence: evidence/20261004-t11-pricing-persistence-preview.txt.
+Reviewed-floor and transaction-input follow-up implemented: exact manager-case
+binding/fingerprint, independent review with self-review denial, stale-source
+invalidation, immutable prepared price/tax snapshot, stable retries and protected
+frontend preparation/review. Preparation references but does not consume approval
+and performs no invoice, payment, stock, numbering, collection or outbox effect.
+48 focused backend and 43 focused frontend tests pass; production build succeeds
+with existing unrelated warnings. Browser/tablet/dark-mode and real tax/accounting
+configuration acceptance remain. T13 must select the exact snapshot and atomically
+consume any matching approval; do not let a price list change tax treatment.
+
+T12 | Implement customer-money and bank configuration
+Status: Ready
+Dependencies: T03,T10
+Acceptance / evidence: Payment method/account/credit liability separate; missing mappings block; credit never expires.
+Owner: Other programmer for bounded T12A configuration only; see
+PROGRAMMER-T12A-HANDOFF.txt and BD-20261004-10. Stable T03/T10 identities permit
+this independent slice. Build versioned payment-method and branch receiving-account
+configuration plus fail-closed lookup using synthetic data. Customer-credit balances,
+payment posting, deposits, cheques and real bank/account seeds remain later T12/T27.
+
+T13 | Complete atomic sales posting
+Status: Blocked
+Dependencies: T07,T08,T11,T12,T13A
+Acceptance / evidence: Invoice/commitments/payments/number/outbox commit together; retries and unknown payment outcomes safe.
+Next action: Compose existing posting boundary and authoritative services.
+
+T14 | Build tablet checkout
+Status: Blocked
+Dependencies: T13,T15A,T14D
+Acceptance / evidence: Customer/cart, scan/images/units/split payments/parked carts, distinct payment/fulfilment status.
+Next action: Integrate authoritative pricing, payments and atomic posting into
+the shared T14C/T14D workspace as T11-T13 become ready. Do not rebuild its cart,
+customer selector or recovery store. T14A-D bring presentation forward only;
+they do not satisfy financial posting or operational checkout acceptance.
+
+T14A | Confirm sales design and map existing capabilities
+Status: Verified
+Evidence: owner design approval BD-20261004-03 and SALES-SCREEN-MAP.txt, mapped
+against current route/client/component source. Documentation acceptance only;
+this does not verify any T14B-D implementation or imply application tests ran.
+Dependencies: T01
+Owner: Integrator; owner confirms visual design.
+Acceptance / evidence: Three raster concepts shown on 2026-10-04 (register,
+desktop order workspace, tablet checkout). Record explicit approved revision
+and requested changes before implementation. These are not editable Figma files.
+Map each proposed view/button to an existing route, permission and API or its
+owning unfinished task. Reuse FreightLens branding and shared RegisterShell;
+generated names, units, totals, dates and logos are illustrative, not requirements.
+Keep company/store context visible, no operational KPI cards, contained scrolling,
+clear primary actions and distinct draft/reservation/payment/collection states.
+Design approved: BD-20261004-03. Initial capability map from current frontend:
+Register list/detail/save -> salesDraftsApi list/read/save at /sales/drafts;
+existing View_SalesDraft/Manage_SalesDraft plus customer/product access remain.
+Local recovery -> LocalSalesDrafts/T15A; stock allocation -> DraftAllocation/T07;
+reservation reviews -> shared ManagerCases/T07; customer profile/history -> T10.
+List API supports server page/limit and store filtering with bounded labels.
+Full-text search remains scoped backend work, not visible-page filtering.
+Payments/posting -> T12/T13; collection -> T16; print -> T17; copy -> T15;
+digital delivery -> T25. Those mockup actions are not working draft capabilities.
+Next action: Maintain SALES-SCREEN-MAP.txt as owning capabilities become available;
+continue T14B-D without rebuilding their existing contracts.
+
+T14B | Refine the sales register and navigation
+Status: In progress
+Dependencies: T14A,T13A
+Acceptance / evidence: Extend existing sales routes/register with approved layout,
+server-paginated search/filter views, readable references and permission-aware
+actions. Preserve Local drafts, due follow-up and existing review deep links.
+Only display statuses backed by authoritative data; draft is not confirmed/paid.
+Loading, empty, denied and failed states remain explicit. No fake active tabs
+or numbered invoices inferred from UUIDs. Missing read contracts are recorded
+against their owning task, not replaced with client-side full-dataset filtering.
+Under BD-20261004-09, use dense two-line rows led by customer/store and Draft vN;
+the exact UUID stays visible as a secondary Draft reference. Present Demand,
+Reservation, Payment and Collection independently rather than a blended progress
+strip. Preserve server paging, scoped search and permission-aware deep links.
+Current implementation (reconciled 2026-10-04): server paging/store filter,
+saved-profile customer labels, separate amount/payment/collection columns, and
+module navigation BD-20261004-06. No fabricated invoice numbers or paid states.
+Search follow-up: scoped Meilisearch query by draft reference/saved customer name,
+store filter, bounded authoritative rehydration and explicit unavailable/stale
+recovery implemented. Post-commit projection preserves confirmed-save semantics.
+Evidence: evidence/20261004-sales-register-search.txt; 38 affected backend and
+15 frontend tests pass; build passes. Eventual/ordered projection repair remains
+T22; no whole-task completion. Local changes await paired checkpoint.
+BD-20261004-09 presentation now leads with customer/store and Draft vN, retains the
+exact UUID as secondary reference and keeps Demand, Reservations, Pricing, Payment
+and Collection distinct. Evidence: evidence/20261004-inflow-p1-sales-presentation.txt.
+Next: whole-menu/role-based browser acceptance. Twenty-four affected Sales tests
+pass and production build passes with existing warnings. See sales-layout evidence.
+
+T14C | Desktop split-view sales workspace
+Status: In progress
+Dependencies: T14B,T10A,T15A
+Acceptance / evidence: Retain a compact order list beside selected details, with
+customer/store/audit header, image/SKU/unit-aware lines and clear save state.
+Reuse existing customer editing/history, SalesDraftEditor, reservation controls,
+ManagerCases and typed clients. Preserve selection/filter state when entering
+and leaving detail/review; guard dirty navigation and retain uncertain operations.
+Items/reservations/history use real available contracts. Payments/collection,
+printing, copy and delivery join via T12-T18/T25 as ready, not simulated actions.
+Tab selection is read-only: it must never start picking, reserve, pay or hand over.
+Show backend eligibility/permission reasons; advanced review/authority details
+stay contextual, not a mandatory technical form for ordinary selling.
+Under BD-20261004-09, consolidate saved customer version, current store label and
+reference, UUID/version, save time and audit actor into a compact identity strip.
+The saving actor is not a salesperson assignment and save time is not an order
+date. Use compact image, SKU, exact selling unit/quantity and reserved-base rows;
+keep stock actions secondary and persistent. Show Pricing pending / Not calculated
+until T11 supplies authoritative currency, tax and prices.
+Current implementation (reconciled 2026-10-04): compact register beside detail,
+customer labels, scoped product media, revision metadata, and saved-draft sidebar
+beside editor at desktop width. Draft switching is disabled while editing to
+preserve unsaved/pending data. Existing reservation actions remain explicit.
+Historical line inspection now implemented through exact-version read-only API
+and Inspect version view; current holds are not queried or shown as historical.
+39 affected backend / 10 focused frontend tests pass; build passes. Evidence:
+evidence/20261004-sales-revision-inspection.txt. Browser acceptance remains pending.
+Route navigation guard now retains recovery before menu/Back departure and blocks
+storage failure, running saves and confirmed cleanup. Full frontend291/55 and
+build pass; evidence/20261004-sales-navigation.txt. Native browser acceptance pending.
+Current detail now displays scoped current branch label and revision saved-at/by
+metadata; editor shows branch label without persisting it to local recovery.
+Saving actor is not salesperson assignment. Evidence/20261004-sales-metadata.txt.
+BD-20261004-09 compact identity/status and line hierarchy is now implemented using
+only current contracts; no unavailable financial/action control was introduced.
+Next: final visual acceptance. Read-only desktop check at 1280px;
+30 focused Sales tests pass. This is not full checkout or final owner acceptance.
+
+T14D | Tablet product-and-cart draft workspace
+Status: In progress
+Dependencies: T14C,T05,T15A
+Acceptance / evidence: Responsive product search/images, unit selection and
+touch-friendly cart share the desktop draft state, API and recovery store.
+Scan uses scoped reviewed unit-barcode identities, not inferred legacy codes.
+Retain parked drafts, exact quantities, unsaved/failed-save recovery and explicit
+discard. Product/cart panes collapse appropriately in portrait; actions remain
+reachable without whole-page overflow. No duplicate tablet catalogue or cart.
+Store-wide selling remains BD-20261003-06: optional preferred picking area,
+compatible same-store stock, explicit approved other-store choices. No counters
+restricting product access. Draft UI does not grant offline posting authority.
+Expose existing dirty, saving, uncertain-retry, conflict and cleanup states in a
+compact persistent banner. The product and cart presentation must not turn those
+states into an additional save, reserve, payment or posting request.
+Current implementation (reconciled 2026-10-04): product cards, exact quantity
+controls, reviewed-unit barcode entry, product images/fallbacks, shared recovery,
+confirmed-save cleanup retry and persistent product/cart panes at 768px+.
+Read-only tablet check at 1024px passed; 30 focused Sales tests pass. Totals say
+Not calculated until T11 supplies authoritative prices/tax. No payment enabled.
+Read-only portrait check (768px) inspected historical v1 against current v2 and
+editor containment. At390px found cart collapsed by fixed headers; repaired with
+internal editor-body scrolling and a 480px cart pane, retaining fixed Save/Cancel.
+Rechecked body containment and visible quantity/unit controls; no records changed.
+10 affected frontend tests pass; evidence/20261004-sales-phone-layout.txt.
+BD-20261004-09 now removes the premature currency label and retains the existing
+persistent recovery state/action area. Next: dark-mode and recovery/navigation acceptance, scanner/media
+provider gates and further visual refinement. Reuse current editor; no rebuild.
+
+T14E | Integrated sales-screen acceptance
+Status: Blocked
+Dependencies: T14,T15,T16,T17
+Acceptance / evidence: Testing resumed BD-20261004-04; verify affected frontend/backend
+contracts and build, plus separately approved desktop/tablet browser checks.
+Cover button permissions, deep links/back/refresh, dirty navigation, failed saves,
+uncertain retries, unit/scanning behavior, tenant/store changes, split statuses
+and payment/collection limits. Check light/dark, keyboard access and contained
+scrolling. Explicit actions require confirmation where applicable; tabs never post.
+No generated design image counts as browser or hardware evidence. Epson, provider,
+accounting/offline/pilot gates remain separate. No real transactions for acceptance.
+Next action: Record deferred checks now; run only after the applicable approval.
+
+T15 | Protect and reuse drafts
+Status: Blocked
+Dependencies: T14,T15A
+Acceptance / evidence: Navigation/failed-save recovery; copy intent/source only, revalidate; no copied money/reservations/approvals/collection.
+Next action: Extend T15A recovery in the real checkout and implement safe document
+copy with new document/line identities and retained source reference; do not replace
+its draft store, copy invoice numbering or introduce another identity model.
+
+T16 | Implement physical collection
+Status: Blocked
+Dependencies: T09,T13,T14
+Acceptance / evidence: Line locations/partial pickup/collector/serial assignment; payment eligibility and quantity/duplicate caps.
+Next action: Add scoped handover service and UI.
+
+T17 | Implement invoices and print queues
+Status: Blocked
+Dependencies: T13
+Acceptance / evidence: Immutable invoice rendering, COPY reprints, failed/uncertain queue; automated checks distinct from Epson hardware gate.
+Generated invoice artifacts belong here. Generic sales attachments, price labels
+and shipping labels are not implicitly owned by T17; assign their contract before
+exposing controls. Next action: Reuse templates; hardware acceptance remains pending.
+
+T18 | Implement returns and credit notes
+Status: Blocked
+Dependencies: T12,T16
+Acceptance / evidence: Original invoice/actual handover links; previous/pending claims counted; debt settled before surplus credit.
+Next action: Build exact cumulative return eligibility.
+
+T19 | Implement damaged/display workflows
+Status: Blocked
+Dependencies: T04,T09,T18
+Acceptance / evidence: Quarantine/disclosure/approved discount/supplier claim/write-off; no good-stock inflation.
+Next action: Extend condition movement and case workflows.
+
+T20 | Implement close and accounting export
+Status: Blocked
+Dependencies: T12,T13,T18
+Acceptance / evidence: Till reconciliation/discrepancy approval/deposit match; repeatable balanced branch journals.
+Next action: Build configuration-driven export and review UI.
+
+T21 | Package store/cloud runtimes
+Status: Blocked
+Dependencies: T02,T03
+Acceptance / evidence: Isolated development nodes, secure enrollment/local assets/search/node-owned jobs; preserve preview.
+Owner-deferred by BD-20261004-10. Existing work is retained; do not expand store-
+local nodes, enrollment or multi-runtime packaging while the current product is a
+single cloud authority. PROGRAMMER-T21-HANDOFF.txt is historical until reactivated.
+
+T22 | Implement durable synchronization
+Status: Blocked
+Dependencies: T21
+Acceptance / evidence: Transactional inbox/outbox, ordered delivery/ack/restart recovery/visible failures; duplicate has one effect.
+Owner-deferred with T21 under BD-20261004-10. Retain the persisted cloud outbox for
+atomic posting/delivery; do not build store/cloud synchronization now.
+
+T23 | Enforce offline eligibility
+Status: Blocked
+Dependencies: T12,T22
+Acceptance / evidence: Cached policy/node fencing/shared-money limits; unsafe credit and ambiguous recovery blocked with cases.
+Owner-deferred by BD-20261004-10; no offline sale entitlement is exposed.
+
+T24 | Implement paper-outage recovery
+Status: Blocked
+Dependencies: T16,T23
+Acceptance / evidence: Controlled paper references/dates/duplicate detection/stock reconciliation before unrestricted checkout.
+Owner-deferred by BD-20261004-10. A manual outage procedure is not represented as
+an implemented offline application or synchronized sale.
+
+T25 | Add digital invoice delivery
+Status: Blocked
+Dependencies: T13,T17
+Acceptance / evidence: Consent and queued email/WhatsApp sent/failed/uncertain states; sandbox adapters only.
+Next action: Reuse the cloud posting outbox; keep actual provider/recipient setup
+as an external gate. Do not depend on store synchronization.
+
+T26 | Build import and recovery rehearsals
+Status: Blocked
+Dependencies: T08,T20
+Acceptance / evidence: Repeatable inFlow mapping/exceptions/opening reconciliation/backup restore; synthetic or approved sanitized data.
+Next action: Develop cloud import, backup and restore adapters/rehearsals using
+synthetic or approved sanitised data. Offline paper reconciliation remains T24.
+
+T27 | Extend deposits and cheque handling
+Status: Blocked
+Dependencies: T12,T13,T18
+Acceptance / evidence: Top-ups/allocations/refunds/reclassification and cheque states; bounced restrictions in history.
+Next action: Extend customer money and history; never invent accounts.
+
+T28 | Implement contract credit
+Status: Blocked
+Dependencies: T04,T13,T27
+Acceptance / evidence: Terms/exposure/ageing/statements/scoped exceptions; concurrent sales cannot reuse credit.
+Next action: Add locked exposure and approval-bound collection checks.
+
+T29 | Implement quotes, orders and follow-through
+Status: Blocked
+Dependencies: T07,T10,T28,T13A
+Acceptance / evidence: Deposit/credit confirmation; waiting links/procurement/
+transfers/agreed ETA/salesperson tasks/manager overdue view. BD-20261004-09 adds
+versioned salesperson assignment, customer PO reference, confirmed/ordered date,
+requested ship-by or ETA, remarks and order address snapshots coordinated with T10.
+These are typed order metadata, not generic custom fields or delivery execution.
+Next action: Extend T13A document/line identities with quote/order lifecycle and
+follow-through; do not create a parallel order store or change reservation keys.
+Unconfirm, split-order and purchase/dropship conversion remain unavailable until
+their transitions, permissions and stock/money/audit effects receive an owner.
+
+T30 | Implement customer-beneficial offers
+Status: Blocked
+Dependencies: T11,T13
+Acceptance / evidence: Eligible groups/tiers/bundles/coupons preserve customer terms, independent prices and approval floors.
+Next action: Add versioned offer calculation and configuration.
+
+T31 | Implement promotion-aware returns
+Status: Blocked
+Dependencies: T18,T30
+Acceptance / evidence: Original terms and cumulative credits recalculate retained benefit; exceptional outcomes require case.
+Next action: Extend returns without silent adjustments.
+
+T32 | Complete reporting
+Status: Blocked
+Dependencies: T20,T28,T29,T31
+Acceptance / evidence: Existing reports/dashboard drill-down, backend access and visibly provisional/unreconciled costs.
+Next action: Extend existing reporting, not another reporting database.
+
+T33 | Implement labels and cycle counts
+Status: Blocked
+Dependencies: T09,T11,T33A
+Acceptance / evidence: Price-label queues/blind counts/recounts/movement-aware reconciliation/annual coverage.
+Next action: Integrate T33A counts with movement-aware reconciliation after T09;
+price labels after T11. Do not rebuild the collaborator's count workspace.
+
+T33A | Cycle-count planning and blind-count workspace
+Status: In progress
+2026-10-04 latest owner instruction: integrator to fix reviewed T33A defects.
+Located backend b6f888e (T33A b004536) and frontend 4b6705f (T33A 3260838).
+Selectively integrated count files and minimal migration/router/menu wiring;
+did not merge unrelated collaborator sales, notification or runtime changes.
+Fixed recount company membership, exact decision replay, authenticated counter ID,
+pending entry locks and confirmed-save/reload separation. Count selectors now use
+Inventory count permissions and shared product choices; warehouses are included.
+Pending review case links exposed to another reviewer. Regression tests written,
+not run under owner test deferral. No push/merge or verified completion claimed.
+Remaining: isolated migration/API/concurrency tests, browser acceptance, broader
+count-scope version/pagination review and notification integration. This update
+supersedes earlier unidentified-backend and do-not-edit integration notes below.
+Owner update 2026-10-04: collaborator work is still in motion. Do not treat the
+missing matching backend as a failed handoff or request repeated confirmation.
+Keep integration deferred until the collaborator supplies the ready revision pair;
+continue independent sales work. Earlier readiness/unknown-status notes are history.
+Dependencies: T03,T04,T05
+Owner: Collaborator; integrator owns shared interface review and merges.
+Presentation refinement (BD-20261004-02): use the shared approved register/detail
+layout and tablet-friendly blind-entry controls, not a sales/cart screen. Reuse
+delivered count screens if present; confirm actual collaborator revision before
+changing implementation. Visual adaptation follows T14A approval; independent
+count/backend work need not wait for T14 checkout or the visual gate. Integrator
+coordinates shared navigation/components. Keep expected stock, prior counts and
+financial values hidden from blind counters; no stock writer or scope expansion.
+Acceptance / evidence: New annual product-location schedules, assignments, blind
+entry, immutable submissions/recounts, provisional discrepancies and audited
+manager review with backend-enforced scope/permissions, pagination, exact units,
+expected versions, retry/concurrency tests and usable frontend. No expected stock
+or earlier counts exposed to blind counters. No real stock or business seeds.
+Implementation-ready foundations exist; browser/provider gates remain separate.
+No implementation or collaborator environment verification is claimed yet.
+Owner previously reported collaborator work pushed; current local file/branch
+inspection did not identify its paired revisions. Treat integration as unresolved,
+not permission to rebuild. Locate exact PRs/revisions before reviewing/merging.
+Updated remote review: frontend commit32608383d7de0bb820bad82e4276632c0c6ba7ab
+found on codex/pos-ui-theme. Backend counterpart still unidentified; requested
+owner link. Evidence/t33a-integration-review.txt records concrete identity,
+warehouse picker and uncertain-save issues. No merge or completion claim.
+Next action: Confirm paired baseline and isolated setup, propose schema/API and
+shared-file integration changes, then build count-specific services/UI. Reuse
+existing products, locations, unit policies, cases and receipts. No inventory
+adjustment posting, freeze, valuation, price labels or final reconciliation.
+Movement-aware adjustment interface remains T09/T33, not guessed in this slice.
+
+T34 | Complete readiness and supervised pilot gates
+Status: Blocked
+Dependencies: T14E,T15,T19,T25,T26,T27,T28,T29,T31,T32,T33
+Acceptance / evidence: Cloud availability, hardware/configuration/import/accounting/staff acceptance; explicit owner pilot approval.
+Next action: Track real acceptance separately; never infer pilot authority.
+
+CONSOLIDATION AND DEPENDENCY CORRECTIONS (2026-10-02)
+The numbered packages remain stable. Added A-slices bring only reusable foundations
+forward, not their later business workflows. Do not duplicate these implementations.
+Implementation readiness and acceptance gates are separate:
+- T03 backend contract ready; visual acceptance deferred.
+- T04 case contract ready; profile notifications unfinished, visual acceptance deferred.
+- T05 implementation complete in owner-restored scope (2026-10-03); new browser
+  acceptance pending. Physical conversion depends on T06/T09 and is not a T05 gate.
+- Browser/hardware gates never become automated-test passes.
+Work order after consolidation: T06, T10A, T13A, T07, T08, then
+dependency-ready tasks in original order. T15A must precede T14, not follow checkout.
+Record a concrete completed slice plus pending acceptance, not a whole-phase claim.
+
+T01A | Consolidate repeated mechanics and tracking
+Status: Verified
+Dependencies: T01,T02
+Acceptance / evidence: Shared in-memory frontend operation-intent helper across
+five screens; shared configuration lock/retry/version primitives, unchanged API
+and storage contracts. One canonical queue in the backend checkout.
+Verification: evidence/consolidation-verification.txt; full suites/build pass,
+38 task dependency references validated without missing nodes or cycles.
+Next action: Reuse these shared contracts in remaining dependency-ready tasks.
+T05 agreed implementation scope is complete; its acceptance gates remain pending.
+
+T10A | Minimal customer identity foundation
+Status: Implemented—verification pending
+Dependencies: T03,T04
+Acceptance / evidence: One tenant-owned customer identity with name/contact data,
+backend permissions, stable keys, expected versions and usable basic create/select
+UI. No balances, auto-merge, credit or guessed real customers. T10 extends this.
+Internal stable company-owned identity and immutable initial contact profile added,
+using existing atomic receipts and exact scoped reads. No automatic merge, balances,
+consent or terms. Evidence: evidence/t10a-customer-identity-verification.txt.
+Started independent ready work while T06 runtime gates remain open; not a declaration
+that T06 is complete. Protected personal-data API and paginated read/inspect screen
+now implemented (29 backend and 4 frontend focused checks, build passed). Next:
+Creation UI now added with multiple contacts and exact uncertain retries; 16 targeted
+frontend and 25 backend tests pass, production build passes. Reusable selection now
+extends the existing register with fresh detail/version check and scoped callback;
+16 selected frontend tests pass. T13A now consumes this selector. Search API/UI now implemented
+with exact scope and DB rehydration: 31 backend/17 frontend tests and build pass.
+Task completion now requires confirmed provider success; creation reports indexing
+separately and warns on unconfirmed projection. 22 backend/16 frontend checks pass.
+Next: live provider/browser acceptance and durable projection recovery verification;
+search now uses a strict POST body and successful responses are no-store (15 backend,
+12 frontend focused checks). Deployment body logging still needs release review. Durable navigation recovery
+remains T15. Search evidence: evidence/t10a-customer-search.txt. Selection evidence:
+evidence/t10a-customer-selection.txt. Creation evidence:
+evidence/t10a-customer-create-ui.txt. Earlier API evidence:
+evidence/t10a-customer-api-verification.txt. Automated integration checkpoint:
+backend1077 passed/2 known legacy xfails; frontend169/35 suites and build passed.
+Browser/live-provider acceptance remains pending; durable projection repair belongs
+to later synchronization work, not a prerequisite for isolated draft development.
+
+T13A | Authoritative sales-intent document and line foundation
+Status: Implemented—verification pending
+Dependencies: T05,T10A
+Acceptance / evidence: Durable scoped intent header/lines with stable UUIDs, owning
+customer/branch/product references, exact requested units/quantities and versions.
+Draft intent never confirms a sale or proves payment/credit eligibility. Reservations
+validate real locked source lines; no free UUID supplied as proof of entitlement.
+Reuse these identities in T13 invoice posting and T29 quote/order workflows; record
+links/snapshots on conversion instead of building a duplicate catalogue/order store.
+Include minimal draft editor/API, source ownership/version/retry/rollback tests.
+Typed source validation implemented: exact quantities, locked scoped references,
+reviewed unit snapshots, no stock/financial effect. Thirteen focused tests passed;
+evidence/t13a-source-foundation.txt. Browser/provider gates on dependencies remain
+visible but do not block this independent local implementation.
+Durable header/line revisions, atomic saves, protected API and read/inspect frontend
+are implemented. Retry/rollback/immutability and real concurrent-save checks pass:
+evidence/t13a-durable-drafts.txt. No stock or financial effects; SALES entitlement
+is not auto-enabled. Line references include document and version, not UUID alone.
+Source selectors/editor and explicit platform module configuration are now added.
+Full backend1118/2 known xfails, frontend179/37 and production build pass; evidence:
+evidence/t13a-editor-integration.txt. No company automatically enabled. Browser/live
+provider acceptance is pending, not a blocker for independent T07/T15A development.
+Next action: Obtain scoped visual/provider acceptance when approved; do not add
+payment, checkout or durable offline recovery to this minimal foundation's scope.
+
+T15A | Durable draft and retry recovery foundation
+Status: Implemented—verification pending
+Dependencies: T13A
+Acceptance / evidence: Reuse T13A server drafts plus tenant/user/branch-scoped local
+recovery for edits and uncertain operation IDs. Navigation/reload/failed-save
+recovery, explicit discard and optimistic conflicts; no autonomous offline posting.
+Do not persist secrets or card data. Local recovery is not authority to use stock,
+money or expired policies. T14 consumes this store from its first implementation.
+Implemented: local whitelist store with company/user/branch identity, browser-lock
+and revision-checked writes; editor recovery, exact pending save persistence before
+network, Local drafts list and explicit discard. Full frontend196/40 and build pass;
+affected backend22 pass. Evidence: evidence/t15a-local-draft-recovery.txt.
+Route navigation guard reuses this store, with exact uncertain intent and no
+repost on leave. Real-router menu/Back and failure tests pass; see
+evidence/20261004-sales-navigation.txt. No whole-task completion implied.
+Next action: Native browser reload/multi-tab acceptance when approved. Reuse the
+store in T14; retain document copy in T15. Independent T07 work can continue.
+
+VERIFICATION AND CHECKPOINT PRACTICE
+Owner-requested GitHub checkpoint (2026-10-03): full backend 1035 passed / 2 known
+legacy xfails; frontend 150 passed / 32 suites; normal production build passed with
+existing warnings. Evidence: evidence/20261003-github-checkpoint.txt.
+No whole-task completion or browser/pilot acceptance implied.
+UI refinement checkpoint (2026-10-02): access/read failure recovery, tablet order
+controls and user/role layout, contextual approval labels and branding. Evidence:
+../../../FreightLens_Frontend/docs/UI-REFINEMENT-2026-10-02.txt.
+93 frontend tests / 23 suites and production build passed; limited read-only
+tablet checks passed. Broad legacy layout and populated workflow acceptance
+remain pending. No backend task status or release gate changed.
+
+Run targeted tests while editing, then full backend/frontend suites and production
+build at the coherent slice boundary. Rerun affected checks after subsequent code
+changes. Security/concurrency/rollback checks are never omitted for speed.
+Evidence is written once; queue links it. Architecture records contracts, not a
+second live backlog. Preserve historical evidence without treating it as current.
+Keep reviewable code/docs/tests together; no commits, pushes or deployment implied.

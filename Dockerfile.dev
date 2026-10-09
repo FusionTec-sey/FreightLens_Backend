@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+# Local development only: some networks block deb.debian.org, so the Debian
+# mirror is overridable. The default is Debian's official CDN and signature
+# verification stays enabled.
+ARG DEBIAN_MIRROR=https://cloudfront.debian.net
+RUN sed -i "s|http://deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libglib2.0-0 \
+        libcairo2 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libffi-dev \
+        fonts-dejavu-core \
+        fonts-noto-core \
+        build-essential \
+        pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 6051
+CMD ["uvicorn", "containerMgmt:app", "--host", "0.0.0.0", "--port", "6051"]

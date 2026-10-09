@@ -152,10 +152,14 @@ class CreadentialsInfoAPI:
         context: OrgContext = Depends(get_org_context),
     ):
         _require(policy, "View_Role")
-        active_org = context.selected_org_id or context.current_org_id
+        if policy.is_platform_admin:
+            role_scope = or_(Role.org_id.is_(None), Role.org_id.in_(context.allowed_org_ids))
+        else:
+            active_org = context.selected_org_id or context.current_org_id
+            role_scope = or_(Role.org_id.is_(None), Role.org_id == active_org)
         roles = (
             db.query(Role).options(joinedload(Role.permissions))
-            .filter(Role.is_deleted.is_(False), or_(Role.org_id.is_(None), Role.org_id == active_org))
+            .filter(Role.is_deleted.is_(False), role_scope)
             .all()
         )
         if not policy.is_platform_admin:
@@ -236,8 +240,12 @@ class CreadentialsInfoAPI:
         context: OrgContext = Depends(get_org_context),
     ):
         _require(policy, "Add_Role")
-        org_id = payload.org_id or context.selected_org_id or context.current_org_id
-        _validate_org_scope({org_id}, policy, context)
+        if policy.is_platform_admin and "org_id" in payload.model_fields_set:
+            org_id = payload.org_id
+        else:
+            org_id = payload.org_id or context.selected_org_id or context.current_org_id
+        if org_id is not None:
+            _validate_org_scope({org_id}, policy, context)
         permissions = db.query(Permission).filter(Permission.id.in_(payload.permissions or [])).all()
         if not policy.is_platform_admin and any(p.name in PLATFORM_PERMISSION_NAMES for p in permissions):
             raise HTTPException(status_code=403, detail="Platform permissions cannot be granted by a tenant admin")
@@ -364,6 +372,21 @@ class CreadentialsInfoAPI:
             raise HTTPException(status_code=403, detail="System role templates require platform administration")
         if role.org_id is not None:
             _validate_org_scope({role.org_id}, policy, context)
+        if policy.is_platform_admin and "org_id" in payload.model_fields_set:
+            target_org_id = payload.org_id
+            if target_org_id is not None:
+                _validate_org_scope({target_org_id}, policy, context)
+                assigned_org_ids = {
+                    row[0] for row in db.execute(
+                        select(user_org_roles.c.org_id).where(user_org_roles.c.role_id == role.id)
+                    )
+                }
+                if assigned_org_ids - {target_org_id}:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This role is assigned in other organisations. Make it available to all organisations instead.",
+                    )
+            role.org_id = target_org_id
         permissions = db.query(Permission).filter(Permission.id.in_(payload.permissions or [])).all()
         if not policy.is_platform_admin and any(p.name in PLATFORM_PERMISSION_NAMES for p in permissions):
             raise HTTPException(status_code=403, detail="Platform permissions cannot be granted by a tenant admin")

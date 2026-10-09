@@ -53,11 +53,19 @@ def get_org_context(
             detail="User organisation is inactive or unavailable",
         )
 
-    configured_ids = user.allowed_org_ids
-    candidate_ids = [user_org_id] if configured_ids is None else configured_ids
-    candidate_ids = list(dict.fromkeys(
-        org_id for org_id in candidate_ids if isinstance(org_id, int) and org_id > 0
-    ))
+    is_root_platform_admin = org.parent_org_id is None and any(
+        bool(getattr(role, "is_platform_admin", False)) for role in user.roles
+    )
+    if is_root_platform_admin:
+        candidate_ids = [row[0] for row in db.query(Organisation.id).filter(
+            Organisation.is_active.is_(True)
+        ).all()]
+    else:
+        configured_ids = user.allowed_org_ids
+        candidate_ids = [user_org_id] if configured_ids is None else configured_ids
+        candidate_ids = list(dict.fromkeys(
+            org_id for org_id in candidate_ids if isinstance(org_id, int) and org_id > 0
+        ))
     active_orgs = (
         db.query(Organisation.id)
         .filter(Organisation.id.in_(candidate_ids), Organisation.is_active.is_(True))

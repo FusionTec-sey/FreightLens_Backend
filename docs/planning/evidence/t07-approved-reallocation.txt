@@ -1,0 +1,40 @@
+2026-10-03 — T07 approved same-bucket draft-demand reallocation
+Status: In progress; no whole-task completion claim.
+
+Implemented: exact source/target case binding, sorted document locks, shared
+release/reserve transaction, immutable paired movement/case lineage and additive
+replayable startup migration. Parent event is grouping, not another stock delta.
+Existing target history, other stores, paid/confirmed demand remain denied.
+Request/review API derives bindings server-side and checks modules, permissions,
+active company, source versions and remaining hold on retries. No execution route.
+Frontend Sales drafts -> Reallocation reviews reuses the manager-case component.
+Review shows exact source/destination/quantity/date; approval does not execute.
+Request-entry UI now uses the existing paginated draft picker, then freshly reads
+the destination and offers matching product/base-unit lines within the same store.
+Current source version/released amount, target version, exact quantity and aware
+review date are submitted; uncertain requests disable editing/exit and retry the
+same body. No durable navigation recovery claim for reservation request forms.
+
+Isolated PostgreSQL runner freightlens-pos-phase0-runner, synthetic identities:
+pytest tests/test_reservation_reallocation.py tests/test_reservation_release_review.py
+ tests/test_stock_ledger.py tests/test_sales_reservation_sources.py
+ tests/test_reservation_deadlines.py --tb=short
+73 passed,21 existing warnings,39.81s.
+pytest tests/test_reservation_reallocation_api.py tests/test_reservation_release_api.py
+ --tb=short:19 passed,23 existing warnings,20.13s.
+Coverage: exact/concurrent replay, independent approval, race on case consumption,
+rollback after source release and outer rollback, source/target changes, foreign
+company, authority/revoked access, immutable history and migration replay.
+Initial failures corrected synthetic other-store ownership and a test's unnecessary
+fixed-width decimal expectation; production validation was not relaxed.
+
+Frontend review checkpoint:24 passed/2 suites,4.414s;build main.de4a2868.js.
+After request-entry integration:46 passed/5 suites,10.037s:
+DraftReservations, ReallocationTargetPicker, SalesDraftEditor, SalesDraftsPage,
+ManagerCases. Initial invocation included a nonexistent picker test filename;
+corrected to the existing editor tests and reran the full affected selection.
+Preview frontend HTTP200 and OpenAPI exposes both reallocation review routes.
+Final request-entry production build passed with existing ESLint/Browserslist
+warnings; main.2a297865.js. No browser automation was used.
+No new full-regression total; no browser/hardware acceptance claim.
+No real postings, external deployment, messages, account mappings or GitHub push.

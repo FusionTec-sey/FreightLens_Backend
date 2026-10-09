@@ -1,0 +1,28 @@
+T07 linked hold list and release request UI - 2026-10-03
+
+GET /inventory/reservation-release-cases/sources/{draft_uuid} provides server-side
+pagination over existing indexed company/document links, with exact hold/released/
+remaining decimal strings and current draft version. Both module and action-view
+permissions are enforced. It does not allocate, release or extend a hold.
+
+Sales drafts -> View -> Reserved stock shows these sources and allows authorised
+users to request a release review with quantity/reason. Uses existing operation
+intent and manager-case APIs; no manual UUID input or duplicate approval engine.
+Unknown outcomes lock to identical retry, conflicts require refreshed sources,
+dirty in-panel exit confirms discard, and unmount aborts stale UI responses.
+Navigation recovery is not yet durable. Approval does not execute release.
+
+Isolated PostgreSQL: test_reservation_release_api.py and
+test_reservation_release_review.py: 17 passed, 23 existing warnings, 6.42s.
+Frontend DraftReservations + SalesDraftsPage: 11 passed/2 suites, 2.456s.
+Production build main.50dbb2a1.js passed with existing ESLint/Browserslist warnings.
+Initial test fixture lacked crypto; corrected test setup. Initial build rejected
+BigInt global under existing lint target; replaced with exact fixed-width decimal
+string comparison, then tests/build passed. No floating-point quantities introduced.
+Preview frontend and API read-only HTTP checks both returned200.
+
+Full suites deliberately deferred per owner focused-test preference. Historical
+1118/179 checkpoint unchanged. Browser checks pending, no real data or entitlements
+changed, no deployment, GitHub push, messaging or financial posting.
+T07 remains in progress: deadline review/reallocation, paid-source adapters and
+trusted runtime posting integration remain. No automatic expiry cancellation.

@@ -1,0 +1,22 @@
+T07 OTHER-STORE REVIEW FOUNDATION — 2026-10-04
+Status: In progress; internal review binding implemented, no public workflow yet.
+
+Explicit selected stock must be in another configured branch of the same company.
+Current assignment, saved demand, exact stock version, quantity/unit, compatible
+existing holds and customer follow-up are server-bound. Sorted branch locks precede
+staff/document/allocation/stock locks; existing case engine handles independent
+review and retry. Approval has no reservation or movement effect.
+Expiry is a recorded source fact, not execution eligibility: trusted target business
+date, persisted node authority and exact approval consumption remain execution gates.
+No new schema, public bypass, automatic cross-store fallback or real stock changes.
+
+Verification: affected other-store foundation, reservation-segment and reallocation
+tests in isolated phase0 *_test PostgreSQL: 32 passed /23 existing warnings, 11.60s.
+Files: test_other_store_fulfilment.py, test_reservation_segments.py,
+test_reservation_reallocation.py.
+Checks cover separate warehouse choice, no stock effect on approval, self-review
+denial, combined local/other-store demand cap, local-path rejection, changed stock,
+revoked staff assignment, foreign-company denial and insufficient selected stock.
+No frontend changed in this foundation slice; no frontend/build/browser pass claimed.
+Next: protected API and usable request/review frontend, then trusted execution.
+Goal/T07 remain active. No deployment, real configuration, Git push or T33A edits.

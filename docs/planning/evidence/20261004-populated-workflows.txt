@@ -1,0 +1,41 @@
+POPULATED LOCAL WORKFLOWS — 2026-10-04
+
+Owner request: populate workflows after the full-build test's empty-state checks.
+Target: local preview only, existing DEMO ONLY - FreightLens T05 (org 2).
+No real company stock/customer/payment records changed. Existing roles and
+credentials preserved. SALES module added to synthetic demo company only.
+
+Open http://127.0.0.1:3000 and select DEMO ONLY - FreightLens T05.
+Sales > Sales drafts: 3 saved drafts for two synthetic customers. One Home
+renovation draft is version 2; open Revision history to inspect both revisions.
+Drafts contain two reviewed-policy demo products, exact quantities, no payments,
+no fulfilment and no draft-linked reservations. They are NOT invoices.
+Stock Counts > Count plans: DEMO-WF-DRAFT (editable), DEMO-WF-OPEN (active) and
+DEMO-WF-SUBMITTED (active). Each covers two products at DEMO - Stock display.
+Stock Counts > My count rounds: one ASSIGNED round for existing admin, ready for
+blind entry. No expected stock/prior quantities are returned on the sheet.
+Stock Counts > Discrepancies: two provisional differences from the submitted
+synthetic round, each with an independent review request. Review changes no stock.
+
+Implementation: python -m Utils.seed_workflow_demo --confirm-demo-only --viewer-id 1
+CLI rejects non-preview host/database and lacks any automatic startup hook.
+Requires existing demo and viewer's existing demo access. Stable namespace keys,
+transaction/advisory lock and marker avoid duplicates or overwriting later edits.
+Customer search projection runs after commit, using reserved example.invalid
+addresses. No messages/consent inferred. Both customer projections succeeded.
+
+Verification: tests/test_workflow_demo_seed.py: 4 passed (2.68s); unchanged stock
+balances/movements, scope, repeatability, rollback, blind sheet and DB rejection.
+Executed preview twice: first created=True, second created=False.
+Browser: populated Sales list/details and both revision-history entries visible;
+3 count plans visible; admin's open blind sheet displays two blank quantity inputs
+and reviewed units, with Submit disabled until complete. Two provisional
+discrepancies and their existing independent review controls inspected, without
+recording a decision. No browser writes made. Normal viewport restored; preview
+left on the populated Sales register in the demo company.
+One full-page access refresh failed transiently; Retry loading restored verified
+admin access. No permissions bypassed. Full count submission/approval E2E remains
+a separate gate; seeded records and read-only inspection are not that claim.
+Screenshot outside Git: ../runtime/populated-blind-count-20261004.png.
+
+No deployment, financial runtime activation, hardware check or GitHub push.

@@ -1,0 +1,17 @@
+T10A reusable customer selection — 2026-10-03
+
+Component-only extension to existing CustomersPage; no duplicated catalogue/register.
+Selection mode uses existing authenticated detail API; result binds company, stable
+customer key and version. No sales consumer or financial entitlement introduced.
+
+Focused frontend command: react-scripts test --watchAll=false --runInBand
+--runTestsByPath src/component/Pages/MasterData/CustomersPage.test.js
+src/component/Pages/MasterData/CustomerCreateForm.test.js src/services/customersApi.test.js
+16 tests passed / 3 suites, 2.837s.
+New checks: scoped selection payload, denied detail, changed version, ignored late
+selection after company switch. Existing create/read/privacy checks also pass.
+
+No backend changes. Full regression/build deferred for this component slice under
+owner's focused-verification preference; prior creation build remains prior evidence.
+Browser checks pending. Search integration remains open; T10A is not complete.
+No real data, deployment, messaging or GitHub push.

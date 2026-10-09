@@ -1,0 +1,19 @@
+Receipt classification manager-review adapter — 2026-10-04
+
+Reuses existing manager-case engine, no duplicate approval store. Source loader
+requires active transaction and explicit permission, re-prepares persisted manifest,
+and compares exact source/classification snapshot. Binding includes manifest author
+to prevent proxy-request approval. No case consumption or stock writer exposed.
+
+Isolated PostgreSQL: 8 passed,23 existing dependency warnings.
+pytest -q tests/test_inventory_receipt_reviews.py
+tests/test_inventory_receipt_manifest_store.py
+Covered request/review retries, creator and requestor self-review, changed source,
+foreign company, unchanged stock/case uses, store immutability and migration replay.
+Initial fixture username exceeded existing45-character column; shortened synthetic
+prefix and reran successfully. No production schema relaxation.
+
+Internal-only API: public route/UI permission adapters and review visibility still
+pending. No browser/build necessary for backend-only service addition. Approval is
+not a receipt source-use claim or valuation approval. Full posting concurrency and
+source-consumption acceptance remain future work, not implied by these tests.

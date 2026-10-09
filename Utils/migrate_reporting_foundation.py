@@ -23,6 +23,16 @@ def ensure_reporting_foundation_schema() -> None:
         return
 
     with engine.begin() as conn:
+        # Reusable role names are unique only among active roles. Soft-deleted
+        # rows stay available for audit but must not block a role being recreated.
+        for index_name in ("uq_roles_system_name", "uq_roles_org_name"):
+            index_def = conn.execute(text("""
+                SELECT indexdef FROM pg_indexes
+                WHERE schemaname = 'usercredentials' AND indexname = :index_name
+            """), {"index_name": index_name}).scalar()
+            if index_def and "is_deleted" not in index_def.lower():
+                conn.execute(text(f'DROP INDEX usercredentials."{index_name}"'))
+
         conn.execute(text("""
             ALTER TABLE usercredentials.roles
                 ADD COLUMN IF NOT EXISTS org_id INTEGER
@@ -34,9 +44,11 @@ def ensure_reporting_foundation_schema() -> None:
             CREATE INDEX IF NOT EXISTS ix_roles_org_id
                 ON usercredentials.roles(org_id);
             CREATE UNIQUE INDEX IF NOT EXISTS uq_roles_system_name
-                ON usercredentials.roles(lower(name)) WHERE org_id IS NULL;
+                ON usercredentials.roles(lower(name))
+                WHERE org_id IS NULL AND is_deleted IS FALSE;
             CREATE UNIQUE INDEX IF NOT EXISTS uq_roles_org_name
-                ON usercredentials.roles(org_id, lower(name)) WHERE org_id IS NOT NULL;
+                ON usercredentials.roles(org_id, lower(name))
+                WHERE org_id IS NOT NULL AND is_deleted IS FALSE;
 
             CREATE TABLE IF NOT EXISTS usercredentials.user_org_roles (
                 user_id INTEGER NOT NULL REFERENCES usercredentials.users(id) ON DELETE CASCADE,

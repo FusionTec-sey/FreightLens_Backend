@@ -1,0 +1,12 @@
+T08 product metadata stock replacement closure — 2026-10-04
+
+Affected backend tests: 59 passed /1 xfailed /23 dependency warnings.
+pytest -q tests/test_pos_prerequisite_regressions.py tests/test_policy_activation.py
+Isolated freightlens_full_20261004_test database; no preview business writes.
+Former metadata xfail is now a four-case positive test: 999,5,0,-1 are rejected;
+stock remains5 and no commit occurs. Existing policy tests verify active policy
+guard remains compatible. Legacy negative adjustment clamp remains expected failure.
+Product form removes editable baseline and current_stock payload; build passes
+with existing warnings (runtime/catalogue-stock-build.log outside Git).
+No new browser acceptance for ProductMasterPage, no receiving/valuation posting,
+no full T08 or operational readiness claim. Audit: LEGACY-STOCK-WRITER-AUDIT.txt.

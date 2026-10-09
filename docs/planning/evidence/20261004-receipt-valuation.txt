@@ -1,0 +1,32 @@
+FreightLens internal receipt-valuation checkpoint — 2026-10-04
+
+Scope
+- Extended the existing immutable pool-wac-v2 ledger with RECEIPT source rows and
+  a replay-safe, no-backfill migration.
+- Added an internal caller-transaction helper. It requires central cost-pool
+  authority, the same-operation receipt source use, the complete exact movement
+  set, explicit branch mapping and a current product valuation stream.
+- Rejects unvalued prior physical stock and mismatched units/scopes. Stable
+  largest-remainder arithmetic distributes exact SCR goods value across movements.
+- Database guard binds every row to its exact receipt movement, manifest and pool.
+- Existing reviewed landed-cost allocation now accepts OPENING or RECEIPT rows;
+  CHARGE rows remain ineligible and late-cost physical-change protection remains.
+- Frontend history labels opening, receipt and charge values distinctly and uses
+  the neutral “Source quantity” heading.
+
+Verification
+- Backend affected set: 120 passed, 23 warnings.
+- Frontend focused set: 6 passed.
+- Production build: compiled successfully with existing repository warnings;
+  output recorded at runtime/receipt-valuation-build.log.
+- A strict CI warnings-as-errors build still fails on the existing repository-wide
+  lint backlog; no warning reported the changed valuation component.
+
+Outstanding gates
+- `goods_value_scr` is internal server-reviewed input. Foreign-currency and source
+  document version evidence are not yet connected and must not be inferred from
+  mutable purchasing totals.
+- Source use, movement, valuation, posting receipt and outbox still need one public
+  coordinator plus committed competing-request tests.
+- No public receipt-posting action, selling-price change, deployment or real data
+  mutation was introduced.

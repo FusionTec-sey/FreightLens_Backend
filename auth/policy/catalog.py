@@ -47,6 +47,8 @@ PERMISSION_CATALOG = [
         ("Delete_Role", "Delete tenant roles"),
         ("View_Setting", "View settings"),
         ("Edit_Setting", "Update settings"),
+        ("View_Menu", "View the navigation menu configuration"),
+        ("Manage_Menu", "Arrange navigation menu items in the Menu Designer"),
         ("View_MasterData", "View shared reference data"),
         ("Edit_MasterData", "Update shared reference data"),
         ("Add_RefData", "Add reference data"),

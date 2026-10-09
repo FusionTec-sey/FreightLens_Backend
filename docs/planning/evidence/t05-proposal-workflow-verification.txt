@@ -1,0 +1,53 @@
+T05 implementation closeout and proposal workflow - 2026-10-03
+
+OWNER SCOPE DECISION
+Owner approved restoring agreed T05 scope: reviewed activation/transitions,
+unit-aware barcodes, immutable snapshots and blocking ambiguous stock transitions.
+Actual physical stock conversion depends on T06 valuation and T09 movement lineage.
+All proposal work is retained; no stock conversion or barcode reassignment enabled.
+
+ACCEPTANCE MAPPING
+Reviewed initial activation: existing exact-source case consumption, immutable
+policy snapshots, permission/tenant/version/replay/concurrency tests.
+Safe transitions: reviewed history-free revisions and compatible additive-unit
+extensions preserve original stock/barcode meanings. Structural changes with stock
+remain blocked; zero quantity does not erase history.
+Unit barcodes: immutable versioned identities, exact lookup and permanent reviewed
+retirement. Retired codes remain reserved; correction uses a new code.
+Unsafe changes: readiness shows active/proposed rules and blockers. Shared live-code
+predicate rejects incompatible live ancestors without penalising retired ancestors.
+History: original stock and policy snapshots remain unchanged.
+Usability: policy/draft/readiness/barcode/approval/stock screens and isolated T05
+demo records were built in preceding slices. New proposals add entry and review.
+
+NEW IN THIS TURN
+Proposal-scoped request/case-list/review endpoints reuse existing manager-case
+engine, source binding, pagination and permissions; no new approval database.
+Frontend explicit batch/serial editor and request/decision panels share existing
+operation-intent, API and manager-review components. Own-panel unsaved discard guard,
+beforeunload warning, retryable policy reads and failed-save payload retention.
+Server field errors identify manifest paths. Approval has no execution action.
+New API coverage: request replay, independent review, self-review denial, stale
+source replay rejection, list filters, foreign company, anonymous/module/permission
+denial across request/list/review. Targeted API28 passed.
+New UI coverage: exact quantities/serials, failed-save retry, required serial
+conditions, reserved-stock blocking, policy-load retry, proposal request binding,
+manager manifest display/no execution, scoped review navigation.
+
+VERIFICATION
+Isolated runner: freightlens-pos-phase0-runner /work, python -m pytest -q.
+Full backend762 passed,2 known legacy C12 xfailed,23 existing warnings,146.58s.
+An initial bare pytest invocation failed import-path collection; corrected to
+python -m pytest. No application failure or successful test claim from that run.
+Frontend full suite122 passed/26 suites,9.912s; initial fixture/mock and matcher
+failures repaired before final full passing run.
+Production build passed, main.8d7cd0ac.js; existing ESLint/Browserslist warnings.
+Preview API OpenAPI200; inventory/locations200 with Accept:text/html, as required
+by SPA history fallback. An HTTP probe without HTML Accept returned404; no restart
+or configuration change was needed. Preview remains running.
+No browser acceptance of new proposal screens claimed; confirmation pending.
+No new demo proposals, preview database writes, deployment or real financial data.
+
+STATUS
+T05: Implemented—verification pending (new browser acceptance only).
+T06: Ready. Do not reopen T05 for physical conversion or duplicate existing services.

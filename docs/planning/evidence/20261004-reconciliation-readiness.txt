@@ -1,0 +1,23 @@
+FreightLens T06 central reconciliation readiness - 2026-10-04
+
+Implemented
+- Read-only tenant/cost-pool scoped union of physical stock products and valuation
+  products, server paginated before detailed aggregation.
+- Compares current physical on-hand in its explicit base unit with the latest
+  immutable valuation head and value.
+- Reports READY, MISSING_VALUATION, QUANTITY_MISMATCH or UNIT_MISMATCH with exact
+  decimal strings. No implicit cross-unit sum or cross-pool/company fallback.
+- Existing Cost pools / Valuation history screen opens the report, clears stale
+  results on reload/company API changes and retains explicit retry and empty states.
+
+Verification
+- 54 focused backend valuation API tests pass in the isolated PostgreSQL database.
+- 22 focused frontend component/API tests pass.
+- Production frontend build succeeds. Existing repository-wide lint and outdated
+  Browserslist warnings remain; no warning originates from the added screen.
+
+Boundaries
+- READY means current quantity/base-unit agreement only. It does not finalise a cost,
+  approve evidence, close a period, prove offline synchronization or post accounting.
+- No write endpoint, migration, real data, deployment or accounting export was added.
+- Reviewed immutable reconciliation checkpoints and release/runtime acceptance remain.

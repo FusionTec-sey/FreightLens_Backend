@@ -1,0 +1,25 @@
+Retired barcode / no-stock policy revision integration - 2026-10-02
+
+Full backend isolated suite: 685 passed, 2 known C12 xfails, 23 warnings (110.28s).
+Targeted transition suites: 20 passed; barcode retirement API suite: 17 passed.
+Full frontend: 103 tests / 23 suites passed (21.91s).
+Production build passed with existing ESLint/Browserslist warnings.
+Both repository diff checks passed; preview API health and frontend returned200.
+Browser checks not attempted; visual acceptance remains pending.
+
+Shared readiness/posting blocker now excludes only same-company committed
+retirements using a correlated indexed existence check. PostgreSQL guidance
+informed this bounded query; no full barcode register is loaded. No new schema,
+permissions, duplicate workflow, business seed, deployment or real posting.
+
+New coverage verifies reviewed revision after complete retirement; old code cannot
+be registered under the new policy; a new code can. One remaining live code, even
+zero-quantity stock history and rollback of retirement all continue blocking.
+Concurrent new-code registration versus revision allows exactly one to succeed.
+API readiness stays blocked after approval alone and becomes review-eligible only
+after retirement executes; it does not activate policy. Existing guard/isolation,
+policy review/replay and retirement tests pass. Frontend guidance matches the flow.
+
+Retired identities remain immutable and permanently reserved. Policy revision still
+needs its own exact-version independent approval. No automatic replacement code,
+stock conversion, rebinding or valuation change is implemented. T05 remains open.

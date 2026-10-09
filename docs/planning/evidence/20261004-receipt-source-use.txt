@@ -1,0 +1,21 @@
+FreightLens internal receipt source-use checkpoint — 2026-10-04
+
+Scope
+- Added empty immutable inventory_receipt_source_uses history and replay-safe migration.
+- Bound each use to company, receipt/line, immutable full-line manifest, exact base
+  quantity/unit, consumed classification approval and outer posting operation.
+- Added an internal helper only; it never commits and has no HTTP route or UI control.
+- Kept stock, movement, valuation and financial effects absent.
+
+Focused isolated PostgreSQL verification
+- tests/test_inventory_receipt_source_uses.py
+- Result: 7 passed, 23 warnings.
+- Covered exact retry, replay permission/source revalidation, second full-line
+  manifest denial, downstream rollback, database rejection without approval,
+  foreign-company denial and migration replay.
+
+Outstanding gates
+- Complete committed concurrency must be exercised with the eventual node-authorised
+  movement and receipt-valuation coordinator; it is not claimed by this checkpoint.
+- Partial receipt/location composition and global batch/serial identity checks remain.
+- No deployment, real data or public posting action was introduced.

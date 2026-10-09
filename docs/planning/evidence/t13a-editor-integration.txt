@@ -1,0 +1,30 @@
+2026-10-03 — isolated local development checkpoint
+
+Backend focused: 41 passed, 23 warnings, 10.72s across sales source, persistence,
+API, concurrency and module configuration tests. Source selectors use original
+catalogue rows, exact tenant scope and current reviewed policies, not new records.
+Search has name/SKU-only matching, ID-only projection, DB rehydration and errors
+instead of empty success for provider/foreign/stale results. Provider mocked here.
+
+After current-label/stored-unit projection changes:
+docker exec -w /work freightlens-pos-phase0-runner python -m pytest -q
+1118 passed, 2 known legacy xfailed, 23 deprecation warnings, 130.04s.
+This runner receives changed source/tests; real preview startup is checked by HTTP,
+not asserted equivalent to a new clean-install migration rehearsal.
+
+Frontend full suite:179 passed /37 suites,13.756s. Subsequent label/unit projection
+changes: affected SalesDraftEditor/SalesDraftsPage10 passed,2.239s.
+Production build exit0 main.217bfc98.js, existing ESLint/Browserslist warnings.
+Editor tests cover create selection, exact revision payload, identical uncertain
+retry, validation retention, conflict stop, explicit discard and late-response abort.
+Frontend / and API /openapi.json HTTP200; no DOM/browser checks executed.
+
+Implemented: draft create/edit/read/register, customer/store/product selection,
+reviewed unit choices, exact quantity strings, stable operation/document/line IDs,
+atomic versions and receipts, same-company constraints, immutable history, isolated
+concurrency, scoped module/permissions and platform toggle support.
+
+Open acceptance: browser/tablet/layout and live search-provider behavior. No real
+module subscription changed, no business records created, no GitHub push/deployment.
+T15A durable navigation/offline recovery is not implemented. T07 source-linked holds
+are next; draft save alone is never payment, reservation or collection authority.

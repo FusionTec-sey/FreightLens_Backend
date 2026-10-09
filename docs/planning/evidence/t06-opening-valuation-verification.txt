@@ -1,0 +1,41 @@
+T06 source-linked opening valuation - 2026-10-03
+
+Implemented
+- Immutable tenant/pool/product valuation entries linked to original opening
+  movement and same-transaction posting receipt/event. Exact six-place SCR.
+- Quantity and pool derived from authoritative rows, not request snapshots.
+- Existing pool-wac-v2 receive arithmetic reused; serialized product lock and
+  expected stream version; duplicate source denied even with a different key.
+- Mandatory internal cost-evidence/authority callback runs before replay.
+- All entries UNRECONCILED. No selling price or physical stock mutation.
+- Replayable empty migration with bounded lock wait and immutable SQL guard.
+- INVENTORY/View_Product/View_Financials-protected paginated history endpoint.
+- Financial viewers can open history from rows in the standalone Cost pools
+  workspace. Existing company-pinned client/pagination reused; exact strings,
+  loading/error/empty states, contained scrolling, company-change aborts.
+
+Verification
+Isolated runner: freightlens-pos-phase0-runner /work; python -m pytest -q.
+Full backend:780 passed,2 known C12 xfailed,23 warnings,62.15s.
+New coverage: source linkage, precise pool averaging over multiple locations,
+  stable retries, changed intents, stale versions, missing pool, duplicate source,
+  independent concurrent requests, same-key concurrency, caller rollback,
+  foreign-company denial, permission revocation, SQL update/delete rejection,
+  migration replay, protected API denials/pagination and populated serialization.
+Frontend:126 passed in27 suites,10.439s.
+Production build passed with existing ESLint/Browserslist warnings:
+  main.12fd1864.js. git diff --check passed.
+Local cost-pools HTML and API OpenAPI returned200. Preview stays running.
+No browser automation/visual acceptance performed; permission remains required.
+Only isolated synthetic tests wrote valuation records. No sample values were
+invented for preview stock, no production data changed and nothing deployed.
+PostgreSQL skill informed indexed ownership/source keys and bounded transactions.
+
+Remaining T06
+Receipt/freight source and approval integration, allocation evidence, correction
+and central reconciliation records, reclassification value-conservation linkage,
+trusted central runtime adapter and associated frontend write/review workflow.
+Internal callback is an integration contract, not implemented runtime enrollment.
+No public financial writer, final shared-pool costing, accounting acceptance or
+full T06 completion claimed. Future costing must not use these partial historical
+snapshots as final inventory totals.

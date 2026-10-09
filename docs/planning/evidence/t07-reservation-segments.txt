@@ -1,0 +1,40 @@
+2026-10-03 — T07 reviewed same-bucket reservation supplements
+Status: In progress; not full T07 completion.
+
+Reallocation into already-held draft demand adds a separate immutable-identity
+hold segment. Original quantity, original follow-up and source attribution remain.
+No balances/customer identities are merged. Each hold keeps its deadline/release
+workflow; the existing draft read sums remaining quantities across segments.
+Existing reserve engine is reused; supplemental calls must prove exact consumed
+parent case, deterministic child IDs, destination, quantity/date and paired release.
+No arbitrary allow-duplicate flag and no client-supplied runtime authority.
+
+Target snapshot streams one indexed source's hold histories into a bounded-memory
+digest. Deadline revisions, quantities, releases and attribution are included.
+Shared document/source/bucket locks protect the snapshot and combined demand cap.
+Reviewed same-bucket supplements only; other buckets/stores and paid sources remain
+blocked. Older pending cases without a target snapshot require a fresh request.
+
+Migration migrate_20261003_reservation_segments.py installs deferred paired-movement
+guard before dropping obsolete one-hold constraint, preserving all data and source
+indexes. Identity trigger prevents editing original quantity/date, deleting history
+or reversing released quantity. Startup registered; isolated migration replay tested.
+
+Isolated synthetic PostgreSQL runner freightlens-pos-phase0-runner:
+pytest tests/test_reservation_segments.py tests/test_reservation_reallocation.py
+ tests/test_reservation_reallocation_api.py tests/test_reservation_release_review.py
+ tests/test_stock_ledger.py tests/test_stock_serials.py
+ tests/test_sales_reservation_sources.py tests/test_reservation_deadlines.py --tb=short
+110 passed,23 existing warnings,38.72s.
+After removing a redundant saved-demand read from the shared guard, reran segments,
+reallocation and reallocation API:31 passed,23 existing warnings,36.04s.
+Includes preserved original hold, cumulative cap, concurrent approved supplements,
+changed deadline invalidation, denied generic/forged bypass, database guard,
+immutability, replay/rollback, serial/stock shared boundaries and API security.
+
+Frontend affected DraftReservations,ReallocationTargetPicker,SalesDraftsPage,
+ManagerCases:38 passed/4 suites,6.407s. Reviews show destination totals without
+exposing the internal digest. Request text explains unchanged historical holds.
+Production build passed with existing ESLint/Browserslist warnings;main.a1dc4778.js.
+Frontend and API OpenAPI each HTTP200; backend git diff --check passed.
+No full-regression total claim, browser acceptance, real data, deployment or push.

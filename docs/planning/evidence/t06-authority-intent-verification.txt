@@ -1,0 +1,22 @@
+T06 - Central authority in posting intent - 2026-10-03
+
+Both charge entry points require a typed CostPoolAuthorityClaim and enforce the
+persisted pool authority internally. Exact proposal/pool check reuses the existing
+proposal identity; no new table or permission registry. Full org/pool/node/epoch
+identity is included in the existing operation digest.
+
+Isolated synthetic PostgreSQL:
+python -m pytest -q tests/test_charge_posting.py
+ tests/test_charge_posting_preparation.py tests/test_cost_pool_authority.py
+ tests/test_cost_evidence_replay.py
+53 passed, 23 dependency warnings, 12.41s.
+Includes valid newer epoch/node refusing historical intent, stale prior claim,
+valid authority for another pool refusing this proposal, no-op extra callback
+unable to bypass persisted fencing, current exact retries, rollback, concurrency,
+source/file verification and revoked authority boundaries.
+
+No schema/UI/API changes; no frontend build or browser/full regression rerun.
+No real authority enrollment or financial posting. Earlier internal requests
+without the authority digest are not silently upgraded. Authentication of runtime
+identity, reviewed enrollment/transition, storage acceptance, receipt costing and
+central reconciliation remain pending; public financial posting stays disabled.

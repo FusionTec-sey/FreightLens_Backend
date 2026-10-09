@@ -1,0 +1,20 @@
+T07 other-store review API and queue - 2026-10-04
+Decision: BD-20261003-06. T07 remains In progress.
+
+Backend isolated phase0 runner, /work, REQUIRE_TEST_DATABASE=1:
+python -m pytest -q --tb=short tests/test_other_store_fulfilment_api.py tests/test_other_store_fulfilment.py
+18 passed, 23 existing dependency warnings, 7.81s.
+Checks: request/review retries, self-review denial, exact public scope and no digest,
+permission/module/authentication denial, own-only requester reads, foreign company,
+stale stock, forged actor/authority rejection, bounded pagination, no apply route,
+no reservation effect. Existing foundation covers combined caps and revoked staff.
+
+Frontend CRA CI=true targeted tests:
+src/component/Pages/Sales/SalesDraftsPage.test.js
+src/component/Pages/Inventory/components/ManagerCases.test.js
+26 passed / 2 suites, 3.342s.
+Production build CI=false: exit0, main.2942ce66.js. Existing ESLint and outdated
+Browserslist warnings remain; not a strict-warning CI claim.
+
+No schema migration, role grants, real data, deployment, external push or browser
+acceptance. Request-entry UI and trusted target-runtime execution remain next.

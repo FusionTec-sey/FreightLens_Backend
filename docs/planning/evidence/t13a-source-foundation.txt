@@ -1,0 +1,21 @@
+2026-10-03 — isolated local checkpoint
+
+Before new sales source files: full backend 1077 passed, 2 known legacy xfailed,
+23 warnings, 117.41s. This is not coverage of subsequent source additions.
+Frontend unchanged: preceding checkpoint 169 tests/35 suites and production build
+passed with existing warnings (frontend-customer-integration.txt).
+
+New source validation:
+docker exec -w /work freightlens-pos-phase0-runner python -m pytest -q
+  tests/test_sales_intent_sources.py --tb=short
+13 passed, 23 existing deprecation warnings, 3.59s.
+Initial run: 3 failed/10 passed because inherited eager joins made PostgreSQL
+FOR SHARE invalid. Fixed unused eager loading and explicit product lock scope.
+
+Coverage: exact bounded positive strings, unique line IDs, rejection of financial
+fields, real reviewed unit conversion, root-context foreign branch/product denial,
+unknown customer denial, stale policy/unknown unit rejection, mandatory permissions
+and caller transaction. No stock changes or new ORM writes from preparation.
+
+Not yet covered/implemented: durable draft records, version/retry/rollback writer,
+API/editor, concurrency acceptance, browser checks. No public sales activation.

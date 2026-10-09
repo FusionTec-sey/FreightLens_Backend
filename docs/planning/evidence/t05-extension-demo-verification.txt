@@ -1,0 +1,44 @@
+T05 compatible extensions and demo - 2026-10-02
+
+Full isolated backend: 698 passed, 2 known C12 xfails, 23 warnings (79.77s).
+Full frontend: 109 passed in 24 suites (9.119s).
+Production build passed with existing ESLint/Browserslist warnings.
+Both repository diff whitespace checks passed.
+
+Coverage includes compatible extension activation, unchanged historical snapshots,
+new-unit reservation/release and future opening, exact operation replay, competing
+same/different keys, rollback, incompatible rules, tenant/permission boundaries,
+original barcode identity retention, demo idempotency and transactional rollback.
+No database migration introduced. Existing schema guards remain in force.
+
+Owner authorised synthetic samples for all T05 inventory/policy/approval screens.
+Opt-in CLI verified local db/freightlens_pos_preview, created org2 named
+DEMO ONLY - FreightLens T05. Ten products, five stock balances, three serials,
+three holds, eleven policy cases and three barcode cases. Synthetic branch/site,
+empty cost pool and authority are scoped only to the demo. Existing preview admin
+assignments gain only demo org visibility; roles/credentials and other org data
+are preserved. This is not operational configuration or an import rehearsal.
+
+Authorised read-only browser checks at 1024x768:
+- Company selector and ten demo catalogue rows visible.
+- Draft/active policy comparison and compatible BOX extension explanation visible;
+  draft footer within viewport, no body horizontal overflow.
+- All policy case states and EXTEND_UNITS approved confirmation displayed.
+  Found activation action below viewport; moved it to fixed panel footer and
+  rechecked bottom739.3 within 768px viewport (previously821px).
+- Barcode review pending/approved/consumed and exact source factor displayed.
+- Location stock shows separate quantities; serial panel shows three conditions.
+  Dark appearance checked and original light appearance restored.
+- Tile barcode list shows four codes including permanently retired status;
+  retired-code lookup visibly rejects reuse. DEMO-TILE-BOX lookup visibly matches
+  BOX = 1.44000000 M2 without reserving or selling stock.
+No business mutation, approval decision or stock posting was performed through UI.
+Temporary viewport is reset after checks; demo company remains selected for review.
+
+Boundaries: all automated tests used the isolated test DB, not preview. Preview
+received only the explicitly requested demo seed. No external deployment, messages,
+real financial entries, purchases or destructive operations. Build warnings and
+two legacy writer xfails remain; unrelated browser/hardware/pilot gates stay pending.
+Structural existing-stock conversion and explicit historical-code rebinding remain
+unimplemented/blocked. T05 remains In progress; this verified slice is not full T05
+signoff. Retire-and-register-new-code correction is available without identity reuse.

@@ -1,0 +1,23 @@
+T07 other-store request entry - 2026-10-04
+Decision BD-20261003-06; T07 remains In progress.
+
+Isolated phase0 runner /work, REQUIRE_TEST_DATABASE=1:
+python -m pytest -q --tb=short tests/test_other_store_fulfilment_api.py tests/test_location_stock_reads.py
+22 passed, 23 existing dependency warnings, 7.10s.
+New tests prove self-only assignment projection without View_User, denial when
+missing/foreign assignment or permission, caller identity not replaceable through
+a user_id query, and product filtering before pagination. Existing tests retain
+auth/module/tenant/review/retry/no-stock-effect checks.
+
+Frontend targeted CRA CI=true:
+src/component/Pages/Sales/OtherStoreRequest.test.js
+src/component/Pages/Sales/SalesDraftsPage.test.js
+src/services/inventoryLocationsApi.test.js
+27 passed / 3 suites, 2.896s. Initial test-only missing JSDOM crypto mock fixed.
+Explicit selections and exact quantity/versions, uncertain identical retries,
+wrong-store block, stale-state block and dirty-close confirmation covered.
+Production build CI=false exit0, main.85e1b2b3.js. Existing ESLint/Browserslist
+warnings remain. Browser acceptance remains separate and unperformed.
+
+No schema/data migration, role grants, real posting, deployment or Git push.
+Next: reviewed target-store execution with trusted authority/business date.

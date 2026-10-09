@@ -1,0 +1,19 @@
+GitHub checkpoint requested by owner - 2026-10-03
+
+Frontend full automated suite: 150 passed / 32 suites, 12.237s.
+Normal production build: passed with existing ESLint/Browserslist warnings;
+main.6cb5712e.js. Strict warning-as-error gate remains outstanding.
+Frontend commit: b2ec3fd (valuation evidence workspace and central writer status).
+
+Backend full suite in isolated phase0 runner, latest changed Python files copied:
+1035 passed, 2 known legacy stock-writer xfails, 23 warnings, 108.95s.
+No new failures. Synthetic isolated PostgreSQL only; preview database not tested.
+
+Both repositories: codex/pos-development. Fetched origin before commits; no remote
+divergence. Staged diff checks passed. Changed paths and common private-key/token
+patterns reviewed; no obvious secret matches or generated/runtime data staged.
+Checked-in GitHub workflows contain test/build jobs, not deployment actions.
+
+No browser visual acceptance or fresh-install rehearsal performed this checkpoint.
+No deployment, real financial posting, runtime enrollment or business-data changes.
+T06 remains In progress; passing tests do not close remaining release gates.

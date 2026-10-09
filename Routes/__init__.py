@@ -17,6 +17,7 @@ from .Orders import (
     LifecycleRouter
 )
 from .Inventory import InventoryRouter
+from .Navigation import MenuRouter
 from .BlobRouter import BlobRouter
 
 __all__ = [
@@ -37,6 +38,7 @@ __all__ = [
     "DailyWorkRouter",
     "NotificationRouter",
     "InventoryRouter",
+    "MenuRouter",
     "LifecycleRouter",
     "BlobRouter"
 ]

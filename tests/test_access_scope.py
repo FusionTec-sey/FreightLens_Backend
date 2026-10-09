@@ -76,6 +76,20 @@ def test_root_tenant_user_is_limited_to_explicit_assignments():
     assert context.selected_org_id is None
 
 
+def test_root_platform_admin_can_view_and_select_all_active_organisations():
+    user = _user(_role("Platform Operations", is_platform_admin=True), allowed_org_ids=[1])
+    db = _SequenceDb(
+        _Query(first=SimpleNamespace(id=1, is_active=True, parent_org_id=None)),
+        _Query(rows=[(1,), (7,), (8,)]),
+        _Query(rows=[(1,), (7,), (8,)]),
+    )
+
+    context = get_org_context(user=user, x_active_org="8", db=db)
+
+    assert context.allowed_org_ids == [1, 7, 8]
+    assert context.selected_org_id == 8
+
+
 def test_unassigned_active_organisation_selection_is_rejected():
     user = _user(_role("Administrator"), allowed_org_ids=[1, 3])
     db = _SequenceDb(

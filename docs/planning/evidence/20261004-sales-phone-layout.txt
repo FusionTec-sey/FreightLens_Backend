@@ -1,0 +1,18 @@
+Sales read-only portrait/phone acceptance and repair — 2026-10-04
+
+Scope: owner's approved local Sales checks, existing synthetic org2. No edits,
+saves, allocations, settings or business-record changes performed.
+At768px: opened draft d6fb5b06-35fe-5360-a323-637d79c802bd v2 (quantity5),
+inspected original v1 (quantity2), with saved/current-label disclaimer and no
+current allocation actions on history. Opened unchanged editor. Body768x976,
+no page overflow. After repair, tablet cart remains550px high.
+At390px: original fixed notices/controls collapsed cart item list. Added contained
+editor-body scroll below the unchanged primary action header; minimum480px pane
+leaves actual item viewport instead of zero height. Keyboard focus reaches unit
+control, Save stays visible at y213. Body390x796 equals viewport; cart480px.
+No viewport override left active. Preview editor left unchanged.
+Screenshot outside Git: runtime/sales-phone-cart-20261004.png.
+Focused editor/navigation tests: 10 passed /3 suites.
+Production build passed (exit0, existing warnings): runtime/sales-phone-build.log.
+Pending: dark appearance, interactive recovery, physical scanner/provider tests,
+full checkout and owner final design acceptance. No whole-task Verified claim.

@@ -1,0 +1,37 @@
+Paired checkpoint: store-wide-allocation-20261004
+Decision revision: BD-20261003-06
+Development branches (both repositories): codex/local-area-scope
+PR target (both repositories): codex/pos-development
+
+Frontend: https://github.com/FusionTec-sey/FreightLens_Frontend
+Commit: e38eb888571192c4ff57e2e476d54d89d859ac7e
+PR: https://github.com/FusionTec-sey/FreightLens_Frontend/pull/7
+
+Backend: https://github.com/FusionTec-sey/FreightLens_Backend
+Commit: the commit which FIRST ADDS this manifest.
+Resolve: git log --diff-filter=A --format=%H -1 -- docs/planning/CHECKPOINT-20261004.txt
+The handoff message/paired PR supplies the resolved immutable backend SHA.
+No self-referential SHA or claim that arbitrary later HEADs form this checkpoint.
+
+Local verification before publishing:
+- Backend isolated phase0 database: 1298 passed, 2 known legacy-writer xfailed,
+  23 dependency warnings, 164.41s. REQUIRE_TEST_DATABASE=1, complete pytest suite.
+- Frontend: 230 passed / 44 suites, 17.052s; full CRA test suite.
+- Production build: main.85e1b2b3.js, exit0 with existing ESLint/Browserslist warnings.
+- Changed/untracked path review and credential/private-document pattern scan:
+  no flagged secrets or private legal files. No database/generated files staged.
+- Repository webhook API: zero hooks in each repository. Checked-in Actions
+  workflows contain tests/build and isolated fresh-install checks, no deployment.
+- Remote CI and fresh-install job must be verified on these PR revisions; local
+  test success is not a substitute. Publication/CI outcome is reported in PRs/chat.
+
+Includes staff/store assignments, optional picking preferences, same-store atomic
+allocation, compatible multi-location holds, explicit other-store review/request
+screens, internal approved other-store execution, and opt-in local allocation API.
+Latest same-store allocation UI remains unfinished; no fake operational controls.
+Runtime is disabled by default. No real configuration/posting or deployment.
+Browser/hardware/offline/provider/accounting/pilot gates remain separate.
+T07/full queue are not complete. T33A remains collaborator-owned.
+
+This is the latest development checkpoint; BASELINE-REVISIONS.txt is retained as
+the historical 20261003 baseline. Do not merge only one half of the paired changes.

@@ -1,0 +1,26 @@
+FreightLens reviewed cost-reconciliation checkpoint — 2026-10-04
+
+Outcome
+- Added immutable, product-scoped reconciliation checkpoints within one explicit cost pool.
+- Added separate request, independent review and close permissions over the shared manager-case engine.
+- A request binds the latest valuation head and every current physical balance/version in the pool's mapped branches.
+- Close requires exact physical on-hand to equal the valuation pool quantity in one base unit, a current approved case, and server-derived central cost authority.
+- The checkpoint appends history only. It does not rewrite weighted-average valuation rows, finalise an accounting period, export a journal, change prices or post stock.
+- Added server-paged case/checkpoint APIs and a permission-aware reconciliation workspace from Cost pools -> Reconciliation readiness.
+
+Safety checks
+- Stale physical or valuation state invalidates an existing approval.
+- Identical state cannot be closed twice through another case.
+- Stable operation retries have one effect and re-run current permission/authority/source checks.
+- Foreign-company and missing-runtime paths fail closed.
+- Database update/delete triggers protect committed checkpoint history.
+
+Verification
+- Backend: 7 passed across service, migration replay and HTTP tests; 56 passed in the combined receipt-cost/reconciliation checkpoint.
+- Frontend: 18 passed across API, readiness and reviewed-checkpoint suites.
+- Production build: passed with the repository's existing unrelated lint and bundle-size warnings.
+
+Remaining
+- This is an inventory-cost checkpoint, not T20 till/accounting close.
+- Whole-pool/per-period sign-off, accounting export and real configuration acceptance remain separate.
+- T06 remains In progress; external evidence retention and final reviewed receipt execution remain gated.

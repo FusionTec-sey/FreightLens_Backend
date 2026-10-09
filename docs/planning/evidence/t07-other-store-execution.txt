@@ -1,0 +1,20 @@
+T07 internal approved other-store execution - 2026-10-04
+BD-20261003-06; T07 remains In progress, not operationally released.
+
+Isolated phase0 runner /work, REQUIRE_TEST_DATABASE=1:
+python -m pytest -q --tb=short tests/test_other_store_execution.py tests/test_other_store_fulfilment.py tests/test_store_allocation.py tests/test_reservation_segments.py tests/test_other_store_fulfilment_api.py
+58 passed, 23 existing dependency warnings, 17.84s.
+
+New execution tests: exact approved hold and same receipt on retry; ordinary
+writer cannot skip approval; altered quantity rejected; authority and permissions
+rechecked on replay; changed stock/history rejected; forced effect failure rolls
+back approval consumption and stock; case cannot be reused by another operation;
+concurrent identical execution has one effect; compatible existing local holds
+remain unchanged and combined demand stays exact.
+
+Reuses reserve_stock, manager-case consumption, source links, stock movements,
+authority epochs and posting receipts. No new table/schema or generic bypass flag.
+No frontend change/build rerun in this slice. Prior frontend request-entry tests
+and build remain separately recorded, not claimed as new evidence.
+No public execution endpoint, browser automation, real posting, deployment or push.
+Next: trusted runtime context resolution and permission-guarded public actions.

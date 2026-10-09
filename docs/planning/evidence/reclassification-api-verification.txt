@@ -1,0 +1,24 @@
+Protected proposal API - 2026-10-03
+
+15 endpoint tests passed (9.22s): save, exact retry, paginated summary/detail,
+historical reads after stock changes, stale-save rejection, anonymous/permission/
+module denials on all endpoints, foreign active-company rejection even for allowed
+multi-company users, unknown UUIDs, numeric input rejection, page limits and hidden
+soft-deleted product/location/branch parents.
+Full isolated backend suite: 749 passed, 2 known C12 xfails, 23 warnings (150.36s).
+git diff --check passed. API health and frontend inventory HTML returned HTTP200.
+
+POST and GET /inventory/reclassification-proposals and UUID detail GET registered
+under INVENTORY. Save uses Request_InventoryReview, reads View_Product. No new
+grants, review/execute endpoint or schema migration. Existing immutable persistence,
+transactional retry and authoritative source validation reused. Responses state
+conversion_enabled=false; details explicitly historical, not current eligibility.
+List query projects only snapshot/reason metadata rather than loading full identity
+manifests for every result. Postgres guidance informed bounded scoped joins and
+query projection. No new catalogue, search index or duplicate review system.
+
+Frontend unchanged, prior109 tests/24 suites and successful production build remain
+last frontend evidence; neither rerun for this backend-only slice. Browser checks
+not performed. UI editor/register and public review adapter remain next; T05 stays
+In progress. Physical conversion, authority/identity/value and lineage gates remain.
+No real business records changed, demo reseeded, external deployment or messaging.

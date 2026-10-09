@@ -1,0 +1,27 @@
+T07 reviewed release checkpoint - 2026-10-03
+
+Implemented: exact source-bound release review using existing manager cases;
+internal atomic approval consumption, stock movement and posting receipt;
+request/review API and reusable Reservation reviews panel in Sales drafts.
+Draft sources only. No automatic release on approval or expiry, no public stock
+writer, no paid-order release or multi-location/reallocation claim.
+
+Verification on isolated synthetic PostgreSQL runner:
+python -m pytest -q tests/test_reservation_release_api.py
+ tests/test_reservation_release_review.py tests/test_sales_reservation_sources.py
+ tests/test_stock_ledger.py --tb=short
+58 passed, 23 existing warnings in 10.83s.
+Includes approval/replay, self-review denial, rollback, concurrent consumption,
+changed sources, revoked permissions, tenant/module isolation and stock regressions.
+
+Frontend focused ManagerCases, SalesDraftsPage and SalesDraftEditor:
+23 passed / 3 suites in 2.596s.
+Production build succeeded with existing ESLint/Browserslist warnings;
+main.2558a009.js. This is not a strict warning-free CI result.
+
+Earlier new-fixture username exceeded varchar45; shortened synthetic username
+before passing runs. No production schema relaxation was made.
+No browser acceptance, real records, deployments, provider messaging or push.
+Full-suite historical baseline remains 1118 backend / 179 frontend, not increased
+by focused totals. Request UI/linked-hold listing, deadline/reallocation workflows,
+paid-order adapters and trusted public runtime integration remain T07 work.

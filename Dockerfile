@@ -4,9 +4,9 @@ FROM python:3.11-slim
 
 # Install system dependencies inside the container
 # Install system dependencies
-RUN apt-get update && \
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && \
     apt-get install -y \
-        libgobject-2.0-0 \
         libglib2.0-0 \
         libcairo2 \
         libpango-1.0-0 \

@@ -1,0 +1,38 @@
+T06 evidence-bound charge review internal adapter - 2026-10-03
+
+Implemented explicit source-currency eligible amount, SCR-per-source-unit rate,
+invoice/date/document and required foreign-currency FX document declaration.
+Exact bounded Decimal conversion uses charge-fx-v1, six-place HALF_UP SCR and
+eight-place rates, isolated from caller precision. SCR requires rate1; missing FX,
+nonfinite values, excess precision, overflow and rounded-zero fail closed. No tax
+eligibility or market rates are inferred; the reviewer attests the declared expense.
+
+Existing supplier/document/PO records are scoped and locked after authorization;
+invoice PO issuer must match. Existing allocation binding and complete SCR total
+must match. Review action inventory.cost.verify-charge is separate from allocation
+approval. Approved evidence loader rejects allocation-only, pending/rejected,
+changed, non-independent and already-consumed cases. It returns the existing typed
+CostChargeEvidence contract, not a posting or independent financial authorization.
+Existing ManagerCase immutable binding/decision tables reused; no migration.
+
+Verification:
+- Full isolated backend899 passed,2 known legacy C12 xfailed,23 warnings,86.02s.
+- Frontend138 passed/30 suites,12.197s; production build passed with existing
+  ESLint/Browserslist warnings, main.f85383f7.js.
+- New tests cover explicit currency/FX rules, exact rounding under low caller
+  precision, independent approval/retry, source mutation, foreign/root scope,
+  linked PO issuer/company, allocation-only rejection and consumed-case denial.
+- Initial synthetic reviewer name exceeded the existing45-character username
+  limit; corrected test fixture, with no production schema workaround.
+- PostgreSQL skill informed scoped column reads and transactional source locks.
+- Frontend copy distinguishes allocation approval from invoice/FX verification.
+
+No business records were created in preview, no browser automation performed,
+no external deployment or additional GitHub push. Internal adapters were tested
+only with synthetic evidence in the isolated database.
+
+Release gates: public permission-aware supplier/document picker/API, immutable
+blob-version guarantees (metadata hashes do not prove file content), source review
+UI and atomic charge/case/valuation composition including own-operation replay.
+Current evidence loader deliberately accepts unconsumed approvals only. T06 is
+in progress and financial posting remains disabled.

@@ -1,0 +1,23 @@
+T06 - Prepared content connected to charge posting - 2026-10-03
+
+Internal integration implemented; T06 remains In progress.
+prepare_and_post_allocated_charge reuses existing preparation and coordinator.
+Factory-owned transaction boundary; scoped trusted case loader and permission/
+central-authority callbacks mandatory. No HTTP endpoint or UI activation.
+
+Isolated synthetic PostgreSQL tests with a synthetic storage adapter:
+python -m pytest -q tests/test_charge_posting_preparation.py
+ tests/test_charge_posting.py tests/test_cost_content_preparation.py
+ tests/test_charge_valuation.py
+40 passed, 23 dependency warnings, 8.58s.
+Checks: no active service session during storage reads, original-version reads
+on retries, authority denial before I/O and revocation during I/O, wrong-company/
+legacy/wrong-proposal binding denial, changed document metadata, storage failure,
+missing capture limit and missing historical evidence after a completed posting.
+Existing coordinator checks cover rollback, concurrency and exact intent replay.
+
+No frontend change, broad regression, build or browser rerun this backend-only
+slice. No real storage or business records changed; no public financial posting.
+Authenticated central identity/scoped persisted-case adapter and actual storage
+retention/configuration are still release gates, not satisfied by test callbacks.
+Receipt costs and central reconciliation remain implementation work.
