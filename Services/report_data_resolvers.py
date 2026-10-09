@@ -16,6 +16,7 @@ from Model.Credentials.users import User
 from Model.Credentials.Organisation import Organisation
 from Model.containermgmt.Report.OrgPrintProfile import OrgPrintProfile
 from auth.security_guards import is_financial_user, can_view_supplier_user
+from Services.report_time_service import org_today_iso
 
 logger = logging.getLogger("containerMgmt.report_resolvers")
 
@@ -421,7 +422,7 @@ def resolve_purchase_order(
         "supplier_name": supplier_data.get("name"),
         "supplier_address": supplier_data.get("address"),
         "supplier_email": supplier_data.get("email"),
-        "report_date": date.today().isoformat(),
+        "report_date": org_today_iso(db, org_context),
         "generated_by": getattr(user, "username", "System"),
         "items": items_list,
         "subtotal": subtotal,
@@ -1133,11 +1134,11 @@ def resolve_sourcing_rfq(
         "status": po.status,
         "status_label": po.status_label or po.status,
         "lifecycle_stage": po.lifecycle_stage or "SOURCING",
-        "issue_date": _clean_val(po.order_mail_date) or date.today().isoformat(),
-        "rfq_date": _clean_val(po.order_mail_date) or date.today().isoformat(),
+        "issue_date": _clean_val(po.order_mail_date) or org_today_iso(db, org_context),
+        "rfq_date": _clean_val(po.order_mail_date) or org_today_iso(db, org_context),
         "due_date": _clean_val(po.eta_date) or "As specified in invitation",
         "eta_date": _clean_val(po.eta_date),
-        "report_date": date.today().isoformat(),
+        "report_date": org_today_iso(db, org_context),
         "currency": po.currency or "USD",
         "consignee": po.consignee,
         "consignee_name": po.consignee,
@@ -1622,7 +1623,7 @@ def resolve_quote_comparison(
         "rfq_number": po.po_number,
         "po_number": po.po_number,
         "title": f"Commercial Bid Evaluation & Vendor Price Comparison — {po.po_number}",
-        "comparison_date": date.today().isoformat(),
+        "comparison_date": org_today_iso(db, org_context),
         "generated_by": getattr(user, "username", "System"),
         "currency": po.currency or "USD",
         "org_name": "Sahaj Holding Corp",

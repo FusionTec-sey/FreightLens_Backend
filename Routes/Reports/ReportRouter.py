@@ -29,6 +29,7 @@ from Schema.ReportDatasetSchema import (
     DatasetResult,
     DatasetCatalogItem,
 )
+from Services.report_time_service import org_timezone_name, stamp_for_filename
 from Services.report_dataset_service import (
     list_dataset_catalog,
     get_dataset_resolver,
@@ -673,6 +674,7 @@ def render_report_pdf(
         footer_template=version.footer_html,
         page_size=template.page_size or "A4",
         orientation=template.orientation or "portrait",
+        timezone=org_timezone_name(db, org_context),
     )
 
     # If requested format is html, return rendered HTML directly
@@ -758,6 +760,7 @@ def render_report_preview(
         footer_template=footer_html,
         page_size=page_size,
         orientation=orientation,
+        timezone=org_timezone_name(db, org_context),
     )
 
     return {"html": full_html}
@@ -909,7 +912,7 @@ def render_dataset_report_pdf(
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "pdf"})
     pdf_bytes = render_dataset_pdf(report_key, spec, db, org_context, access_policy.scoped_user)
-    filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    filename = f"{report_key}_{stamp_for_filename(db, org_context)}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
@@ -933,7 +936,7 @@ def export_dataset_report_excel(
     spec = _apply_saved_dataset_template(report_key, spec, db, org_context)
     spec = spec.model_copy(update={"format": "xlsx"})
     excel_bytes = export_dataset_excel(report_key, spec, db, org_context, access_policy.scoped_user)
-    filename = f"{report_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"{report_key}_{stamp_for_filename(db, org_context)}.xlsx"
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

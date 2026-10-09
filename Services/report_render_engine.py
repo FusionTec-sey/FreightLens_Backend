@@ -5,6 +5,7 @@ Executes templates within an ImmutableSandboxedEnvironment with strict helper fu
 """
 import logging
 from typing import Dict, Any, Callable, Optional
+from zoneinfo import ZoneInfo
 from datetime import datetime, date
 from decimal import Decimal
 from urllib.parse import unquote, urlparse
@@ -73,14 +74,31 @@ def default_na_filter(val: Any, placeholder: str = "-") -> str:
     return str(val)
 
 
-def get_sandboxed_env() -> SandboxedEnvironment:
-    """Configures a sandboxed Jinja2 environment with safe helpers and strict attribute access."""
+DEFAULT_REPORT_TIMEZONE = "Indian/Mahe"
+
+
+def _resolve_zone(timezone: Optional[str]):
+    """The named zone, or the default, never an exception during a render."""
+    try:
+        return ZoneInfo(timezone or DEFAULT_REPORT_TIMEZONE)
+    except Exception:
+        return ZoneInfo(DEFAULT_REPORT_TIMEZONE)
+
+
+def get_sandboxed_env(timezone: Optional[str] = None) -> SandboxedEnvironment:
+    """Configures a sandboxed Jinja2 environment with safe helpers and strict attribute access.
+
+    `timezone` is the organisation's zone, so a template calling now() prints the
+    date its reader is living in. UTC stamped anything printed between midnight
+    and 04:00 in Seychelles with the previous day.
+    """
     env = SandboxedEnvironment(autoescape=True)
     env.filters["format_date"] = format_date_filter
     env.filters["format_number"] = format_number_filter
     env.filters["format_currency"] = format_currency_filter
     env.filters["default_na"] = default_na_filter
-    env.globals["now"] = datetime.utcnow
+    zone = _resolve_zone(timezone)
+    env.globals["now"] = lambda: datetime.now(zone)
     return env
 
 
@@ -245,9 +263,10 @@ def render_html_document(
     footer_template: Optional[str] = None,
     page_size: str = "A4",
     orientation: str = "portrait",
+    timezone: Optional[str] = None,
 ) -> str:
     """Renders Jinja2 templates into a complete HTML string using sandboxed environment."""
-    env = get_sandboxed_env()
+    env = get_sandboxed_env(timezone)
 
     body_tmpl = env.from_string(html_template)
     rendered_body = sanitize_html_fragment(body_tmpl.render(context))
