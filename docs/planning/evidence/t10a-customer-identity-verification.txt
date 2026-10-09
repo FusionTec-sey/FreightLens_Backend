@@ -1,0 +1,17 @@
+T10A - Customer identity internal foundation - 2026-10-03
+
+Stable organisation-owned customer UUID, immutable original profile and explicit
+bounded contacts. Creation reuses existing execute_once/receipt/outbox and supports
+caller rollback. Same-company receipt FK; no consignees or suppliers repurposed.
+Empty additive startup migration; no customer, balance or contact seeds.
+
+Isolated synthetic PostgreSQL: tests/test_customer_identity.py
+17 passed, 20 dependency warnings, 1.98s.
+Validation, exact retry, changed intent, separate customers sharing contacts,
+permission revocation, foreign root reads, caller rollback, concurrency, expected
+version zero, immutable snapshot and migration replay covered.
+
+Internal-only service: protected public permission adapter, customer API, paginated
+frontend/create/select and search remain unimplemented. No frontend/build/browser
+claim or fresh-install rehearsal. T10A In progress; T06 remains open. No real data,
+credit, payment, deployment or GitHub push. Full-suite baseline unchanged.

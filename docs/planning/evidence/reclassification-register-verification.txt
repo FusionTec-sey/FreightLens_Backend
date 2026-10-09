@@ -1,0 +1,21 @@
+Read-only proposal register - 2026-10-03
+
+Location stock rows expose Reclassification proposals -> paginated saved proposals
+-> historical detail with exact condition quantities and batch/serial manifests.
+Existing company-pinned inventory client and PaginationToolbar reused; contained
+scrolling, light/dark classes, fixed navigation/pagination and explicit empty/error
+states. Detail is historical, not current stock or approval status. No write control.
+No sample proposals were generated in this turn; absent data shows an empty register.
+
+Frontend full suite: 115 tests in25 suites passed (13.519s). New tests cover stock
+navigation, exact decimals, server pagination, historical detail, missing write
+actions, failed-refresh clearing, retry/empty state, unmount and company-change
+aborts, late-response suppression and pinned auth/company/balance API parameters.
+Production build: final post-guard build passed with existing ESLint/Browserslist
+warnings (main.b9750384.js). git diff --check passed. Locations HTML200.
+Backend unchanged, not rerun: previous749 passed/2 known C12 xfails.
+Browser check explicitly requested; no acceptance claimed without owner reply.
+
+Next: proposal editor and public review adapter. Conversion remains disabled until
+physical authority, identity/value conservation and atomic lineage gates pass.
+No data writes, migrations, external deployment or real business changes.

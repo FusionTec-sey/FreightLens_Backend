@@ -1,0 +1,23 @@
+T05 stock-reclassification reconciliation foundation - 2026-10-02
+
+Implemented pure, unconnected ordinary-to-batch/serial manifest validation.
+Reuses existing schemas, exact unit conversion and QuantityBreakdown. It does not
+create stock, mutate policy, consume approval or expose a new API/UI action.
+
+24 focused tests passed (0.78s): exact per-condition conservation, explicit serial
+conditions, protected reservations, missing required batch metadata, duplicate
+batch keys/codes, unsupported tracking removal/base-unit changes, fractional serial
+mismatch, isolated decimal context, absent/mixed manifests, target rounding,
+source increment inconsistency, zero stock and manifest size bounds.
+Full isolated backend suite: 724 passed, 2 known C12 xfails, 23 warnings (101.69s).
+git diff --check passed. API health and frontend inventory HTML returned HTTP200.
+
+Frontend unchanged, not retested/rebuilt in this slice; prior109 tests/24 suites and
+production build passed with existing warnings. No browser checks in this turn.
+No migration, new dependencies, demo reseed, real records, deployment or live writes.
+
+T05 remains In progress. Required next integration: version-bound persisted
+proposals, exact manager approval, scoped source locking/node authority, global
+identity checks, append-only lineage and atomic stock movements. Quantity validation
+does not prove valuation conservation or permit product-wide activation. Existing
+policy blockers stay in place until those integration gates are implemented.

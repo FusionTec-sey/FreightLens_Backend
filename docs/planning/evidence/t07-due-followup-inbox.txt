@@ -1,0 +1,33 @@
+T07 company-wide overdue follow-up inbox - 2026-10-03
+
+GET /inventory/reservation-deadline-cases/due is authenticated, both-module guarded,
+requires draft/product/customer/personal-data access plus Review_ReservationDeadline
+or Schedule_ReservationReview, and returns only the active allowed company. It is
+server-paginated, oldest first, with optional exact branch filter. Due means remaining
+quantity >0 and latest effective review date <= database current time. Approved but
+unapplied extensions do not remove a hold from the due inbox.
+
+Per-draft and company-wide reads now share reservation_source_read_service. Public
+product/location/store labels are explicitly selected, without eager supplier data.
+Indexed original deadlines safely prefilter candidates because reviewed dates only
+move forward; indexed correlated latest-version reads preserve historical rules.
+No new table, duplicate catalogue, schedule mutation or background auto-release.
+
+Sales drafts -> Overdue follow-up reuses DraftReservations. It supports the same
+permission-aware release/follow-up requests and a fresh-access-checked Open draft.
+No KPI cards on this operational screen. Failed reads clear old rows; pagination and
+in-flight source opening remain guarded. Per-draft lists gain readable stock labels.
+
+Verification:
+- Isolated inbox/release/deadline API tests:19 passed,23 warnings,8.93s.
+- Affected frontend reservation/register tests:16 passed/2 suites,2.835s.
+- Production build main.cd891de3.js passed with existing ESLint/Browserslist warnings.
+Cases cover scope/module/permission/auth denials, pagination, branch filtering,
+future reschedule exclusion, approval-only retention, full-release exclusion,
+and fresh source opening/failure behavior. No browser acceptance was run.
+Full suites deferred per focused-check practice; previous totals remain historical.
+No actual business records, entitlement changes, customer messages, deployment or push.
+
+The inbox is pull-based, not delivered manager-profile notifications. T07 still
+needs reviewed reallocation/multi-location and trusted runtime/paid-source adapters.
+T04 notification delivery remains a separate implementation item.

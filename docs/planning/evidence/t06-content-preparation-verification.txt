@@ -1,0 +1,21 @@
+T06 two-stage content preparation - 2026-10-03
+
+New internal cost_content_preparation_service reuses current binding and storage
+contracts. Authorize/load detached source inside a short transaction, close it,
+then read storage. Revalidations request the saved version and compare full typed
+fingerprints. No disk/latest fallback, implicit approval, configuration mutation or
+financial writer. Later owning adapters must reauthorize and require_current on
+the newly locked source before using the prepared content map.
+
+Targeted checks (isolated runner, synthetic sources):
+python -m pytest -q tests/test_cost_content_preparation.py
+ tests/test_cost_content_reviews.py tests/test_cost_charge_reviews.py
+ tests/test_cost_evidence_api.py tests/test_blob_evidence.py tests/test_blob_storage.py
+106 passed, 23 existing warnings, 8.34 seconds.
+Preparation tests explicitly assert storage runs after transaction closure, denied
+permissions perform no reads, mismatched identities/sizes fail, reviewed versions
+are pinned and absent fingerprints never fall back to latest.
+Full regression and frontend build deferred under owner testing preference.
+No frontend/schema changes. Public HTTP capture and exact-version download wiring
+remain next; storage retention and atomic valuation remain release gates.
+T06 remains In progress. No deployment, push or real-data changes.

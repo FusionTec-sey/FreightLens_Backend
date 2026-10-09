@@ -1,0 +1,63 @@
+FREIGHTLENS - OTHER PROGRAMMER ASSIGNMENT
+Package: T12A cloud payment-method and receiving-account configuration
+Authority: BD-20261005-01. Assignment revision 2.
+Status: Ready after the paired Wave0 baseline is merged; replaces the deferred T21
+packaging assignment and is the first package in the programmer lane.
+Starting revisions: use the latest paired checkpoint supplied by the integrator.
+
+COPYABLE START PROMPT
+You are implementing a bounded FreightLens T12A configuration slice alongside an
+integration owner. Read both AGENTS.md files, relevant rules, architecture/latest
+ten log entries, TASK-QUEUE.txt, BUSINESS-DECISIONS.txt, COLLABORATION-HANDOFF.txt
+and this handoff before editing. Confirm the exact backend and frontend SHAs first.
+
+Build cloud-only, tenant-scoped configuration for payment methods and the receiving
+account mapped to each selling branch/method. Missing, disabled or foreign mappings
+must return an explicit blocking result; never select another branch/account. Keep
+payment method, receiving account and future customer-credit liability conceptually
+separate. Use synthetic labels only—no real bank names, account numbers or balances.
+
+Deliver stable identities, immutable consecutive revisions, expected-version and
+stable-operation retry protection, additive replay-safe migration, protected
+paginated FastAPI reads/writes, and a usable React Settings screen with loading,
+error, empty, permission and retained-save-result states. Reuse existing OrgContext,
+InventoryBranch, posting receipt helpers, permissions and shared UI components.
+Do not create another organisation, branch, customer, sales or approval system.
+
+BOUNDARIES
+- Configuration and fail-closed lookup only. Do not accept/allocate/refund money.
+- Do not create customer balances or store credit, deposits, cheque states, card
+  provider flows, bank matching, journals, invoice posting or till close.
+- Do not grant permissions or seed methods/accounts. Missing configuration is valid
+  setup state and blocks the later affected action.
+- Do not implement offline nodes, synchronization or T21-T24.
+- Do not modify pricing/tax, sales drafts, inventory/allocation or count behavior.
+- Coordinate before changing shared startup registration, migration ordering,
+  navigation, permission catalogues or sales/payment schemas.
+- No deployment, real data, external provider, customer message or financial posting.
+
+PROPOSED CONTRACT
+Before coding, inventory reusable source files and propose exact tables, route names,
+permissions, migration order, changed files and frontend entry point. Prefer one
+PaymentMethod identity/revision and one BranchReceivingAccountMapping identity/
+revision referencing an existing organisation branch. Account details should be an
+opaque synthetic accounting reference and display label, not banking credentials.
+Provide a service lookup that requires exact org/branch/method and fails closed.
+Do not wire that lookup into T13 posting in this assignment.
+
+VERIFICATION
+Use a separate checkout, branch, Docker project/ports and isolated synthetic DB.
+Test tenant/branch isolation, permissions, pagination, exact replay, changed-intent
+conflict, concurrent version updates, immutable SQL history, migration replay,
+disabled/missing mapping denial and frontend save/error/retry behavior. Run affected
+backend/frontend tests and a production build. Report browser acceptance separately.
+
+DELIVERY
+Submit linked backend/frontend PRs targeting codex/pos-development. Include starting
+and delivered SHAs, companion PR, BD-20261004-10, exact changed files, migrations,
+commands/results, known warnings, unresolved gates and recovery notes. Do not merge,
+force-push, overwrite shared branches or include unrelated prior work. Check decisions
+again immediately before the PR; chat history alone is not project synchronization.
+
+Begin with the read-only contract inventory and proposed interface. Wait for the
+integration owner to approve shared-interface changes, then implement this package.

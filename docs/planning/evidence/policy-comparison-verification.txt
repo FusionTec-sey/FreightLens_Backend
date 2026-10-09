@@ -1,0 +1,21 @@
+Exact policy comparison - 2026-10-02 (T05 preparation slice)
+
+Targeted backend policy-transition suite: 9 passed, including existing endpoint
+authentication, module/permission and foreign/shared/deleted-product checks.
+Existing assertions now verify typed active/proposed configurations, exact factor
+strings, and explicit null snapshots when no configuration exists.
+Full isolated backend suite: 685 passed, 2 known C12 xfails, 23 warnings (92.30s).
+Frontend full suite: 106 passed in 23 suites (12.499s).
+Production build passed with existing ESLint/Browserslist warnings.
+Both repository diff checks passed. API health/frontend returned HTTP200.
+
+The existing readiness response now includes active/proposed configs from the
+already-loaded revisions. No extra database query, schema, permission or posting
+path. Comparison preserves decimal strings and displays all seven bounded policy
+fields plus blockers; it is not a paginated business register or authorization.
+Frontend regression checks exact factor rendering, blocked comparison, and aborted
+responses after product/editing changes. API-context changes clear results too.
+
+No deployment, real business edits, approval consumption or stock changes.
+Browser/tablet acceptance not attempted and remains pending. Existing-stock
+conversion and barcode rebinding remain blocked and T05 remains in progress.

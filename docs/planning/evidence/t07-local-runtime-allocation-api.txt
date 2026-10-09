@@ -1,0 +1,19 @@
+T07 local runtime resolver and allocation API - 2026-10-04
+BD-20261003-06. T07 remains In progress.
+
+Isolated phase0 runner /work, REQUIRE_TEST_DATABASE=1:
+python -m pytest -q --tb=short tests/test_store_allocation_api.py tests/test_stock_runtime.py
+22 passed, 23 existing dependency warnings, 4.87s.
+
+Proves operator-pinned node/epoch matching, absent/invalid/ambiguous configuration
+denial, no automatic new-epoch adoption, same-store compatible splits and receipt
+replay, permissions, tenant/module/authentication checks, stale settings/assignment,
+and rejection of body-supplied authority/node/business-date/branch overrides.
+
+Only .env.example documentation changed. No real environment/node/epoch/stock
+configuration changed. Default execution is disabled. Synthetic test environment
+configuration is scoped to pytest monkeypatch lifetime only.
+No frontend change/build rerun this slice; tablet allocation control is next.
+No browser checks, deployment, real posting, external messaging or push.
+Local runtime is single-database development only; T21-T24 secure enrollment,
+distributed sync/fencing and recovery remain mandatory pre-pilot gates.

@@ -1,0 +1,34 @@
+FreightLens receipt manifest entry checkpoint — 2026-10-04
+
+Scope
+- Exposed the existing exact receipt source and manifest preparation as read-only previews.
+- Added product identity to goods-receipt line reads through eager PO-line loading.
+- Added contained Goods Receiving classification entry with paginated branch/location
+  selection, reviewed policy loading, exact quantities and shared batch/serial input.
+- Pre-filled the exact converted received total without inferring damaged/incorrect
+  disposition, and required successful validation of current input before stable-key save.
+- Preserved the boundary: preview/save/review do not post stock, cost or financials.
+
+Focused backend verification (isolated PostgreSQL database)
+- tests/test_receipt_manifest_api.py
+- tests/test_inventory_receipt_source.py
+- Result: 26 passed, 23 warnings.
+- tests/test_pos_prerequisite_regressions.py::test_receipt_format_exposes_linked_product_without_commercial_fields
+- Result: 1 passed, 23 warnings (27 focused backend checks total).
+
+Focused frontend verification
+- ReceiptManifestEditor.test.js
+- ReceiptManifestPanel.test.js
+- ReclassificationEditor.test.js
+- receiptManifestsApi.test.js
+- Result: 4 suites / 14 tests passed.
+
+Production build
+- Result: success with existing lint and bundle-size warnings.
+- Log: FreightLens-POS/runtime/receipt-manifest-editor-build.log
+
+Outstanding acceptance gates
+- No browser/tablet/dark-mode acceptance was performed for this new editor.
+- Cumulative receipt-line use, partial/location split composition, global identity
+  uniqueness, trusted node authority, physical movement and valuation posting remain.
+- No real business data, external deployment or financial posting was used.

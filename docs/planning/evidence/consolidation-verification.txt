@@ -1,0 +1,32 @@
+Consolidation verification - 2026-10-02
+
+Backend isolated PostgreSQL:612 passed,2 known C12 xfails,23 warnings (77.02s).
+Targeted branch settings/counter tests:38 passed before the full regression run.
+Frontend:68 tests in16 suites passed (10.816s). Production build exit0 with
+existing ESLint/Browserslist warnings; strict warning-free CI is not claimed.
+Both repository diff checks pass. Preview API healthy with DB/object storage
+connected; inventory locations returns HTTP200. Browser checks remain skipped.
+
+Changes verified:
+- Five screens share useOperationIntent. Exact retries retain keys across renders;
+  changed action/target/payload generates a new key; clear starts a new intent;
+  detached decimal-string payloads cannot be changed through an earlier snapshot.
+- Existing component tests still cover failed saves, duplicate submit, permission
+  visibility, discard protection, pagination and tenant-pinned clients.
+- Two settings routes share operation locking, exact historical retry and current
+  version validation. Existing namespace strings, lock order, permission/tenant
+  boundaries, versioned history and HTTP409 behavior remain unchanged. Real DB
+  concurrency, rollback and replay tests remain in the full suite.
+- Canonical task queue is in the backend checkout; workspace queue is a pointer.
+  Dependency graph has38 tasks with no missing nodes/cycles. T10A/T13A bring
+  customer/source foundations before reservations; T15A precedes checkout.
+
+No schema migration, business-data seed, deployment, commit or push performed.
+All implementation remains uncommitted; moving the queue into the checkout does
+not itself create a Git checkpoint. Historical evidence remains preserved.
+The PostgreSQL skill guided preserving transaction-scoped locks and bounded wait
+behavior; settings retain domain-specific authorization and transaction ownership.
+This consolidation does not implement durable drafts, source documents, stock
+transitions, barcodes or synchronization; those remain explicit queue tasks.
+Only operation-intent mechanics were extracted from the forms. Domain validation,
+abort lifecycle, busy indicators and confirmation UX remain local intentionally.

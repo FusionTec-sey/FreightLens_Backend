@@ -1,0 +1,22 @@
+T06/T08 full-line receipt manifest preparation — 2026-10-04
+
+Internal typed manifest only. Existing batch/serial schemas and QuantityBreakdown
+reused; shared validate_stock_manifest extracted from reclassification without
+removing old transition restrictions. Full received line quantity must be conserved.
+Batch totals/conditions and serial counts conserve exactly, no duplicate identities.
+Reported damaged/incorrect goods cannot be reclassified available; observations
+may overlap, so use max as unavailable lower bound and retain review flag.
+
+Verification command, isolated PostgreSQL database freightlens_full_20261004_test:
+pytest -q tests/test_inventory_receipt_manifest.py
+tests/test_inventory_receipt_source.py tests/test_stock_reclassification.py
+tests/test_reclassification_proposals.py
+Final result: 55 passed,23 existing dependency warnings. Two earlier runs exposed
+changed validation-message expectations in existing conversion tests; preserved
+both conservation context and original unit error, then reran all four suites.
+No frontend/migration changes.
+
+No persisted manifest, approval consumption, global identity uniqueness or stock
+posting proved by this pure preparation. Future writer must enforce cumulative
+source use, partial/multi-location allocation, authority and atomic valuation.
+No new public screen/action or real business writes. T06/T08 remain In progress.

@@ -1,0 +1,22 @@
+T06 - Atomic charge-posting coordinator - 2026-10-03
+
+Implemented internal coordinator; T06 remains In progress.
+Reuses prepare/content, case, charge, valuation and execute_once services. No
+schema migration, public writer, frontend control or configuration changes.
+Permission and central-authority callbacks are mandatory; these do not themselves
+constitute an authenticated runtime adapter or distributed fencing implementation.
+
+Isolated synthetic PostgreSQL tests:
+python -m pytest -q tests/test_charge_posting.py tests/test_charge_valuation.py
+ tests/test_cost_evidence_replay.py
+28 passed, 23 dependency warnings, 8.16s.
+Includes exact intent/replay, changed version conflict, concurrent single effect,
+revoked permission/authority on both fresh and repeated attempts, foreign prepared
+scope, changed content, alternate operation rejection, stale-stream rollback and
+outer caller-transaction rollback after coordinator success.
+
+Frontend/API unchanged: no frontend build, browser checks or broad regression rerun
+this slice, per targeted-test cadence. Previous frontend evidence remains separate.
+No actual supplier content, business transactions or financial data were posted.
+Still required: runtime identity/central authority integration, real storage version
+retention and capture-limit configuration, receipt costs and central reconciliation.

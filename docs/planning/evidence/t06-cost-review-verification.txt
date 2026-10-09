@@ -1,0 +1,42 @@
+T06 independent cost-allocation review - 2026-10-03
+
+Reused existing ManagerCase/Decision/operation receipt services. No new tables,
+approval system, catalogue or migration. Exact immutable proposal manifest,
+allocation snapshot and creator bind the case; authoritative allocation loader
+rechecks company/pool/source eligibility on every attempt, including retries.
+Proposal lock serializes source access. Creator and case requester cannot review,
+including a proxy-request attempt. Different/repeated concurrent decision keys
+produce one decision. Review is not invoice verification or financial consumption.
+
+Request/review require INVENTORY and View_Product/View_Financials/Manage_Financials;
+case history requires module and both view permissions. Parent scope applies to
+list, request and decision; root/allowed-company fallback never broadens scope.
+Needs-my-review excludes creators/requesters before bounded pagination.
+
+UI: saved proposal -> request review / view reviews -> inspect exact SCR source
+lines -> approve/reject. Existing shared request and manager-case components reused.
+Request retries retain intent and input. Dirty request blocks refresh/navigation
+without explicit discard; unsaved decisions warn on unload. No charge posting or
+policy activation exposed even if activation prop is mistakenly supplied.
+
+Verification:
+- Full isolated backend839 passed,2 known legacy C12 xfailed,23 warnings,75.76s.
+- Frontend138 passed/30 suites,11.585s.
+- Follow-up15 route-access checks passed after explicitly testing that a financial
+  viewer without management permission reaches the scoped read (404, not403).
+- Both git diff --check passed; local UI cost-pools HTML and API OpenAPI returned200.
+- Production build passed with existing ESLint/Browserslist warnings:
+  main.086bced0.js.
+- Coverage: self/proxy review, foreign/root fallback, source drift on retry,
+  exact history, no extra valuation, concurrency, rollback, API permissions,
+  financial read-only controls, no accidental activation, failed request replay
+  and draft discard safeguards.
+- Initial full-suite collection exposed legacy auth-test stub interaction;
+  route imports moved into runtime fixtures (no production workaround).
+- PostgreSQL skill used for scoped reads and transactional locking.
+- No preview records seeded, real business writes, external deployment or browser
+  acceptance. New browser acceptance remains pending.
+
+Remaining T06: authoritative charge identity/deduplication, supplier/FX evidence,
+single-use financial consumption, physical receipt integration, correction and
+central reconciliation. Approval does not make costs final or post a charge.

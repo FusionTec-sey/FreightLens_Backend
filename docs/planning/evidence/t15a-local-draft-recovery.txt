@@ -1,0 +1,40 @@
+T15A local draft/retry recovery - 2026-10-03
+
+Implemented local intent store and Sales drafts -> Local drafts, plus Keep locally
+and close. Store is scoped to active company/authenticated user and retains explicit
+branch identity/filtering. Maximum100 records per scope and100 lines per draft.
+It stores only stable references, expected versions, exact quantity/unit strings,
+unit choices, conflict state and pending save identity. Whitelist excludes tokens,
+names/contacts, prices, payments, reservations and approvals.
+
+Origin-wide Web Locks serialize storage writes/deletes with expected local revision
+checks. Another tab cannot silently overwrite/delete a newer copy. Unsupported
+locking or quota failures surface explicitly. Exact request is persisted BEFORE
+network submission; failed persistence blocks network save. Confirmed server save
+removes only the expected recovery revision. No automatic replay or offline posting.
+Local data is untrusted; existing backend authorization/version/source validation
+and atomic receipt still govern every save and retry. This is browser storage,
+not encrypted shared-device storage or a server backup. Clearing site data loses it.
+Recovery metadata is not authoritative stock availability or current pricing.
+
+Automated checks:
+- Focused recovery/editor/register tests20 passed /4 suites,2.609s.
+- Full frontend196 passed /40 suites,14.719s.
+- Isolated backend sales-intent API/concurrency/persistence22 passed,
+  23 existing warnings,8.36s. Backend implementation unchanged in this slice.
+- Production build main.cf3993a1.js succeeded with existing ESLint/Browserslist
+  warnings; not strict warning-free CI.
+- Git diff --check passed (existing line-ending notices only).
+
+Tests cover whitelisted storage, user/company/store filtering, pending exact retry
+across unmount/remount, storage failure/no send, local concurrent revision collision,
+stale list reopening, explicit discard and backend optimistic concurrency/replay.
+Subsequent cross-tab edge hardening uses an origin-wide non-resetting local revision
+sequence, preventing stale overwrite after delete/recreate of the same document.
+Affected16 tests/3 suites pass,2.205s. This extra case is not in the196 full total.
+Final post-hardening build main.b8b7070e.js also passes with existing warnings.
+Web Locks scheduling is modelled in Jest; native browser multi-tab/reload acceptance
+remains pending, not claimed from component tests. Browser checks were not run.
+No real business writes, entitlement changes, schema migration, deployment or push.
+T15A implemented—verification pending. Document copying remains T15; the real
+tablet checkout should reuse this store rather than build another recovery system.

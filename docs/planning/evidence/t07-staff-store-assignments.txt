@@ -1,0 +1,40 @@
+T07 STAFF WORKING-STORE ASSIGNMENTS — 2026-10-04
+Decision: implements BD-20261003-06; T33A untouched.
+Status: automated slice verified; browser/public-runtime acceptance pending.
+
+Immutable company/user assignment revisions keep branch authority separate from
+optional usual counter. One current version per user/company; no counter/product
+restriction. Existing company membership and action RBAC remain independently
+mandatory. No users, assignments, counters or business values are invented/seeded.
+Version and user-row locking enforce current assignment through posting; revocation
+blocks automatic-allocation replay. Separate per-branch node authority unchanged.
+Existing execute_once receipts provide retry/rollback; no second approval system.
+Additive migration registered after branch counters, replayed twice in isolated DB.
+FK/immutable and counter-branch guards preserve historical attribution.
+
+API: paginated scoped staff projection plus PUT assignments. Read needs INVENTORY,
+View_Product, View_User. Write also needs Edit_User and Manage_BranchSettings.
+No password hashes, contact data or role internals returned. No SQL text search.
+Frontend: selected branch -> Staff working stores. Current assignment, explicit
+reassign/enable and optional usual-counter picker. Frozen exact unconfirmed retry,
+version conflict handling, discard confirmation and stale-read cleanup.
+
+VERIFIED
+Backend 66 passed /23 existing warnings /25.16s:
+  test_staff_store_assignments.py, test_staff_store_assignment_api.py,
+  test_store_allocation.py, test_branch_counters.py, test_sales_reservation_sources.py.
+Includes concurrent writes, same-key replay, revoked membership/assignment,
+counter/store mismatch, transaction-held user lock, rollback, immutable history,
+migration replay, API auth/permission/module/company boundaries and store allocation.
+Frontend 36 passed /5 suites /4.273s:
+  StaffStoreAssignments, InventoryLocationsPage, inventoryLocationsApi,
+  BranchCounters, CounterStockArea.
+Build main.095008bd.js/main.71ffce7d.css passed with existing lint/Browserslist warnings.
+Git diff --check passed. Preview3000/API9000 HTTP200; startup router/migration
+registrations inspected. All mutation tests use the isolated phase0 *_test database.
+
+DEFERRED
+No full regression rerun; prior full baseline counts remain historical.
+Browser acceptance requires separate approval. No public checkout/runtime authority,
+other-store exception activation, financial posting, real configuration, deployment
+or Git push. Multi-bucket reviewed supplements and paid-source adapters remain.

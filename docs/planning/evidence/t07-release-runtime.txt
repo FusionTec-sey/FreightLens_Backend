@@ -1,0 +1,24 @@
+T07 approved release runtime/UI — 2026-10-04
+Status: Implemented—verification pending
+Decision revision: BD-20261003-06. T33A remains collaborator-owned.
+
+API: POST /inventory/reservation-release-cases/{key}/execute. Exact operation
+UUID only; company-scoped case/balance determines source, quantity and authority.
+Distinct Execute_ReservationRelease permission plus SALES/INVENTORY/draft access.
+Existing release_stock performs atomic review consumption, source checks and
+stock release. Runtime unset => 503; no operator config or real data changed.
+UI: Sales drafts -> Release reviews -> approved case -> explicit confirmation.
+Retained receipt and exact unknown retry; no automatic release on approval.
+
+Completed BEFORE owner instruction to cancel tests:
+Isolated freightlens-pos-phase0-runner /work, REQUIRE_TEST_DATABASE=1:
+pytest tests/test_reservation_release_api.py tests/test_reservation_release_review.py
+21 passed / 23 existing warnings / 6.75s.
+Frontend PolicyActivation, ManagerCases, SalesDraftsPage: 35 passed / 3 suites.
+
+AFTER instruction: added retained release receipt, clearer uncertain-outcome
+message and execute-only default All cases. These changes have NOT been tested.
+No production build or browser run for this slice. Full regression deferred.
+Next verification must cover execute-only navigation, receipt retention and
+target-store authority for other-store holds, plus build/shared-boundary checks.
+No push, merge, deployment or operational activation included.

@@ -1,0 +1,20 @@
+Frontend integration — 2026-10-03
+
+Persistent customer save/indexing confirmation and direct saved-record opening;
+fresh detail read with existing company-pinned guards and abort handling.
+Details positioned above list; successful creation clears active search.
+Dependency-free customer route constant removes API client import from sidebar.
+
+Full frontend test run first detected sidebar Axios/Jest import regression.
+After the dependency fix: 169 tests passed / 35 suites, 14.585s.
+Production build passed with existing ESLint/Browserslist warnings.
+Artifact main.0d6755f4.js. No backend code changed in this slice.
+
+UI integration test covers saved-but-unindexed customer opening and persistent result.
+Existing tests cover create/search/select, permissions, stale company responses,
+navigation, inventory settings/reviews/cost workflows and other existing screens.
+Tests are not comprehensive visual or business acceptance of every screen.
+
+Remaining frontend limits: browser/tablet acceptance; durable navigation recovery;
+sales/collection/returns/offline screens depend on their unfinished backend tasks.
+No mock live financial actions, real records, external deployment or push.

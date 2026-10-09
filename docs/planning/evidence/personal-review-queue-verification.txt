@@ -1,0 +1,33 @@
+Personal policy review queue - 2026-10-02 (T04 partial)
+
+Backend full isolated suite: 659 passed, 2 known C12 xfails, 23 warnings (79.89s).
+Targeted manager-case endpoints: 21 passed. Runner hostname/database confirmed
+freightlens-pos-phase0-db/containermgmt_test before running synthetic fixtures.
+Frontend full suite: 97 passed / 23 suites (13.516s).
+Production build passed with existing ESLint and old Browserslist warnings.
+Repository diff checks passed. Preview API uses the existing read-only source
+mount with Uvicorn reload; no restart, seed, deployment or business write performed.
+
+API view ALL preserves compatibility. NEEDS_MY_REVIEW filters out authenticated
+user's own requests and decided/consumed cases before count and pagination.
+MY_REQUESTS selects authenticated user's requests in exact active company scope.
+No caller-supplied actor identity. Existing permission/module/auth dependencies and
+review/activation transactions remain unchanged. Correlated EXISTS explicitly
+targets ManagerCase to avoid correlation with the outer decision/use joins.
+PostgreSQL guidance informed reuse of indexed org/case probes and bounded pages.
+
+Tests cover anonymous/module/permission denial, invalid view, self exclusion,
+approved/rejected removal, pagination after filtering, root selected-company
+isolation, frontend page reset, obsolete response cancellation, tenant-pinned
+client requests and permission-aware profile shortcut.
+
+Standalone Approvals defaults to Needs my review; All cases and My requests reuse
+the current case panel. Contextual panels retain All default. No duplicate APIs,
+case stores, catalogue, permission grants, migrations or posting paths added.
+The queue is not an exclusive reviewer assignment or unread notification system.
+Saved-source changes still reject on decision; list membership alone is advisory.
+
+Browser acceptance for this new slice remains pending (not attempted this turn).
+No actual manager notifications delivered; durable recipient/unread delivery is
+still T04 work. T05 stock transitions/barcode maintenance remain next major
+inventory work. No whole task/phase or live-pilot gate marked complete.

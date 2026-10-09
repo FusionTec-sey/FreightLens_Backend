@@ -1,0 +1,38 @@
+T06 freight allocation preview - 2026-10-03
+
+Read-only POST /inventory/cost-pools/{id}/allocate-cost-preview reuses the exact
+costing allocator and the history register's visible-source query. INVENTORY,
+View_Product and View_Financials are all required. Exact active company/pool and
+visible parent constraints apply to every selected source; missing rows never
+fall back to another pool. Maximum100 distinct strict integer IDs. SCR total is a
+bounded nonnegative decimal string with at most6 places, not a float.
+
+Weights derive from original goods values or same-unit base quantities. Cumulative
+pool values and historical additional costs are not weights. Mixed-unit quantity
+allocation and all-zero weights fail. Existing stable-ID largest-remainder
+allocation preserves the entered total exactly. Return marks posting disabled.
+
+Frontend: select source rows on the current valuation-history page, then Preview
+additional-cost allocation. Page/refresh/company changes clear selection. Input
+changes invalidate/abort previous calculations; failure retains inputs. Fixed
+actions, contained results table, exact string amounts and light/dark classes.
+No charge document, approval, receipt, journal, stock or selling-price write.
+
+Verification
+- Full isolated backend:794 passed,2 known legacy C12 xfailed,23 warnings,63.98s.
+- Full frontend:130 passed/28 suites,10.6s.
+- Production build passed with existing ESLint/Browserslist warnings;
+  main.4ad6a974.js. Both repos git diff --check passed.
+- API OpenAPI and cost-pools HTML returned200; local preview stays running.
+- Coverage includes protected endpoint denials, bounded/exact input, missing
+  sources, original rather than cumulative basis, no mutation, zero-weight
+  rejection, mixed-unit rejection, deterministic reordered input and exact total.
+- UI tests cover selection/page reset, exact payload, no post/approve control,
+  invalid input, retained failed-calculation inputs and late-response suppression.
+- PostgreSQL skill informed scoped/indexed source queries; no migration required.
+- Browser acceptance not performed or claimed. No real data writes or deployment.
+
+Next T06: persist authoritative charge/source evidence and independent review,
+connect physical receipt movements when T08 provides them, then central valuation
+reconciliation. Purchasing receipt totals are not physical stock movement evidence.
+This preview does not complete T06 or authorize freight capitalisation.

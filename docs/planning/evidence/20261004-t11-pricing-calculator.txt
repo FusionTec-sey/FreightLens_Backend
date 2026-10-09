@@ -1,0 +1,35 @@
+FreightLens T11 exact pricing/tax calculation foundation - 2026-10-04
+
+Implemented
+- Pure typed service; no database, stock, invoice, payment or price mutation.
+- Requires exactly one versioned selling-store price and accepts only explicitly
+  eligible versioned customer-agreement prices. Lowest eligible gross price wins;
+  equal-price ties retain the store source.
+- Optional gross floor produces requires_floor_approval without altering the chosen
+  customer price or creating an approval.
+- Tax is an independent versioned STANDARD, ZERO_RATED or EXEMPT snapshot. Standard
+  rate is positive/configurable; zero-rated and exempt remain distinct at rate zero.
+- Tax-inclusive SCR decomposes into separate net and tax. The invoice gross is rounded
+  once to cents, then line gross and tax cents are allocated deterministically so all
+  displayed line and invoice totals conserve exactly.
+
+Verification
+- 16 focused tests pass, including standard 115/100/15 decomposition, zero/exempt
+  distinction, agreement selection, floor flags, mixed tax groups, ambiguous input
+  denial and 200 deterministic multi-line invoices.
+
+Official basis checked 2026-10-04
+- Seychelles Revenue Commission Tax System:
+  https://src.gov.sc/seychelles-tax-system/
+- SRC VAT Guideline:
+  https://www.src.gov.sc/wp-content/uploads/2022/12/VAT-Guideline.pdf
+- SRC materials state a current 15% standard rate, distinct zero-rated and exempt
+  supplies, and separate VAT display on invoices/receipts. These are evidence for
+  configurable defaults and invoice fields, not permission to hard-code product
+  classifications or treat guidance as an exhaustive legal opinion.
+
+Remaining
+- Persist versioned rules/prices/agreements under company and branch scope.
+- Resolve eligibility, dates/quantity/terms and tax/exemption evidence server-side.
+- Add independent reviewed floor exceptions and immutable sales snapshots.
+- No real prices, classifications, tax defaults, records or deployment were added.

@@ -1,0 +1,33 @@
+Unit-aware barcode verification - 2026-10-02
+
+Backend isolated PostgreSQL: 636 passed, 2 known C12 xfails, 23 warnings
+in 71.13s. Barcode coverage includes 20 API/service cases and 4 concurrency/
+transaction cases. The two legacy stock-writer expected failures remain T08 work.
+Frontend: 73 tests in 17 suites passed in 9.933s. Production build exit 0 with
+existing ESLint/Browserslist warnings; warning-free strict CI is not claimed.
+Both repository git diff --check commands passed.
+Preview health reports database/object storage connected; /inventory HTTP 200.
+Browser/layout acceptance remains skipped at the owner's request.
+
+Verified implementation:
+- Immutable company-scoped barcode identities reference a reviewed policy version
+  and its exact unit factor. Leading zeroes and case are retained. Unknown legacy
+  catalogue codes are not silently adopted or used as a lookup fallback.
+- Registration enforces module/action permissions, tenant ownership, active product,
+  current policy version, configured units and stable operation IDs before replay.
+- Concurrent same-code registration cannot duplicate a company identity; identical
+  operation retries have one effect. Outer rollback leaves no registration effect.
+- Foreign references and immutable-record deletion are rejected; the additive
+  migration is replayable. Inactive/stale identities cannot resolve as eligible.
+- Paginated frontend registration and exact scan checking reuse the existing API
+  client and operation-intent hook. Failed saves preserve input, duplicate submits
+  are blocked, and read-only access cannot register codes.
+
+No preview business records, real barcodes, stock, accounts or balances were seeded.
+No deployment, customer messaging, financial posting, commit or push performed.
+The PostgreSQL best-practices skill guided tenant-scoped uniqueness, transaction
+locking and immutable history. No new catalogue or separate approval system added.
+
+T05 remains In progress. Existing-stock policy transitions and reviewed barcode
+retirement/correction/rebinding remain unimplemented. Barcode lookup is advisory;
+it does not itself reserve stock, authorize checkout or implement offline sales.

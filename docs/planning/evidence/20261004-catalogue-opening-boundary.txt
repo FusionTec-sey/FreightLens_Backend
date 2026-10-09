@@ -1,0 +1,16 @@
+T08 catalogue creation stock boundary — 2026-10-04
+
+API rejects nonzero opening current_stock after Add_Product permission checks;
+constructor initializes zero. Omitted/null/zero remain compatible. Quick-create
+frontend omits current_stock. No new ledger, migration or business records.
+
+pytest -q tests/test_pos_prerequisite_regressions.py:
+48 passed,1 xfailed,23 dependency warnings. This suite uses the real routers with
+a session double; it does NOT prove PostgreSQL transaction/concurrency behavior.
+New coverage: positive/negative/fractional/NaN/Infinity opening rejection without
+adds/commit, omitted/null/zero success, permission rejection before business checks.
+The remaining expected failure is legacy negative-adjustment clamping.
+
+Frontend production build passes with existing warnings:
+runtime/catalogue-create-build.log (outside Git). Browser quick-create acceptance
+not performed. T08 receipt/movement replacement remains in progress, not Verified.

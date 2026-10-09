@@ -1,0 +1,29 @@
+Immutable reclassification proposals - 2026-10-03
+
+Full isolated PostgreSQL backend suite: 734 passed, 2 known C12 xfails,
+23 warnings (138.52s). Ten new proposal tests included.
+Initial eight focused persistence tests passed before adding two more rejection
+checks, which passed in the full run. Coverage: save/replay, unchanged stock,
+existing manager review binding, self-review denial, stale quantity/draft rejection,
+reserved-stock denial even with current version, concurrent replay, changed intent,
+rollback, foreign active company, revoked permission on retry, SQL immutability
+and repeatable migration. No tests run against preview database.
+
+New additive migration creates empty proposal table and immutable guards; registered
+in startup. Source balance and operation receipt ownership use composite FKs.
+Product then balance locks retain a consistent source for saves and review. Saving
+uses the existing posting-operation transaction without physical stock movements.
+No source quantities or destination scope are accepted from the caller. Exact
+versions and server snapshots are rechecked even on replay. Permission callback
+mandatory; no new public endpoint or role grant.
+
+API health and inventory HTML preview returned200. git diff --check passed.
+Frontend unchanged; prior109 tests/24 suites and production build remain last
+frontend evidence, not rerun here. Browser checks not performed in this slice.
+Postgres skill informed reuse of scoped indexes, composite ownership and bounded
+transaction locking. No real records, demo reseed, external deployment or messages.
+
+Still internal: proposal API/editor/review UI not connected. Actual conversion
+still disabled pending identity checks, physical authority, product-wide policy
+compatibility, quantity/value reconciliation and atomic lineage/movement posting.
+T05 remains In progress. Approved proposal is not an executed conversion.

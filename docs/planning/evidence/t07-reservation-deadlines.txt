@@ -1,0 +1,45 @@
+T07 reviewed reservation follow-up dates - 2026-10-03
+
+Immutable ReservationDeadline history adds consecutive per-hold versions, scoped
+hold/case/operation FKs, single-case use and deferred atomic posting receipt.
+SQL guards reject mutation, nonconsecutive history and missing exact approved use.
+Migration migrate_20261003_reservation_deadlines is additive/replayable and seeds no
+business records. PostgreSQL guidance informed scoped indexes and locked short
+transactions; no network work occurs in the posting transaction.
+
+Shared locked reservation source is reused for release and deadline decisions.
+Request/review/apply bind draft version, held/released quantities, existing deadline
+version and explicit future timezone-aware date. Apply consumes the case and appends
+history/receipt/event together. Own-operation replay alone may normalize its prior
+deadline. Changed demand/hold state or access rejects stale approvals/retries.
+New follow-up invalidates older release approvals, and release invalidates an older
+deadline approval. Original hold date/quantities are not rewritten.
+
+Public /inventory/reservation-deadline-cases offers paginated cases, request, review
+and explicit schedule. Requires SALES+INVENTORY, customer/draft/product access and
+separate Request_ReservationDeadline, Review_ReservationDeadline and
+Schedule_ReservationReview rights. No roles or real module grants are changed.
+Scheduling is metadata follow-up, not a stock writer or financial action.
+The linked-hold read projects the latest approved scheduled date/version and due
+flag with indexed correlated reads. Fully released holds are not flagged due.
+
+Frontend reuses DraftReservations, ManagerCases and the existing confirmed-action
+panel. Request follow-up uses explicit device timezone and stable retry identity.
+Follow-up reviews shows exact dates and quantities; approval and scheduling remain
+separate. Stock stays reserved, including after the review date passes.
+
+Verification (isolated synthetic data only):
+- Backend deadline API/history, release API/history and demand sources:45 passed,
+  23 existing warnings,11.88s. Includes concurrency, rollback, replay, immutable
+  history, migration replay, source/access changes, tenant/module/auth boundaries.
+- Frontend affected reservation/register/case/confirmed-action tests33 passed,
+  4 suites,3.702s.
+- Production build main.fffd9b41.js passed with existing warnings.
+- Local frontend HTTP200 and API OpenAPI confirms all deadline endpoints.
+- git diff --check passed (existing line-ending warnings).
+Full regression deferred; these counts do not replace historical whole-suite totals.
+No browser acceptance, live data, deployment, customer message or GitHub push.
+
+T07 remains in progress: organisation-wide due follow-up inbox/notifications,
+approved reallocation/multi-location, paid-order source adapters and trusted public
+stock runtime integration. No automatic expiration/cancellation, refund or credit.

@@ -1,0 +1,20 @@
+T06 - Persisted case loader integration - 2026-10-03
+
+Removed integration-supplied case binding from preparation entry point. Exact
+company/proposal/case resolution shares the existing evidence checker lookup and
+uses the existing company/case unique index. No schema or UI/API change.
+
+Isolated synthetic PostgreSQL and synthetic storage verification:
+python -m pytest -q tests/test_charge_posting_preparation.py
+ tests/test_charge_posting.py tests/test_cost_content_reviews.py
+ tests/test_cost_evidence_replay.py tests/test_cost_evidence_api.py
+72 passed, 23 dependency warnings, 31.51s.
+Includes missing/legacy/wrong-proposal and pending/rejected case denial before
+storage, root multi-company isolation, current source and permissions, pinned
+storage reads outside transactions, exact retry and atomic coordinator regressions.
+
+No broad suite, frontend build or browser rerun this backend-only slice.
+No business records, real storage configuration or external deployment changed.
+Central-runtime authority and storage acceptance remain release gates. Receipt
+costing and central reconciliation remain implementation work. T06 In progress;
+public financial posting remains disabled.

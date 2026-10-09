@@ -1,0 +1,33 @@
+T06 content-bound review integration contract - 2026-10-03
+
+Implemented internal integration
+- Typed immutable DocumentContentFingerprint, not a public request schema.
+- Existing charge review adapter accepts server-prepared content for exactly the
+  locked invoice/FX document set, validates keys/known sizes, and stores private
+  identities in the existing case binding under source_version 2.
+- approved_charge_evidence now requires source_version 2 plus current fingerprints.
+  Metadata-only historical approvals remain readable and cannot acquire financial
+  authority by supplying new content after approval. No historical row rewritten.
+- Exact comparison binds digest/version/bucket/key/size; existing permission,
+  independent approval and case single-use remain enforced.
+- No storage calls inside transaction callbacks. The future owning HTTP adapter
+  must authorize/snapshot, read pinned content outside posting, then recheck locked
+  metadata before commit. Typed shape alone is not proof of a real storage read.
+
+Verification (isolated test runner; no preview data)
+python -m pytest -q tests/test_cost_content_reviews.py tests/test_cost_charge_reviews.py
+  tests/test_cost_evidence_api.py tests/test_blob_evidence.py tests/test_blob_storage.py
+98 passed, 23 existing warnings, 8.42 seconds.
+Tests cover persisted v2 cases, stable results, changed content identities,
+missing/extra/untyped maps, legacy upgrade denial, missing verification, revoked
+permissions, single-use consumption, schema rejection and affected API/storage regressions.
+git diff --check passed (existing line-ending notices only).
+Full regression deferred to milestone under owner's targeted-testing preference.
+Frontend tests/build skipped: no frontend changes. No new migration required.
+
+Limits and next work
+Public capture/review/download adapter still creates metadata-only v1 cases; no
+financial posting exposed. Connect server-prepared content and exact reviewed bytes
+to that UI/API without accepting caller hashes or performing I/O inside posting.
+Actual RustFS retention/compatibility, atomic charge/case/valuation, receipt costing
+and central reconciliation remain open. T06 In progress. No external changes/push.

@@ -1,0 +1,37 @@
+RECEIPT MANIFEST READ API AND UI — 2026-10-04
+
+Scope
+- Extended the existing immutable receipt-manifest store with read-only inspection.
+- Added server-paginated summaries filtered by receipt and exact UUID detail reads.
+- Embedded an initially closed inspector in the existing Goods Receiving receipt modal.
+- Added no manifest save/review, stock movement, valuation or financial posting route.
+
+Security and response boundary
+- Both INVENTORY and ORDERS module guards apply.
+- View_Product and View_GoodsReceipt permissions apply independently.
+- Manifest, receipt, receipt line and purchase-order parents must be active and in the
+  selected company. Foreign and deleted parents return an empty list or not found.
+- Detail fields are manually whitelisted. Supplier and price data are excluded.
+- Responses use Cache-Control: private, no-store.
+
+Frontend behaviour
+- No request is made until the user opens Inspect physical manifests.
+- Reads are company/token/receipt pinned, cancellable and reject mismatched responses.
+- Failed or obsolete reads clear prior rows/details instead of showing stale data.
+- Exact decimal strings and historical unit/tracking policy are retained.
+- Saved—not posted and not-current-approval wording prevents authority inference.
+- Modal content scrolls internally and its header/close action remains fixed.
+
+Verification
+- Backend: tests/test_receipt_manifest_api.py — 7 passed, 23 warnings, isolated
+  PostgreSQL. Covers authentication, each module/permission, foreign/deleted parents,
+  pagination bounds, historical reads, response exclusions and absence of POST routes.
+- Frontend: ReceiptManifestPanel.test.js — 4 passed. Covers explicit open, read-only
+  detail, mismatched-response clearing and abort/late-result handling.
+- Frontend production build passed with the repository's existing ESLint and bundle
+  size warnings. Log: ../runtime/receipt-manifest-ui-build.log (outside Git).
+
+Outstanding gates
+- Read-only browser/tablet/dark-mode acceptance was not run for this new screen.
+- Public manifest entry/review, cumulative receipt-line consumption, partial/location
+  composition and atomic Inventory movement/valuation posting remain unfinished.

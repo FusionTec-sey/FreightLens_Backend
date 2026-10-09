@@ -1,0 +1,52 @@
+T07 STORE-WIDE ALLOCATION — 2026-10-03
+Decision: BD-20261003-06 supersedes BD-20261003-03 counter-area restriction.
+Status: Automated slice verified; browser/public-runtime acceptance remains pending.
+
+IMPLEMENTATION
+- Counter setting remains backward-compatible JSON, now an optional preference.
+  Missing preference yields null root/empty inspection, not an allocation error.
+- Independent trusted BranchActionContext carries branch and counter; preference
+  does not assign staff, grant product permissions or create node authority.
+- Internal initial-allocation coordinator uses saved source/version, permission
+  and persisted authority checks before replay. Reuses shared locked source loader.
+- Product-scoped streamed candidates exclude foreign branches/companies, inactive
+  ancestors, unavailable quantities and expired batches. Prefer counter descendants
+  then compatible stock elsewhere in the same InventoryBranch.
+- Same-batch/shade/calibre splits use deterministic child reserve operations and
+  one atomic grouping receipt/outbox. A short preferred lot does not mask another
+  sufficient eligible lot. Failure rolls back every child; no partial allocation.
+- Existing hold history cannot be silently replaced/topped up. Source-linked
+  splits enforce combined exact demand caps. Generic source-less splits and
+  unapproved same-bucket supplements remain denied; SQL segment guards unchanged.
+- No schema migration required. No second ledger, catalogue or approval engine.
+- Frontend Counters: Preferred picking area, View picking preference (also unset).
+  Explicit wording separates workstation/specialism, selling store and permissions.
+
+VERIFICATION
+Initial affected backend selection: 110 passed /23 existing warnings, 47.05s.
+Expanded rerun after centralising source loading: 127 passed /23 existing warnings,
+76.69s. Includes reviewed release/deadline regressions as well as allocation.
+Frontend: 22 passed /3 suites, 8.733s:
+  BranchCounters.test.js, CounterStockArea.test.js, inventoryLocationsApi.test.js.
+Production build passed with existing ESLint/Browserslist warnings:
+  main.3c29299e.js, main.71ffce7d.css. Not warning-free certification.
+Git diff --check passed both repos. HTTP preview3000 and API9000 both200.
+Database: freightlens-pos-phase0-runner / dedicated *_test database only.
+Backend files: test_store_allocation.py, test_counter_stock_area.py,
+  test_branch_counters.py, test_sales_reservation_sources.py,
+  test_reservation_reallocation.py, test_reservation_segments.py,
+  test_stock_ledger.py; expanded selection adds test_reservation_release_review.py
+  and test_reservation_deadlines.py.
+Cases include unset preference, same-store split/quantity/replay, competing documents,
+  permission/company/branch/epoch denial on replay, source cap, expired/other-warehouse
+  and inactive-parent exclusions, alternate compatible lot, rollback after child failure.
+
+REMAINING / GATES
+Persisted staff/store assignment, trusted runtime/public checkout integration,
+other-store explicit exception workflow and paid-source adapters remain T07 work.
+Existing reviewed reallocation is still same-bucket; it does not yet supplement
+multi-bucket target history. Rejects rather than bypasses approval or batch guards.
+No new browser checks (separate approval gate), full-suite rerun or live posting.
+No real company/settings/stock seeds, deployment, external messages or Git push.
+Historical full checkpoint remains backend1199/2 known xfails and frontend213/41;
+do not add focused counts to those totals. Collaborator T33A untouched.

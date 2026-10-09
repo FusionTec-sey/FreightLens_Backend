@@ -1,0 +1,33 @@
+FreightLens T06/T08 receipt cost-evidence checkpoint - 2026-10-04
+
+Implemented
+- Exact ReceiptCostDeclaration for official PO price, source currency, explicit
+  SCR-per-source exchange rate, PO price document and required foreign-currency FX
+  document. SCR declarations require a rate of exactly one.
+- Current receipt manifest, receipt-unit quantity, PO line, currency, unit price and
+  document scope are locked and bound into a version-2 manager case.
+- Exact server-prepared blob version, size and SHA256 fingerprints are retained.
+  Receipt manifest creators cannot verify the receipt-cost case.
+- Reusable document preparation rereads only original reviewed blob versions outside
+  database transactions and rechecks the locked binding before posting.
+- Official internal posting derives SCR goods value from the approved evidence. It
+  accepts no goods-value parameter and atomically consumes the classification and
+  receipt-cost approvals, source capacity, stock movement, valuation and durable
+  posting/event receipt. The raw-value composition seam is private/test-only and uses
+  inventory.receipt.post-value.v1 rather than the official operation kind.
+
+Verification
+- 13 focused receipt-cost tests pass.
+- 141 affected receipt, valuation, additional-cost and evidence-preparation tests pass.
+- Coverage includes official value derivation, independent review, stale PO/document
+  rejection, pinned-version reads, same-operation replay, permission recheck, changed
+  evidence rejection, complete rollback and the prior committed concurrency proofs.
+- Command used an isolated PostgreSQL database in freightlens-pos-phase0-db with the
+  isolated runner checkout /tmp/freightlens-full-BBMVW3.
+
+Boundaries
+- No public route or UI action was added.
+- No real receipt, value, FX rate, stock or financial record was posted.
+- RustFS version retention and size configuration, authenticated central runtime,
+  accounting reconciliation, browser/hardware acceptance and supervised release are
+  still explicit gates. T06 and T08 remain in progress.

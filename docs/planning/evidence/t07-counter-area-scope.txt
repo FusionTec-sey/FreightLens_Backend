@@ -1,0 +1,30 @@
+2026-10-03 — Default counter stock-area boundary and inspection
+
+Scope: active same-company branch/counter recheck; exact current counter revision;
+valid active SITE -> ZONE -> BIN ancestry; allocation resolver rejects collection-
+only/disabled counters. Branch shared lock protects configuration until transaction
+end. Read-only paginated active-descendant API and frontend Counter stock area panel.
+No schema change, data backfill, staff assignment or automatic stock posting.
+An advisory page is not a consistent/locked stock allocation plan.
+
+Backend isolated phase0 PostgreSQL:
+python -m pytest -q tests/test_counter_stock_area.py tests/test_branch_counters.py
+  tests/test_branch_settings.py
+48 passed,23 existing warnings,24.56s.
+Checks cover ancestry/deactivated parents, narrower roots/sibling exclusion,
+stale versions, company/branch/auth/module boundaries, pagination and existing
+counter races/retries. A second DB session cannot acquire the branch update lock
+until the resolver transaction ends; configuration updates succeed afterwards.
+
+Frontend focused CounterStockArea, BranchCounters, inventoryLocationsApi:
+21 passed /3 suites,3.49s. Version/header/page pinning, read-only entry point,
+disabled notice, error clearing and aborted former-company responses verified.
+Production build passed with existing ESLint/Browserslist warnings;
+main.7c608dbc.js. No full-suite rerun for this isolated slice per owner preference.
+Read-only HTTP frontend3000/API9000 checks returned200; preview preserved.
+Browser layout/zoom/dark appearance acceptance remains pending, not automated proof.
+
+Work on paired codex/local-area-scope task branches from published checkpoint.
+No commit/push/deployment, real business changes, stock or financial effects.
+T33A collaborator scope untouched. T07 remains in progress; next is staff-context
+assignment and automatic allocation under existing stock/source/authority guards.

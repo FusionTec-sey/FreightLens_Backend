@@ -1,0 +1,29 @@
+T07 COMPATIBLE MULTI-LOCATION REVIEWED SUPPLEMENTS — 2026-10-04
+Implements remaining same-store integration of BD-20261003-06; T33A untouched.
+
+Destination demand may already hold matching stock across same-branch locations.
+Reallocation transfers ownership of the exact source bucket, not physical stock.
+Target snapshot now joins bucket identity, rejects incompatible active holds and
+binds all historical quantities/deadlines/bucket IDs in a v2 digest. Combined
+remaining quantities cap the supplement. Original holds and dates remain unchanged.
+Historical fully released quantities remain audited but do not constrain active lots.
+Paired release proof, independent approval, immutable history and deferred database
+segment guard remain mandatory. No generic supplemental-reserve permission added.
+Older digest approvals fail closed and require fresh request/review. No schema change.
+
+CHECKS
+52 backend tests passed /23 existing warnings /18.24s:
+ test_reservation_segments.py, test_reservation_reallocation.py,
+ test_reservation_reallocation_api.py, test_store_allocation.py.
+New checks cover compatible multi-location supplements preserving original holds,
+exact replay, changed secondary-location history, total cap and mixed-batch denial.
+Existing checks cover competing approvals, rollback, permissions, source/version
+changes, SQL guard bypass attempts and immutable identity.
+30 frontend tests passed /3 suites /3.667s including final wording assertion:
+ DraftReservations, ManagerCases, ReallocationTargetPicker.
+Production build main.f23e6d84.js/main.71ffce7d.css passed with existing warnings.
+
+GATES
+Browser, trusted public runtime, explicit other-store approval integration and paid
+sources remain pending. No full regression rerun, real business posting, deployment
+or external push. All mutation tests use isolated phase0 *_test PostgreSQL only.

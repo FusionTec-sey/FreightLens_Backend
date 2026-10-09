@@ -1,0 +1,22 @@
+FreightLens legacy product-total adjustment retirement — 2026-10-04
+
+Scope
+- Removed float/clamp/Product.current_stock mutation from the legacy adjustment route.
+- Retained backend permission and tenant-scoped product visibility before failing closed.
+- Removed Product Master row, menu, stock-gauge and quick-view adjustment actions.
+- Removed the unused direct-adjust modal/API client implementation.
+- Did not invent an automatic movement, location, approval, cost or accounting entry.
+
+Focused backend verification
+- Former adjustment regression, product edit stock replacement, and nonzero catalogue
+  creation cases: 10 passed, 23 warnings.
+
+Frontend verification
+- Production build succeeded with existing lint and bundle-size warnings.
+- Log: FreightLens-POS/runtime/legacy-stock-writer-removal-build.log
+- Repository scan finds no frontend call to /adjust-stock.
+
+Outstanding
+- Controlled adjustment requires exact location/batch/serial quantities, manager case,
+  node authority, immutable movement and valuation/accounting treatment under T08/T09.
+- No browser acceptance, deployment or real data change was performed.

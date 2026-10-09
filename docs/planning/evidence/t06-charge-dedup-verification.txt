@@ -1,0 +1,44 @@
+T06 internal whole-charge duplicate protection - 2026-10-03
+
+Repository inspection: OrderPackingList.supplier_invoice_ref is optional text;
+OrderDocument stores attachments and OrderPayment records payments. None is an
+authoritative approved capitalisable supplier-charge/FX ledger. These values were
+not used as verified invoice evidence, and no parallel invoice system was created.
+
+Implemented CostChargeUse linked to existing supplier/document/proposal IDs.
+Identity is organisation + supplier + conservative canonical invoice reference;
+date, currency, cost pool, amount and uploaded document do not create a second
+identity. Case/common separator differences collide; leading zeros remain distinct.
+Separate unique constraints prohibit proposal or evidence-document reuse. Whole
+eligible charges only; ambiguous references and partial/multi-invoice consumption
+require a future explicit reviewed workflow, never a bypass flag.
+
+check_cost_charge rechecks trusted evidence and action authorization on retries.
+consume_cost_charge operates only in the caller's transaction. Advisory identity
+lock and proposal row lock serialize different duplicate domains; deferred receipt
+FK prevents standalone claim commits. SQL ownership/amount/snapshot guards and
+update/delete rejection provide an independent integrity boundary. Exact six-place
+SCR is retained, with no valuation, stock or selling-price writes.
+
+Migration is empty/additive/replayable with a five-second lock wait, registered in
+startup and fresh model metadata. No public route, permission grant or UI posting
+action was added. No real cost records or preview claims were created. Frontend
+remains unchanged because existing review screens already state approval is not
+posting. PostgreSQL skill informed index and locking design.
+
+Verification:
+- Final full isolated backend874 passed,2 known legacy C12 xfailed,23 warnings,
+  85.11s. Dedicated new guard suite35 passed before final full regression.
+- Frontend138 passed/30 suites,11.986s; unchanged production bundle
+  main.086bced0.js built successfully with existing ESLint/Browserslist warnings.
+- Tests cover concurrent same/different keys, different invoice claims against one
+  proposal, cross-pool collision, document relabelling/reupload, distinct suppliers,
+  source/permission revocation, foreign ownership including root fallback, amount
+  mismatch, invalid precision/identity, immutable SQL history, raw SQL duplicate/
+  foreign inserts, migration replay, missing-receipt commit failure and rollback.
+- Local UI HTML/API OpenAPI returned200; no browser automation performed.
+
+Remaining: trusted supplier-invoice/FX evidence adapter, exact evidence-bound
+review, composition with valuation and single-use approval, receipt integration,
+corrections and central reconciliation. Mandatory callbacks are contracts, not a
+claim that these missing integrations exist. T06 remains in progress.
