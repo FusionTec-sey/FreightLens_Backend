@@ -69,6 +69,14 @@ services:
       - RUSTFS_REGION=us-east-1
       - MEILISEARCH_URL=http://meilisearch-staging:7700
       - MEILISEARCH_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      # Legacy MySQL source for the one-off containermgmt import. Left unset,
+      # the sync endpoints refuse with "credentials are not configured"; the
+      # rest of the backend is unaffected.
+      - LEGACY_MYSQL_HOST=${LEGACY_MYSQL_HOST:-}
+      - LEGACY_MYSQL_PORT=${LEGACY_MYSQL_PORT:-3306}
+      - LEGACY_MYSQL_USER=${LEGACY_MYSQL_USER:-}
+      - LEGACY_MYSQL_PASSWORD=${LEGACY_MYSQL_PASSWORD:-}
+      - LEGACY_MYSQL_SSL_CA=${LEGACY_MYSQL_SSL_CA:-}
     depends_on:
       postgres-staging:
         condition: service_healthy
