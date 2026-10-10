@@ -133,6 +133,8 @@ PAGE_REGISTRY = [
              "SYSTEM", ("View_Setting", "Edit_Setting"), ("ORDERS",), 50),
     PageSpec("LOGISTICS_SETTINGS", "/logistics", "Logistics & Demurrage", "Ship", "SYSTEM",
              ("View_Setting", "Edit_Setting"), ("LOGISTICS",), 60),
+    PageSpec("PRINT_PROFILE", "/settings/print-profile", "Print Profile", "Stamp", "SYSTEM",
+             (), (), 65),
     PageSpec("REFERENCE_DATA", "/reference-data", "Reference Data", "ListTree", "SYSTEM",
              ("View_Setting", "Edit_Setting"), (), 70),
     PageSpec("MENU_DESIGNER", "/admin/menu", "Menus", "ListTree", "SYSTEM",
