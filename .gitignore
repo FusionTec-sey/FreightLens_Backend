@@ -95,3 +95,7 @@ BLOB/
 # Local environment files are never committed (they hold real credentials)
 local-dev.env.example
 *.env.local
+
+# Excel templates and their Office lock files: generated, not source.
+docs/templates/*.xlsx
+~$*.xlsx
