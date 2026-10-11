@@ -224,6 +224,81 @@ def list_orders(
 
 # ── Document Endpoints (Must be before /{order_id}) ───────────────────────────
 # ── Document Endpoints (Must be before /{order_id}) ───────────────────────────
+@OrderRouter.get("/status-counts")
+def order_status_counts(
+    search: Optional[str] = Query(None),
+    lifecycle_stage: Optional[str] = Query(None),
+    doc_type: Optional[str] = Query(None),
+    urgent_only: Optional[bool] = Query(False),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """How many orders sit at each status, across the whole filtered set.
+
+    The stage chips above the order list used to count the rows on screen, so a
+    chip could never read higher than the page size and its number changed as
+    you paged. The counts belong to the data, not the page, so they are counted
+    in the database.
+
+    Every filter the list applies is applied here too -- except `status`, since
+    selecting one chip must not zero the others.
+    """
+    is_accounts = is_accounts_user(current_user, org_context)
+    can_view_rfq = has_permission(current_user, "View_RFQ") or is_accounts
+    can_view_po = has_permission(current_user, "View_Order") or is_accounts
+
+    if not can_view_rfq and not can_view_po:
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing order and RFQ view permissions.")
+
+    query = (
+        db.query(PurchaseOrder.status, PurchaseOrder.status_label, func.count(PurchaseOrder.id))
+        .filter(PurchaseOrder.is_deleted == False)
+    )
+    query = apply_org_filter(query, PurchaseOrder, org_context)
+
+    if can_view_rfq and not can_view_po:
+        query = query.filter(PurchaseOrder.doc_type == "RFQ")
+    elif can_view_po and not can_view_rfq:
+        query = query.filter(PurchaseOrder.doc_type == "PO")
+
+    if doc_type and doc_type != "ALL":
+        req_doc = doc_type.upper()
+        if (req_doc == "RFQ" and not can_view_rfq) or (req_doc == "PO" and not can_view_po):
+            return {"counts": {}, "total": 0}
+        query = query.filter(PurchaseOrder.doc_type == req_doc)
+
+    if search and search.strip():
+        s_term = f"%{search.strip()}%"
+        search_clauses = [
+            PurchaseOrder.po_number.ilike(s_term),
+            PurchaseOrder.company.ilike(s_term),
+            PurchaseOrder.goods_description.ilike(s_term),
+        ]
+        if is_accounts:
+            search_clauses.append(PurchaseOrder.po_nce.ilike(s_term))
+        query = query.filter(or_(*search_clauses))
+
+    if lifecycle_stage and lifecycle_stage != "ALL":
+        query = query.filter(PurchaseOrder.lifecycle_stage == lifecycle_stage)
+
+    if urgent_only:
+        query = query.filter(PurchaseOrder.urgent_action == True)
+
+    counts = {}
+    total = 0
+    for status_code, status_label, count in query.group_by(
+        PurchaseOrder.status, PurchaseOrder.status_label
+    ).all():
+        total += count
+        # Keyed by both, because a chip is matched on either one.
+        for key in (status_code, status_label):
+            if key:
+                counts[key] = counts.get(key, 0) + count
+
+    return {"counts": counts, "total": total}
+
+
 @OrderRouter.get("/documents/config")
 async def get_document_config(
     space: Optional[str] = Query(None, description="Stage / space filter: SOURCING, ORDER, PAYMENT, SHIPPING, DEFECTS"),
