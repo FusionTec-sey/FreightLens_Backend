@@ -105,6 +105,12 @@ async def list_organisation_configuration(
     user_counts = dict(
         db.query(User.org_id, func.count(User.id)).group_by(User.org_id).all()
     )
+    container_counts = dict(
+        db.query(ContainerDetails.org_id, func.count(ContainerDetails.Container_ID))
+        .filter(ContainerDetails.is_deleted == False)  # noqa: E712
+        .group_by(ContainerDetails.org_id)
+        .all()
+    )
 
     return [
         {
@@ -117,6 +123,7 @@ async def list_organisation_configuration(
             "is_root": org.parent_org_id is None,
             "modules": org.modules or [],
             "user_count": user_counts.get(org.id, 0),
+            "container_count": container_counts.get(org.id, 0),
             # What is configured, so the list can say what is missing.
             "numbering_active": series_counts.get(org.id, 0),
             "has_print_profile": org.id in profile_orgs,
