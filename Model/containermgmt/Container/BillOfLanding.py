@@ -10,7 +10,11 @@ class BillOfLanding(OrgMixin, AuditMixin, Base):
     __table_args__ = {'schema': 'containermgmt'}
 
     BillOfLanding = Column(String(100), primary_key=True)
-    Consignee = Column(Integer, ForeignKey("containermgmt.consignee.consignee_id"), index=True, nullable=True)
+    # The consignee of a bill of lading is an organisation. This pointed at the
+    # consignee table, which held one row per organisation kept in sync by hand;
+    # the ids were rewritten into the organisation id space and the foreign key
+    # dropped, so this is a plain organisation id.
+    Consignee = Column(Integer, index=True, nullable=True)
     Vessel = Column(Integer, ForeignKey("containermgmt.vessals.id"), index=True, nullable=True)
     ArrivalDate = Column(DateTime, index=True, nullable=True)
     Supplier = Column(Integer, ForeignKey("containermgmt.supplier.supplier_id"), index=True, nullable=True)
@@ -28,7 +32,6 @@ class BillOfLanding(OrgMixin, AuditMixin, Base):
     raw_tracking_data = Column(JSON, nullable=True)
     # ✅ Relationships
     # In BillOfLanding model
-    consignee_rel = relationship("Consignee", back_populates="bill_of_landings", lazy="joined")
     vessel_rel = relationship("Vessal", back_populates="bill_of_landings", lazy="joined")
     supplier_rel = relationship("Supplier", back_populates="bill_of_landings", lazy="joined")
     provider_rel = relationship("LogisticsProvider", back_populates="bill_of_landings", lazy="joined")

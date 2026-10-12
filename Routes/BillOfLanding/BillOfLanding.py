@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 # from sqlalchemy import func, desc, case
 from Model.db import get_db
+from Model.Credentials import Organisation
 from Model import BillOfLanding as BOfL
 from Model import ContainerDetails, Supplier, LogisticsProvider,  Vessal, BillOfLanding, Consignee, ShippingDocument, ContainerDocs, ReportDetails, DamageProduct, ReportImage, Material, ContainerType, UnloadVenue, Status
 from Schema import   BillOfLandingInSchema, BillOfLandingWithContainersSchema, ContainerDetailsSchemaWithBl, BillOfLandingUpdateOnlySchema, BillOfLandingListResponse
@@ -76,15 +77,20 @@ def resolve_doc(db: Session, entry: Any, current_user_id: int) -> Any:
     return doc.doc_id
 
 def resolve_consignee(db: Session, entry: Any, current_user_id: int) -> Any:
+    """Resolve a consignee to an organisation id.
+
+    The consignee of a document is its organisation. This used to add a row to
+    the consignee table for any name it did not recognise, which is how that
+    table filled with near-duplicates of the organisations; it now matches an
+    organisation and creates nothing.
+    """
     if entry is None or entry == "": return None
     if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
     val = str(entry).strip()
-    consignee = db.query(Consignee).filter(Consignee.consignee_name.ilike(val), Consignee.is_deleted != True).first()
-    if not consignee:
-        consignee = Consignee(consignee_name=val, created_by=current_user_id, updated_by=current_user_id)
-        db.add(consignee)
-        db.flush()
-    return consignee.consignee_id
+    org = db.query(Organisation).filter(
+        or_(Organisation.display_name.ilike(val), Organisation.name.ilike(val))
+    ).first()
+    return org.id if org else None
 
 def resolve_container_type(db: Session, entry: Any, current_user_id: int) -> Any:
     if entry is None or entry == "": return None
@@ -270,7 +276,6 @@ class BillOfLandingAPI:
             query = db.query(BOfL).filter(BOfL.is_deleted == False)
             query = apply_org_filter(query, BOfL, org_context)
             query = query.options(
-                joinedload(BOfL.consignee_rel),
                 joinedload(BOfL.vessel_rel),
                 joinedload(BOfL.supplier_rel),
                 joinedload(BOfL.provider_rel),
@@ -285,10 +290,12 @@ class BillOfLandingAPI:
 
             if search and search.strip():
                 term = f"%{search.strip()}%"
-                query = query.outerjoin(BOfL.consignee_rel).outerjoin(BOfL.vessel_rel).outerjoin(BOfL.supplier_rel).outerjoin(BOfL.provider_rel).filter(
+                query = query.outerjoin(
+                    Organisation, Organisation.id == BOfL.Consignee
+                ).outerjoin(BOfL.vessel_rel).outerjoin(BOfL.supplier_rel).outerjoin(BOfL.provider_rel).filter(
                     or_(
                         BOfL.BillOfLanding.ilike(term),
-                        Consignee.consignee_name.ilike(term),
+                        Organisation.display_name.ilike(term),
                         Vessal.name.ilike(term),
                         Supplier.name.ilike(term),
                         LogisticsProvider.name.ilike(term)
@@ -296,8 +303,10 @@ class BillOfLandingAPI:
                 )
 
             if ConsigneeName:
-                query = query.join(BOfL.consignee_rel).filter(
-                    Consignee.consignee_name.ilike(f"%{ConsigneeName}%")
+                query = query.join(
+                    Organisation, Organisation.id == BOfL.Consignee
+                ).filter(
+                    Organisation.display_name.ilike(f"%{ConsigneeName}%")
                 )
 
             if Vessel:

@@ -1,3 +1,5 @@
+from functools import lru_cache
+import time
 from pydantic import BaseModel, Field
 from datetime import datetime, date
 from typing import Optional, List, Union
@@ -6,6 +8,31 @@ from Model.containermgmt.Container import ContainerDetails
 
 from .ContailerDocumenSchema import ContainerDocumentSchema
 from ..CInfo.ContainerMaterialSchema import ContainerProductSchema
+
+
+@lru_cache(maxsize=64)
+def _organisation_name_cached(org_id: int, _stamp: int) -> str | None:
+    from Model.db import SessionLocal
+    from Model.Credentials import Organisation
+    db = SessionLocal()
+    try:
+        org = db.query(Organisation).filter(Organisation.id == org_id).first()
+        return (org.display_name or org.name) if org else None
+    finally:
+        db.close()
+
+
+def _organisation_name(org_id):
+    """Name for a consignee whose organisation was not eager-loaded.
+
+    Organisations change rarely and there are a handful of them, so this is
+    cached for a minute rather than queried per row.
+    """
+    if not org_id:
+        return None
+    return _organisation_name_cached(int(org_id), int(time.time() // 60))
+
+
 
 class ContainerCreateSchema(BaseModel):
     container_no: str
@@ -71,8 +98,12 @@ class BillOfLandingSchema(BaseModel):
         schema.Supplier = getattr(obj, "Supplier", None)
         schema.Provider = getattr(obj, "Provider", None)
         schema.Doc = getattr(obj, "Doc", None)
-        if obj.consignee_rel:
-            schema.consignee_name = obj.consignee_rel.consignee_name
+        # The consignee is an organisation, so the name comes off that relation
+        # rather than the retired consignee table.
+        if getattr(obj, "organisation", None) and obj.Consignee == obj.org_id:
+            schema.consignee_name = obj.organisation.display_name or obj.organisation.name
+        elif obj.Consignee:
+            schema.consignee_name = _organisation_name(obj.Consignee)
         if obj.vessel_rel:
             schema.vessel_name = obj.vessel_rel.VessalNo
         if obj.supplier_rel:
@@ -181,8 +212,12 @@ class BillOfLandingWithContainersSchema(BaseModel):
         schema.Supplier = getattr(obj, "Supplier", None)
         schema.Provider = getattr(obj, "Provider", None)
         schema.Doc = getattr(obj, "Doc", None)
-        if obj.consignee_rel:
-            schema.consignee_name = obj.consignee_rel.consignee_name
+        # The consignee is an organisation, so the name comes off that relation
+        # rather than the retired consignee table.
+        if getattr(obj, "organisation", None) and obj.Consignee == obj.org_id:
+            schema.consignee_name = obj.organisation.display_name or obj.organisation.name
+        elif obj.Consignee:
+            schema.consignee_name = _organisation_name(obj.Consignee)
         if obj.vessel_rel:
             schema.vessel_name = obj.vessel_rel.VessalNo
         if obj.supplier_rel:

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 
 from Model.db import get_db
+from Model.Credentials import Organisation
 from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, Consignee, ShippingDocument, ContainerType, BillOfLanding, LogisticsProvider, Material, OrderStatus
 
 from Utils import *
@@ -54,27 +55,25 @@ class CinfoAPI:
         db: Session = Depends(get_db), 
         org_context: OrgContext = Depends(get_org_context)
     ):
+        # Consignees are the organisations themselves. The consignee table held
+        # one row per organisation, kept in sync by hand and auto-created from
+        # free text, and across 778 bills of lading a consignee never differed
+        # from the document's own organisation. Deriving the list here means a
+        # company is consignable the moment it exists -- Sahaj Construction had
+        # no consignee row at all and so could never be selected.
         query = db.query(
-            Consignee.consignee_id,
-            Consignee.consignee_name,
-            Consignee.org_id,
-            Consignee.code
-        ).filter(
-            Consignee.is_deleted != True,
-            Consignee.consignee_name != None,
-            Consignee.consignee_name != ""
-        )
+            Organisation.id,
+            Organisation.display_name,
+            Organisation.id,
+            Organisation.code,
+        ).filter(Organisation.is_active == True)
 
-        if not org_context.is_root:
-            if org_context.selected_org_id:
-                query = query.filter(Consignee.org_id == org_context.selected_org_id)
-            else:
-                query = query.filter(Consignee.org_id.in_(org_context.allowed_org_ids))
-        else:
-            if org_context.selected_org_id:
-                query = query.filter(Consignee.org_id == org_context.selected_org_id)
+        if org_context.selected_org_id:
+            query = query.filter(Organisation.id == org_context.selected_org_id)
+        elif not org_context.is_root:
+            query = query.filter(Organisation.id.in_(org_context.allowed_org_ids))
 
-        data = query.order_by(Consignee.consignee_id.asc()).all()
+        data = query.order_by(Organisation.id.asc()).all()
         return json.dumps({"data": [list(row) for row in data]})
     
     @Cinfo.get("/shipping-documents")

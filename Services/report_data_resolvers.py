@@ -122,6 +122,25 @@ def _asset_data_uri(key: Optional[str]) -> Optional[str]:
         return None
 
 
+def _consignee_for_org(db: Session, org_id: Optional[int]) -> Optional[str]:
+    """The consignee name, derived from the owning organisation.
+
+    A shipping document genuinely names a consignee, but it was kept as its own
+    master-data table that duplicated `organisations`: every row mapped 1:1 to
+    an organisation, and across 778 bills of lading the consignee never once
+    differed from the document's own organisation.
+
+    Deriving it here keeps `consignee` and `consignee_name` resolving for the
+    templates that print them, with nothing left to keep in sync by hand.
+    """
+    if not org_id:
+        return None
+    organisation = db.query(Organisation).filter(Organisation.id == org_id).first()
+    if not organisation:
+        return None
+    return organisation.display_name or organisation.name
+
+
 def _resolve_company_profile(db: Session, org_id: Optional[int]) -> Dict[str, Any]:
     """Resolve tenant-owned print identity without leaking another organisation's data."""
     organisation = None
@@ -410,8 +429,10 @@ def resolve_purchase_order(
         "order_mail_date": _clean_val(po.order_mail_date),
         "eta_date": _clean_val(po.eta_date),
         "currency": po.currency or "USD",
-        "consignee": po.consignee,
-        "consignee_name": po.consignee,
+        # The stored value is kept where a document recorded one; otherwise it
+        # comes from the organisation rather than the retired consignee table.
+        "consignee": po.consignee or _consignee_for_org(db, po.org_id),
+        "consignee_name": po.consignee or _consignee_for_org(db, po.org_id),
         "freight_type": po.freight_type or "Sea Freight",
         "remark": po.remark,
         "show_financials": allow_financials,
@@ -677,26 +698,34 @@ def resolve_bl_summary(
     can_vendor = can_view_supplier_user(user, org_context)
 
     # Carrier & vessel
-    carrier = bl.carrier_name or (bl.provider_rel.LogisticsProvider if bl.provider_rel else None)
-    vessel = bl.vessel_rel.VessalName if bl.vessel_rel else None
-    consignee = bl.consignee_rel.Consignee if bl.consignee_rel else None
+    carrier = bl.carrier_name or (bl.provider_rel.Name if bl.provider_rel else None)
+    vessel = bl.vessel_rel.VessalNo if bl.vessel_rel else None
+    # Was bl.consignee_rel.Consignee -- an attribute the Consignee model never
+    # had, so printing a bill of lading that carried one raised AttributeError.
+    consignee = _consignee_for_org(db, getattr(bl, "org_id", None))
     supplier = "[REDACTED]"
     if can_vendor:
-        supplier = bl.supplier_rel.Supplier if bl.supplier_rel else None
+        supplier = bl.supplier_rel.name if bl.supplier_rel else None
 
     # Containers
+    from Model.containermgmt.Cinfo.Status import Status
+    status_names = {row.status_id: row.name for row in db.query(Status).all()}
     containers_list = []
     for c in bl.containers:
         if getattr(c, "is_deleted", False):
             continue
+        # Read off the columns the model actually defines: Container_No,
+        # seal_no, Weight and the status/location relations do not exist, so
+        # every bill of lading with a container raised AttributeError here.
         containers_list.append({
-            "container_no": c.Container_No,
-            "container_type": getattr(c, "container_type", None) or "40HC",
-            "seal_no": getattr(c, "seal_no", None),
-            "weight": float(c.Weight) if c.Weight is not None else None,
-            "status": c.status_rel.Status if c.status_rel else None,
-            "location": c.location_rel.Location if c.location_rel else None,
-            "demurrage_days": getattr(c, "demurrage_days", 0),
+            "container_no": c.container_no,
+            "container_type": (c.type_rel.type if c.type_rel else None) or "40HC",
+            "seal_no": getattr(c, "seal_number", None),
+            "weight": float(c.gross_weight_kg) if c.gross_weight_kg is not None else None,
+            "volume_cbm": float(c.gross_volume_cbm) if c.gross_volume_cbm is not None else None,
+            "status": status_names.get(c.status),
+            "location": getattr(c, "port_of_discharge", None),
+            "demurrage_days": getattr(c, "FreeDays", 0),
         })
 
     return {
@@ -1140,8 +1169,10 @@ def resolve_sourcing_rfq(
         "eta_date": _clean_val(po.eta_date),
         "report_date": org_today_iso(db, org_context),
         "currency": po.currency or "USD",
-        "consignee": po.consignee,
-        "consignee_name": po.consignee,
+        # The stored value is kept where a document recorded one; otherwise it
+        # comes from the organisation rather than the retired consignee table.
+        "consignee": po.consignee or _consignee_for_org(db, po.org_id),
+        "consignee_name": po.consignee or _consignee_for_org(db, po.org_id),
         "destination_port": getattr(po, "destination_port", None) or "Port Victoria, Seychelles",
         "freight_type": po.freight_type or "Sea Freight",
         "buyer_contact": company_data.get("email"),

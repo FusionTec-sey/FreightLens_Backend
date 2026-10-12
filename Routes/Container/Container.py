@@ -8,6 +8,7 @@ from typing import List, Optional
 from pydantic import ValidationError
 from sqlalchemy import func, desc, case, or_
 from Model.db import get_db
+from Model.Credentials import Organisation
 from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, ContainerDocs, DocType, ReportDetails, DamageProduct, ReportImage, BillOfLanding, Material, ContainerType, Consignee
 from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse, ReportSchema
 from Utils import *
@@ -136,15 +137,18 @@ def resolve_doc(db: Session, entry: Any, current_user_id: int) -> Any:
     return doc.doc_id
 
 def resolve_consignee(db: Session, entry: Any, current_user_id: int) -> Any:
+    """Resolve a consignee to an organisation id, creating nothing.
+
+    The consignee of a document is its organisation; this used to mint a
+    consignee row for any name it did not recognise.
+    """
     if entry is None or entry == "": return None
     if isinstance(entry, int) or (isinstance(entry, str) and entry.isdigit()): return int(entry)
     val = str(entry).strip()
-    consignee = db.query(Consignee).filter(Consignee.consignee_name.ilike(val), Consignee.is_deleted != True).first()
-    if not consignee:
-        consignee = Consignee(consignee_name=val, created_by=current_user_id, updated_by=current_user_id)
-        db.add(consignee)
-        db.flush()
-    return consignee.consignee_id
+    org = db.query(Organisation).filter(
+        or_(Organisation.display_name.ilike(val), Organisation.name.ilike(val))
+    ).first()
+    return org.id if org else None
 
 def resolve_container_type(db: Session, entry: Any, current_user_id: int) -> Any:
     if entry is None or entry == "": return None
@@ -488,8 +492,6 @@ class ContainerAPI:
                 .options(
                     # To-one relationships: safe to joinedload (no collection, no subquery-LIMIT issue)
                     joinedload(ContainerDetails.bill_of_landing)
-                    .joinedload(BillOfLanding.consignee_rel),
-                    joinedload(ContainerDetails.bill_of_landing)
                     .joinedload(BillOfLanding.vessel_rel),
                     joinedload(ContainerDetails.bill_of_landing)
                     .joinedload(BillOfLanding.supplier_rel),
@@ -511,11 +513,13 @@ class ContainerAPI:
             # Apply filters
             if search and search.strip():
                 term = f"%{search.strip()}%"
-                base_query = base_query.outerjoin(BillOfLanding.consignee_rel).outerjoin(BillOfLanding.supplier_rel).outerjoin(BillOfLanding.vessel_rel).filter(
+                base_query = base_query.outerjoin(
+                    Organisation, Organisation.id == BillOfLanding.Consignee
+                ).outerjoin(BillOfLanding.supplier_rel).outerjoin(BillOfLanding.vessel_rel).filter(
                     or_(
                         ContainerDetails.container_no.ilike(term),
                         ContainerDetails.BillOfLanding.ilike(term),
-                        Consignee.consignee_name.ilike(term),
+                        Organisation.display_name.ilike(term),
                         Supplier.name.ilike(term),
                         Vessal.name.ilike(term)
                     )
@@ -533,7 +537,9 @@ class ContainerAPI:
                     base_query = base_query.join(BillOfLanding.supplier_rel).filter(Supplier.name.ilike(f"%{SupplierName.strip()}%"))
 
             if ConsigneeName and ConsigneeName.strip():
-                base_query = base_query.join(BillOfLanding.consignee_rel).filter(Consignee.consignee_name.ilike(f"%{ConsigneeName.strip()}%"))
+                base_query = base_query.join(
+                    Organisation, Organisation.id == BillOfLanding.Consignee
+                ).filter(Organisation.display_name.ilike(f"%{ConsigneeName.strip()}%"))
 
             if material:
                 base_query = base_query.join(ContainerDetails.materials)
@@ -598,6 +604,12 @@ class ContainerAPI:
             # Apply pagination
             results = base_query.offset(offset).limit(limit).all()
 
+            # The consignee is an organisation; resolve the names once for the page.
+            consignee_names = {
+                org.id: (org.display_name or org.name)
+                for org in db.query(Organisation).all()
+            }
+
             # Convert to serializable format
             serialized_data = []
             for container in results:
@@ -606,7 +618,7 @@ class ContainerAPI:
                 # Manually handle relationships if needed
                 if container.bill_of_landing:
                     container_dict["bill_of_landing"] = {
-                        "consignee_name": container.bill_of_landing.consignee_rel.consignee_name if container.bill_of_landing.consignee_rel else None,
+                        "consignee_name": consignee_names.get(container.bill_of_landing.Consignee),
                         "supplier_name": (container.bill_of_landing.supplier_rel.name if container.bill_of_landing.supplier_rel else None) if can_see_supplier else None,
                         "ArrivalDate": container.bill_of_landing.ArrivalDate.isoformat() if container.bill_of_landing.ArrivalDate else None,
                         "vessal": container.bill_of_landing.vessel_rel.VessalNo if container.bill_of_landing.vessel_rel else None,
