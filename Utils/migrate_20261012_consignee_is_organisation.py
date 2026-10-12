@@ -36,13 +36,25 @@ def ensure_consignee_points_at_organisation():
             logger.info("bill_of_landing.Consignee is already gone; nothing to do.")
             return
 
-        # Refuse to rewrite anything if a bill of lading ever disagreed with its
-        # own organisation. That would mean the consignee carried information
-        # the organisation does not, and this migration would destroy it.
-        disagreements = conn.execute(text("""
+        # A row whose value already equals its own organisation is in the target
+        # id space and must be left alone. Judging it against the consignee
+        # table would be meaningless -- an organisation id happens to match an
+        # unrelated consignee id -- and would rewrite a correct value into a
+        # wrong one. This is what makes the migration safe to re-run, and safe
+        # on an environment whose data already arrived in the new shape.
+        pending = """
+            b."Consignee" IS NOT NULL
+            AND b."Consignee" IS DISTINCT FROM b.org_id
+        """
+
+        # Refuse to rewrite anything if a bill of lading ever named a consignee
+        # from a different organisation. That would mean the consignee carried
+        # information the organisation does not, and this would destroy it.
+        disagreements = conn.execute(text(f"""
             SELECT count(*) FROM containermgmt.bill_of_landing b
             JOIN containermgmt.consignee c ON c.consignee_id = b."Consignee"
-            WHERE c.org_id IS NOT NULL AND b.org_id IS NOT NULL AND c.org_id <> b.org_id
+            WHERE {pending}
+              AND c.org_id IS NOT NULL AND b.org_id IS NOT NULL AND c.org_id <> b.org_id
         """)).scalar()
         if disagreements:
             raise RuntimeError(
@@ -68,12 +80,12 @@ def ensure_consignee_points_at_organisation():
 
         # Rewrite via the consignee row's own org_id, so a stored id is
         # translated rather than assumed.
-        translated = conn.execute(text("""
+        translated = conn.execute(text(f"""
             UPDATE containermgmt.bill_of_landing b
             SET "Consignee" = c.org_id
             FROM containermgmt.consignee c
             WHERE c.consignee_id = b."Consignee" AND c.org_id IS NOT NULL
-              AND b."Consignee" IS DISTINCT FROM c.org_id
+              AND {pending}
         """)).rowcount
 
         # A bill of lading with no consignee takes its own organisation, which
@@ -84,8 +96,13 @@ def ensure_consignee_points_at_organisation():
             WHERE "Consignee" IS NULL AND org_id IS NOT NULL
         """)).rowcount
 
+        already = conn.execute(text("""
+            SELECT count(*) FROM containermgmt.bill_of_landing
+            WHERE "Consignee" IS NOT NULL AND "Consignee" = org_id
+        """)).scalar()
         logger.info(
-            "bill_of_landing.Consignee now holds organisation ids "
-            "(%s translated, %s filled from the owning organisation).",
-            translated, filled,
+            "bill_of_landing.Consignee holds organisation ids "
+            "(%s translated, %s filled from the owning organisation, "
+            "%s already correct).",
+            translated, filled, already,
         )
