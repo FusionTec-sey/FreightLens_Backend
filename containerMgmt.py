@@ -174,6 +174,8 @@ async def startup_event():
     ensure_document_number_series_schema()
     from Utils.migrate_20261012_consignee_is_organisation import ensure_consignee_points_at_organisation
     ensure_consignee_points_at_organisation()
+    from Utils.migrate_20261013_unique_shared_suppliers import ensure_unique_shared_suppliers
+    ensure_unique_shared_suppliers()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

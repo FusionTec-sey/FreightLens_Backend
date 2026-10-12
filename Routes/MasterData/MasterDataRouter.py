@@ -546,6 +546,12 @@ def get_suppliers_master(
             ),
             "is_shared": bool(s.is_shared),
             "org_id": s.org_id,
+            # Named, so the directory can show which company a vendor is
+            # restricted to rather than a bare id.
+            "org_name": (
+                (s.organisation.display_name or s.organisation.name)
+                if s.organisation else None
+            ),
             "scope": "shared" if s.is_shared else "tenant",
             "default_currency": s.default_currency or "USD",
             "default_payment_term_id": s.default_payment_term_id,
