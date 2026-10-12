@@ -211,11 +211,14 @@ class CinfoAPI:
         is_shared = bool(supplier_data.get("is_shared", False))
         if is_shared and not org_context.is_root:
             raise HTTPException(status_code=403, detail="Only root organisation users can create shared suppliers")
+        # org_id is NOT NULL, so a shared supplier still records who created it;
+        # is_shared is what makes it visible to every organisation. Setting it to
+        # None here raised an IntegrityError and returned a 500 instead.
         new_supplier = Supplier(
             name=name,
             variance_threshold_pct=var_thresh,
             is_shared=is_shared,
-            org_id=None if is_shared else org_context.org_id,
+            org_id=org_context.org_id,
         )
         db.add(new_supplier)
         db.commit()
