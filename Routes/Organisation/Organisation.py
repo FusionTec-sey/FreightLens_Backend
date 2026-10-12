@@ -4,15 +4,25 @@ from fastapi import Depends, HTTPException, Body, APIRouter, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import date, datetime
 
 from Model.db import get_db
+from auth.security_guards import has_permission
+from Model.containermgmt.Report.OrgPrintProfile import OrgPrintProfile
+from sqlalchemy import func
 from Model.Credentials import Organisation, User, Role
 from Model.containermgmt import ContainerDetails, BillOfLanding
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import require_admin, require_root_admin
 from Utils.org_filter import OrgContext
 from Services.navigation_service import seed_default_menu
+from Services.document_number_service import (
+    DOC_TYPES,
+    RESET_POLICIES,
+    format_number,
+    peek_document_number,
+)
+from Model.containermgmt.MasterData.DocumentNumberSeries import DocumentNumberSeries
 
 logger = logging.getLogger("containerMgmt.organisation")
 
@@ -48,6 +58,72 @@ class OrganisationUpdateSchema(BaseModel):
     logo_url: Optional[str] = None
     modules: Optional[List[str]] = None
     plan: Optional[str] = None
+
+@OrganisationRouter.get("/configuration")
+async def list_organisation_configuration(
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user),
+):
+    """One row per company, saying which parts of its setup are done.
+
+    Company settings were spread across four screens, so a half-configured
+    company looked exactly like a finished one until a document printed wrong.
+    This backs a single list that answers "is this company ready?" without
+    opening anything.
+
+    Scoped to the companies the caller may already see, and read-only: every
+    setting is still edited through the screen that owns it, with that screen's
+    own permission.
+    """
+    if not (has_permission(current_user, "View_Setting")
+            or has_permission(current_user, "Edit_Setting")
+            or org_context.is_root):
+        raise HTTPException(status_code=403, detail="Access forbidden: Missing View_Setting permission")
+
+    orgs = (
+        db.query(Organisation)
+        .filter(Organisation.id.in_(org_context.allowed_org_ids))
+        .order_by(Organisation.id.asc())
+        .all()
+    )
+
+    # Counted once for every company rather than per row.
+    series_counts = dict(
+        db.query(DocumentNumberSeries.org_id, func.count(DocumentNumberSeries.id))
+        .filter(
+            DocumentNumberSeries.is_deleted == False,  # noqa: E712
+            DocumentNumberSeries.is_active == True,  # noqa: E712
+        )
+        .group_by(DocumentNumberSeries.org_id)
+        .all()
+    )
+    profile_orgs = {
+        row[0] for row in db.query(OrgPrintProfile.org_id)
+        .filter(OrgPrintProfile.is_deleted == False).all()  # noqa: E712
+    }
+    user_counts = dict(
+        db.query(User.org_id, func.count(User.id)).group_by(User.org_id).all()
+    )
+
+    return [
+        {
+            "id": org.id,
+            "name": org.name,
+            "display_name": org.display_name or org.name,
+            "code": getattr(org, "code", None),
+            "parent_org_id": org.parent_org_id,
+            "is_active": org.is_active,
+            "is_root": org.parent_org_id is None,
+            "modules": org.modules or [],
+            "user_count": user_counts.get(org.id, 0),
+            # What is configured, so the list can say what is missing.
+            "numbering_active": series_counts.get(org.id, 0),
+            "has_print_profile": org.id in profile_orgs,
+        }
+        for org in orgs
+    ]
+
 
 @OrganisationRouter.get("", response_model=List[OrganisationSchema])
 async def list_organisations(
@@ -273,16 +349,43 @@ async def get_admin_settings(
     org_context: OrgContext = Depends(get_org_context),
 ):
     orgs = db.query(Organisation).order_by(Organisation.id.asc()).all()
+
+    # Numbering used to be reported here as f"REQ-{code}", computed per request
+    # and stored nowhere, so the screen showed a value it could not save. These
+    # now come from the configured series.
+    series_rows = (
+        db.query(DocumentNumberSeries)
+        .filter(DocumentNumberSeries.is_deleted == False)  # noqa: E712
+        .all()
+    )
+    by_org = {}
+    for row in series_rows:
+        by_org.setdefault(row.org_id, []).append({
+            "id": row.id,
+            "doc_type": row.doc_type,
+            "doc_label": DOC_TYPES.get(row.doc_type, row.doc_type),
+            "prefix": row.prefix or "",
+            "suffix": row.suffix or "",
+            "padding": row.padding,
+            "next_number": row.next_number,
+            "reset_policy": row.reset_policy,
+            "date_token": row.date_token,
+            "is_active": row.is_active,
+            # Produced by the same code that issues the number, so the preview
+            # cannot drift from what a document will actually get.
+            "preview": format_number(row, row.next_number),
+        })
+
     companies = []
     for o in orgs:
         code = getattr(o, "code", None) or f"ORG{o.id}"
+        rows = sorted(by_org.get(o.id, []), key=lambda r: r["doc_type"])
         companies.append({
             "id": o.id,
             "code": code,
             "name": o.display_name or o.name,
-            "request_prefix": f"REQ-{code}",
-            "po_prefix": f"PO-{code}",
             "active": o.is_active,
+            "number_series": rows,
         })
 
     return {
@@ -324,10 +427,109 @@ async def update_company_settings(
         "id": org.id,
         "code": code,
         "name": org.display_name or org.name,
-        "request_prefix": payload.get("request_prefix", f"REQ-{code}"),
-        "po_prefix": payload.get("po_prefix", f"PO-{code}"),
         "active": org.is_active,
     }
+
+@AdminRouter.patch("/number-series/{series_id}")
+async def update_number_series(
+    series_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user),
+):
+    """Save one company's numbering for one document type.
+
+    Lowering next_number below what has already been issued is allowed but
+    reported back as a warning: it is occasionally right after a false start,
+    and usually a mistake whose collision would otherwise only surface later,
+    as a failed save by whoever creates the next document.
+    """
+    if not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Only Root administrators can change numbering.")
+
+    series = (
+        db.query(DocumentNumberSeries)
+        .filter(
+            DocumentNumberSeries.id == series_id,
+            DocumentNumberSeries.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not series:
+        raise HTTPException(status_code=404, detail="Number series not found")
+
+    if "prefix" in payload:
+        series.prefix = (payload.get("prefix") or "").strip()[:30]
+    if "suffix" in payload:
+        series.suffix = (payload.get("suffix") or "").strip()[:30]
+
+    if "padding" in payload and payload["padding"] is not None:
+        try:
+            padding = int(payload["padding"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Padding must be a whole number.")
+        if not 0 <= padding <= 12:
+            raise HTTPException(status_code=400, detail="Padding must be between 0 and 12.")
+        series.padding = padding
+
+    if "reset_policy" in payload and payload["reset_policy"]:
+        policy = str(payload["reset_policy"]).lower()
+        if policy not in RESET_POLICIES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Reset must be one of: {', '.join(RESET_POLICIES)}.",
+            )
+        series.reset_policy = policy
+
+    if "date_token" in payload:
+        token = (payload.get("date_token") or "").strip()[:20]
+        if token:
+            # Reject a token now rather than at document-creation time.
+            try:
+                date.today().strftime(token)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="That date format cannot be used.")
+        series.date_token = token or None
+
+    warning = None
+    if "next_number" in payload and payload["next_number"] is not None:
+        try:
+            requested = int(payload["next_number"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Start number must be a whole number.")
+        if requested < 1:
+            raise HTTPException(status_code=400, detail="Start number must be 1 or higher.")
+        if requested < series.next_number:
+            warning = (
+                f"{requested} is below the current counter ({series.next_number}). "
+                "Numbers already issued may be repeated."
+            )
+        series.next_number = requested
+
+    if "is_active" in payload and payload["is_active"] is not None:
+        series.is_active = bool(payload["is_active"])
+
+    series.updated_by = current_user.id
+    db.commit()
+    db.refresh(series)
+
+    return {
+        "id": series.id,
+        "org_id": series.org_id,
+        "doc_type": series.doc_type,
+        "doc_label": DOC_TYPES.get(series.doc_type, series.doc_type),
+        "prefix": series.prefix or "",
+        "suffix": series.suffix or "",
+        "padding": series.padding,
+        "next_number": series.next_number,
+        "reset_policy": series.reset_policy,
+        "date_token": series.date_token,
+        "is_active": series.is_active,
+        "preview": format_number(series, series.next_number),
+        "warning": warning,
+    }
+
 
 @AdminRouter.patch("/groups/{group_id}")
 async def update_company_group(
