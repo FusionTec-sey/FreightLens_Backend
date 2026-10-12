@@ -9,6 +9,7 @@ from sqlalchemy import or_, and_, desc, asc, func
 import math
 from Services.search_service import search_orders_with_total, sync_order_document, remove_order_document
 from Routes.Orders.order_serialization import order_to_dict
+from Services.document_number_service import next_document_number
 
 from Model.db import get_db
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
@@ -957,7 +958,10 @@ def create_order(
     can_set_financials = is_accounts and (not is_rfq)
 
     if not po_number:
-        # Auto-generate unique sequential number based on doc_type
+        # A configured series for this company wins; otherwise keep the old
+        # format so a company that has not set one up is unaffected.
+        po_number = next_document_number(db, getattr(org_context, "org_id", None), doc_type)
+    if not po_number:
         year = datetime.utcnow().year
         prefix = f"{doc_type}-{year}-"
         count = db.query(PurchaseOrder).filter(PurchaseOrder.po_number.like(f"{prefix}%")).count()

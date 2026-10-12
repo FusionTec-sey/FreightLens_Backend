@@ -19,6 +19,7 @@ from auth.dependencies import get_current_user, get_org_context
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 from Utils.reportGenerator import generate_defect_report_pdf
+from Services.document_number_service import next_document_number
 
 logger = logging.getLogger("containerMgmt.orders.defects")
 
@@ -143,8 +144,6 @@ async def create_defect(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    def_num = payload.get("defect_number", "").strip() or f"DEF-{datetime.utcnow().strftime('%Y%m%d')}-{datetime.utcnow().strftime('%H%M%S')}"
-    
     disc_date = date.today()
     if payload.get("discovery_date"):
         disc_date = datetime.strptime(payload["discovery_date"][:10], "%Y-%m-%d").date()
@@ -166,6 +165,10 @@ async def create_defect(
             raise HTTPException(status_code=404, detail="Purchase order not found")
         if po_rec:
             target_org_id = po_rec.org_id
+
+    def_num = (payload.get("defect_number", "").strip()
+               or next_document_number(db, target_org_id, "DEF")
+               or f"DEF-{datetime.utcnow().strftime('%Y%m%d')}-{datetime.utcnow().strftime('%H%M%S')}")
 
     new_def = DefectReport(
         defect_number=def_num,

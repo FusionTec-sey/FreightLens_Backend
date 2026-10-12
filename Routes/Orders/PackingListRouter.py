@@ -13,6 +13,7 @@ from Model.containermgmt.Orders.OrderStatus import OrderStatus
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from Utils.org_filter import OrgContext, apply_org_filter
+from Services.document_number_service import next_document_number
 
 logger = logging.getLogger("containerMgmt.orders.packing")
 
@@ -115,7 +116,9 @@ async def create_packing_list(
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
-    pl_number = payload.get("packing_list_number", "").strip() or f"PL-{po.po_number}"
+    pl_number = (payload.get("packing_list_number", "").strip()
+                 or next_document_number(db, getattr(po, "org_id", None), "PL")
+                 or f"PL-{po.po_number}")
 
     new_pl = OrderPackingList(
         org_id=po.org_id,

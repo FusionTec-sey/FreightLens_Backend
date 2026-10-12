@@ -8,6 +8,7 @@ import math
 
 from Model.db import get_db
 from Model.containermgmt.Orders.StoreRequest import StoreRequest, StoreRequestItem
+from Services.document_number_service import next_document_number
 from Model.containermgmt.Orders.Product import Product
 from Model.containermgmt.Orders.OrderStatusHistory import OrderStatusHistory
 from Model.containermgmt.Orders.Notification import Notification
@@ -96,6 +97,16 @@ def format_request(req: StoreRequest, is_accounts: bool = True) -> dict:
     }
 
 def generate_request_number(db: Session, org_id: int) -> str:
+    """The next requisition number for this company.
+
+    A configured series is allocated under a row lock. Without one, the old
+    count-based format is kept so an unconfigured company still works -- note
+    that it is shared across companies and reuses a deleted requisition's
+    number, which is why the series exists.
+    """
+    configured = next_document_number(db, org_id, "REQ")
+    if configured:
+        return configured
     year = datetime.utcnow().year
     prefix = f"REQ-{year}-"
     count = db.query(StoreRequest).filter(StoreRequest.request_number.like(f"{prefix}%")).count()

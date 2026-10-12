@@ -17,6 +17,7 @@ from Model.containermgmt.Container.ContainerDetails import ContainerDetails
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from Utils.org_filter import OrgContext, apply_org_filter
+from Services.document_number_service import next_document_number
 
 logger = logging.getLogger("containerMgmt.orders.receiving")
 
@@ -164,7 +165,9 @@ async def create_receipt(
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
-    rec_num = payload.get("receipt_number", "").strip() or f"GRN-{datetime.utcnow().strftime('%Y%m%d')}-{po.id}"
+    rec_num = (payload.get("receipt_number", "").strip()
+               or next_document_number(db, getattr(po, "org_id", None), "GRN")
+               or f"GRN-{datetime.utcnow().strftime('%Y%m%d')}-{po.id}")
     rec_date = datetime.strptime(payload["received_date"][:10], "%Y-%m-%d").date() if payload.get("received_date") else date.today()
 
     new_gr = GoodsReceipt(

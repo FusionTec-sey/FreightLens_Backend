@@ -39,6 +39,7 @@ from .Orders.POStageTransition import POStageTransition
 from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
+from .MasterData.DocumentNumberSeries import DocumentNumberSeries
 from .Report.ReportTemplate import ReportTemplate
 from .Report.ReportTemplateVersion import ReportTemplateVersion
 from .Report.ReportRenderJob import ReportRenderJob

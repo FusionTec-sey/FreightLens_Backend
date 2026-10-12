@@ -170,6 +170,10 @@ async def startup_event():
     ensure_menu_default_removed()
     from Utils.migrate_20261009_shared_menus_and_separators import ensure_shared_menus_and_separators
     ensure_shared_menus_and_separators()
+    from Utils.migrate_20261012_document_number_series import ensure_document_number_series_schema
+    ensure_document_number_series_schema()
+    from Utils.migrate_20261012_consignee_is_organisation import ensure_consignee_points_at_organisation
+    ensure_consignee_points_at_organisation()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
