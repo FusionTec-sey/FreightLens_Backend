@@ -478,6 +478,13 @@ def get_suppliers_master(
     sort_by: Optional[str] = Query(None),
     sort_dir: Optional[str] = Query("asc"),
     active_only: bool = False,
+    for_org_id: Optional[int] = Query(
+        None,
+        description=(
+            "Narrow to the suppliers a document owned by this organisation may "
+            "use: shared ones, plus that organisation's own."
+        ),
+    ),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user = Depends(get_current_user)
@@ -487,6 +494,15 @@ def get_suppliers_master(
     query = apply_shared_or_org_filter(query, Supplier, org_context)
     if active_only:
         query = query.filter(Supplier.is_active == True)
+
+    # A user whose context spans several organisations otherwise sees suppliers
+    # that a document belonging to one of them cannot accept -- the vendor quote
+    # endpoint requires shared-or-same-organisation and rejects the rest. This
+    # narrows, never widens: it is applied on top of the scope filter above.
+    if for_org_id is not None:
+        query = query.filter(
+            or_(Supplier.is_shared == True, Supplier.org_id == for_org_id)
+        )
 
     if search:
         s = f"%{search.strip()}%"

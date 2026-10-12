@@ -213,6 +213,9 @@ class QuoteComparisonService:
             "po": {
                 "id": po.id,
                 "po_number": po.po_number,
+                # Quotes may only be recorded from a supplier this organisation
+                # can use, so the vendor picker needs to know whose order it is.
+                "org_id": po.org_id,
                 "consignee": po.consignee,
                 "sheet_type": po.sheet_type,
                 "doc_type": getattr(po, "doc_type", "PO") or "PO",

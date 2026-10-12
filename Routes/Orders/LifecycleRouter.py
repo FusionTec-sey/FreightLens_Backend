@@ -114,6 +114,28 @@ def check_variance_permission(user: User, org_context: OrgContext):
         detail="Permission Denied: 'Approve_Variance' is required."
     )
 
+
+def _supplier_scope_error(db: Session, supplier_id) -> str:
+    """Say why a supplier the user picked cannot be quoted on this order.
+
+    A quote may only name a shared supplier or one belonging to the order's own
+    organisation. A user whose context spans several organisations could be
+    offered the rest, and "Supplier not found." then reads as a missing record
+    rather than one that belongs to another company.
+    """
+    supp = db.query(Supplier).filter(
+        Supplier.supplier_id == supplier_id,
+        Supplier.is_deleted != True,
+    ).first()
+    if not supp:
+        return "Supplier not found."
+    return (
+        f"'{supp.name}' belongs to another company and is not shared, so it "
+        "cannot be quoted on this order. Choose a supplier set up for this "
+        "order's company, or mark that supplier as shared."
+    )
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @LifecycleRouter.get("/{po_id}/lifecycle")
@@ -236,7 +258,7 @@ def create_vendor_quote(
         or_(Supplier.is_shared == True, Supplier.org_id == po.org_id),
     ).first()
     if not supp:
-        raise HTTPException(status_code=404, detail="Supplier not found.")
+        raise HTTPException(status_code=404, detail=_supplier_scope_error(db, req.supplier_id))
 
     # Check if a quote from this supplier already exists on this PO
     existing_quote = db.query(VendorQuote).filter(
@@ -398,7 +420,7 @@ def update_vendor_quote(
             or_(Supplier.is_shared == True, Supplier.org_id == po.org_id),
         ).first()
         if not supp:
-            raise HTTPException(status_code=404, detail="Supplier not found.")
+            raise HTTPException(status_code=404, detail=_supplier_scope_error(db, req.supplier_id))
         duplicate_check = db.query(VendorQuote).filter(
             VendorQuote.po_id == po.id,
             VendorQuote.supplier_id == req.supplier_id,
