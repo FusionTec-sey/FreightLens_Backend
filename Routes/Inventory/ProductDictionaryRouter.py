@@ -90,6 +90,81 @@ def list_definitions(
     return [_serialize(r, adopted.get(r.id)) for r in rows]
 
 
+def _publish_one(db: Session, product: Product, user_id: int):
+    """Publish a product, or link it to the entry its SKU already has.
+
+    Returns (definition, created). Deduplicated on the normalised SKU rather
+    than creating a second entry -- the lesson from the vendor master, which had
+    to have its duplicates merged out after the fact.
+    """
+    key = _sku_key(product.sku)
+    existing = db.query(ProductDefinition).filter(
+        ProductDefinition.sku_key == key, ProductDefinition.is_deleted == False
+    ).first()
+    if existing:
+        if product.definition_id != existing.id:
+            product.definition_id = existing.id
+        return existing, False
+
+    definition = ProductDefinition(
+        sku=product.sku.strip(), sku_key=key,
+        suggested_category_id=product.category_id,
+        source_org_id=product.org_id,
+        created_by=user_id, updated_by=user_id,
+        **{f: getattr(product, f, None) for f in DEFINITION_FIELDS},
+    )
+    db.add(definition)
+    db.flush()
+    product.definition_id = definition.id
+    return definition, True
+
+
+@ProductDictionaryRouter.post("/publish-bulk")
+def publish_products_bulk(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Publish many of this company's products at once.
+
+    A catalogue of thousands cannot be published a row at a time, and the
+    dictionary is useless until something is in it.
+    """
+    if not has_permission(current_user, "Edit_Product"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to modify products.")
+
+    product_ids = (payload or {}).get("product_ids")
+    publish_all = bool((payload or {}).get("all"))
+    if not product_ids and not publish_all:
+        raise HTTPException(status_code=400, detail="Give product_ids, or all=true for this company's whole catalogue.")
+
+    query = db.query(Product).filter(Product.is_deleted == False)
+    if not publish_all:
+        query = query.filter(Product.id.in_(product_ids))
+    products = apply_org_filter(query, Product, org_context).all()
+
+    published, linked, skipped = 0, 0, 0
+    for product in products:
+        if not (product.sku and product.sku.strip()):
+            skipped += 1  # no SKU, so nothing to deduplicate it against
+            continue
+        _definition, created = _publish_one(db, product, current_user.id)
+        if created:
+            published += 1
+        else:
+            linked += 1
+    db.commit()
+
+    parts = [f"{published} published"]
+    if linked:
+        parts.append(f"{linked} already in the dictionary and now linked")
+    if skipped:
+        parts.append(f"{skipped} skipped for having no SKU")
+    return {"published": published, "linked": linked, "skipped_no_sku": skipped,
+            "considered": len(products), "message": ", ".join(parts) + "."}
+
+
 @ProductDictionaryRouter.post("/publish/{product_id}")
 def publish_product(
     product_id: int,
@@ -110,32 +185,11 @@ def publish_product(
     if not (product.sku and product.sku.strip()):
         raise HTTPException(status_code=400, detail="A product needs a SKU before it can be published.")
 
-    key = _sku_key(product.sku)
-    existing = db.query(ProductDefinition).filter(
-        ProductDefinition.sku_key == key, ProductDefinition.is_deleted == False
-    ).first()
-    if existing:
-        # Deduplicated on SKU rather than creating a second entry -- the lesson
-        # from the vendor master, which had to have its duplicates merged out.
-        if product.definition_id != existing.id:
-            product.definition_id = existing.id
-            db.commit()
-        return {"definition_id": existing.id, "created": False,
-                "message": f"'{existing.name}' is already in the dictionary; this product now points at it."}
-
-    definition = ProductDefinition(
-        sku=product.sku.strip(), sku_key=key,
-        suggested_category_id=product.category_id,
-        source_org_id=product.org_id,
-        created_by=current_user.id, updated_by=current_user.id,
-        **{f: getattr(product, f, None) for f in DEFINITION_FIELDS},
-    )
-    db.add(definition)
+    definition, created = _publish_one(db, product, current_user.id)
     db.commit()
-    db.refresh(definition)
-
-    product.definition_id = definition.id
-    db.commit()
+    if not created:
+        return {"definition_id": definition.id, "created": False,
+                "message": f"'{definition.name}' is already in the dictionary; this product now points at it."}
     return {"definition_id": definition.id, "created": True,
             "message": f"'{definition.name}' published to the group dictionary."}
 
