@@ -176,6 +176,8 @@ async def startup_event():
     ensure_consignee_points_at_organisation()
     from Utils.migrate_20261013_unique_shared_suppliers import ensure_unique_shared_suppliers
     ensure_unique_shared_suppliers()
+    from Utils.migrate_20261013_group_product_catalogue import ensure_group_product_catalogue
+    ensure_group_product_catalogue()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

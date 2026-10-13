@@ -18,7 +18,7 @@ from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import is_financial_user, has_permission, can_view_supplier_user
-from Utils.org_filter import OrgContext, apply_org_filter
+from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from Utils.blob_storage import blob_storage
 from Services.search_service import sync_product_document, remove_product_document, search_products, search_products_with_total
 
@@ -315,8 +315,104 @@ def _seed_taxonomy_recursive(db: Session, org_id: int, user_id: int, parent_id: 
             _seed_taxonomy_recursive(db, org_id, user_id, existing.id, item["children"])
 
 
+# ── Catalogues ────────────────────────────────────────────────────────────────
+#
+# A category tree is shared whole or not at all. Sharing one branch of it would
+# leave another company seeing a child whose parent it cannot see, and deleting
+# that parent re-parents the orphans into a tree they do not belong to.
+#
+# So a category belongs to exactly one catalogue: the group catalogue (shared,
+# managed by the root organisation) or a single company's own. A company reads
+# one or the other, never both, because two roots means the same products
+# classified two incompatible ways and reports that double-count.
+
+
+def _catalogue_of(cat: ProductCategory):
+    """Which catalogue a category belongs to. Shared ones are all one catalogue."""
+    return "shared" if cat.is_shared else ("own", cat.org_id)
+
+
+def _catalogue_name(catalogue) -> str:
+    return "the group catalogue" if catalogue == "shared" else "this company's own catalogue"
+
+
+def _group_root(db: Session):
+    """The shared tree's root, if a group catalogue exists at all."""
+    return db.query(ProductCategory).filter(
+        ProductCategory.is_shared == True,
+        ProductCategory.parent_id == None,
+        ProductCategory.is_deleted == False,
+    ).first()
+
+
+def _require_same_catalogue(db: Session, parent_id, catalogue):
+    """A category may only sit under a parent from its own catalogue."""
+    if parent_id is None:
+        return None
+    parent = db.query(ProductCategory).filter(
+        ProductCategory.id == parent_id,
+        ProductCategory.is_deleted == False,
+    ).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent category not found.")
+    if _catalogue_of(parent) != catalogue:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{parent.name}' is in {_catalogue_name(_catalogue_of(parent))} and this "
+                f"category is in {_catalogue_name(catalogue)}. A category must sit in the "
+                "same catalogue as its parent, because a category tree is shared whole "
+                "or not at all."
+            ),
+        )
+    return parent
+
+
+def _require_may_manage(cat: ProductCategory, org_context: OrgContext):
+    """The group catalogue is the root organisation's to manage, like a shared supplier."""
+    if cat.is_shared and not org_context.is_root:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"'{cat.name}' is in the group catalogue, which is managed by the root "
+                "organisation. Create a category in this company's own catalogue instead."
+            ),
+        )
+
+
+def _require_category_for_org(db: Session, category_id, org_id):
+    """A product may only be filed under a category its own company reads."""
+    if category_id is None:
+        return None
+    cat = db.query(ProductCategory).filter(
+        ProductCategory.id == category_id,
+        ProductCategory.is_deleted == False,
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found.")
+    if not cat.is_shared and cat.org_id != org_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{cat.name}' belongs to another company's catalogue, so a product of "
+                "this company cannot be filed under it. Use the group catalogue or a "
+                "category of this company."
+            ),
+        )
+    return cat
+
+
 def _ensure_root_category(db: Session, org_id: int, user_id: int) -> ProductCategory:
-    """Ensure the org has a 'Products' root category and standard taxonomy branches."""
+    """Ensure the org has a 'Products' root category and standard taxonomy branches.
+
+    A company already reading the group catalogue is left alone: seeding it a
+    second root would put two roots in front of it, which is the conflict this
+    design exists to prevent.
+    """
+    group_root = _group_root(db)
+    if group_root is not None and group_root.org_id != org_id:
+        return group_root
+
     root = db.query(ProductCategory).filter(
         ProductCategory.org_id == org_id,
         ProductCategory.parent_id == None,
@@ -399,6 +495,11 @@ def _category_to_dict(c: ProductCategory, db: Session) -> dict:
         "name": c.name,
         "description": c.description,
         "parent_id": c.parent_id,
+        # Which catalogue this belongs to, so a screen can say why a category
+        # cannot be edited or re-parented rather than just refusing.
+        "is_shared": bool(c.is_shared),
+        "org_id": c.org_id,
+        "catalogue": "group" if c.is_shared else "company",
         "is_subcategory": c.is_subcategory,
         "images": c.images or [],
         "attachments": c.attachments or [],
@@ -1091,7 +1192,7 @@ def bulk_category(
     if not has_permission(current_user, "Edit_Product"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to modify products.")
 
-    cat = apply_org_filter(
+    cat = apply_shared_or_org_filter(
         db.query(ProductCategory).filter(ProductCategory.id == payload.category_id, ProductCategory.is_deleted == False),
         ProductCategory, org_context
     ).first()
@@ -1102,6 +1203,18 @@ def bulk_category(
         db.query(Product).filter(Product.id.in_(payload.product_ids), Product.is_deleted == False),
         Product, org_context
     ).all()
+
+    # A company's product may not be filed under another company's category.
+    if not cat.is_shared:
+        stray = next((p for p in prods if p.org_id != cat.org_id), None)
+        if stray:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"'{cat.name}' is in another company's catalogue, so '{stray.name}' "
+                    "cannot be filed under it. Use the group catalogue instead."
+                ),
+            )
 
     for p in prods:
         p.category_id = payload.category_id
@@ -1350,6 +1463,8 @@ def create_product(
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"A product with SKU '{sku_val}' already exists.")
+
+    _require_category_for_org(db, payload.category_id, target_org_id)
 
     new_prod = Product(
         org_id=target_org_id,
@@ -1741,7 +1856,9 @@ def list_categories(
 
     target_org_id = org_context.org_id
     _ensure_root_category(db, target_org_id, current_user.id)
-    query = apply_org_filter(
+    # is_shared has been on this table all along but nothing read it, so a
+    # category marked shared was invisible to every other company.
+    query = apply_shared_or_org_filter(
         db.query(ProductCategory).filter(ProductCategory.is_deleted == False),
         ProductCategory, org_context
     )
@@ -1766,8 +1883,20 @@ def create_category(
         root = _ensure_root_category(db, target_org_id, current_user.id)
         parent_id = root.id
 
+    # A category inherits its parent's catalogue: that is what keeps a tree
+    # shared whole or not at all.
+    parent = db.query(ProductCategory).filter(
+        ProductCategory.id == parent_id, ProductCategory.is_deleted == False
+    ).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent category not found.")
+    _require_may_manage(parent, org_context)
+    is_shared = bool(parent.is_shared)
+
     new_cat = ProductCategory(
-        org_id=target_org_id, name=payload.name.strip(),
+        org_id=parent.org_id if is_shared else target_org_id,
+        is_shared=is_shared,
+        name=payload.name.strip(),
         description=payload.description, parent_id=parent_id, is_subcategory=True,
         images=payload.images or [], attachments=payload.attachments or [],
         created_by=current_user.id, updated_by=current_user.id
@@ -1788,12 +1917,13 @@ def update_category(
     if not has_permission(current_user, "Manage_ProductCategory"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to manage product categories.")
 
-    cat = apply_org_filter(
+    cat = apply_shared_or_org_filter(
         db.query(ProductCategory).filter(ProductCategory.id == category_id, ProductCategory.is_deleted == False),
         ProductCategory, org_context
     ).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
+    _require_may_manage(cat, org_context)
     # Protect root
     if cat.parent_id is None and cat.name == "Products":
         if payload.name and payload.name.strip() != "Products":
@@ -1806,6 +1936,7 @@ def update_category(
     if payload.description is not None:
         cat.description = payload.description
     if payload.parent_id is not None:
+        _require_same_catalogue(db, payload.parent_id, _catalogue_of(cat))
         cat.parent_id = payload.parent_id
         cat.is_subcategory = True
     if payload.images is not None:
@@ -1830,17 +1961,31 @@ def delete_category(
     if not has_permission(current_user, "Manage_ProductCategory"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to manage product categories.")
 
-    cat = apply_org_filter(
+    cat = apply_shared_or_org_filter(
         db.query(ProductCategory).filter(ProductCategory.id == category_id, ProductCategory.is_deleted == False),
         ProductCategory, org_context
     ).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
+    _require_may_manage(cat, org_context)
     if cat.parent_id is None and cat.name == "Products":
         raise HTTPException(status_code=400, detail="Cannot delete the root 'Products' category")
 
-    target_org_id = getattr(org_context, "selected_org_id", None) or getattr(org_context, "current_org_id", None) or getattr(org_context, "org_id", 1) or 1
-    root = _ensure_root_category(db, target_org_id, current_user.id)
+    # Whatever this category held stays in the catalogue it was already in.
+    # Falling back to the caller's own root would move a group category's
+    # products and subcategories into one company's private tree.
+    if cat.is_shared:
+        root = _group_root(db)
+    else:
+        root = _ensure_root_category(db, cat.org_id, current_user.id)
+    if root is None or root.id == cat.id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{cat.name}' is the root of {_catalogue_name(_catalogue_of(cat))} and "
+                "cannot be deleted. Delete the categories under it instead."
+            ),
+        )
 
     # Move all products in this category to default 'Products' category
     reparented_count = db.query(Product).filter(
