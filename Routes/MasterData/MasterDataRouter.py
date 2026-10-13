@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc, asc
+from sqlalchemy import or_, and_, desc, asc, text as sqltext
 import math
 from typing import Optional, List
 from datetime import date
@@ -15,6 +15,44 @@ from Model.Credentials.Organisation import Organisation
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import can_view_supplier_user
 from Utils.org_filter import OrgContext, apply_shared_or_org_filter
+from Services.master_data_audit import snapshot, record_changes, record_event
+
+
+# What a trail records for a vendor. Identity and terms -- the things another
+# company would notice changing under it.
+SUPPLIER_AUDITED_FIELDS = (
+    "name", "code", "address", "email", "phone", "contact_person", "country",
+    "default_currency", "default_payment_term_id", "variance_threshold_pct",
+    "is_active", "is_shared", "notes",
+)
+
+
+def _supplier_usage(db: Session, supplier_id: int) -> dict:
+    """Where a vendor is already used, and by how many companies.
+
+    A shared vendor is retired by one company for everyone, so the count of who
+    else depends on it is shown before that happens.
+    """
+    counts = {}
+    for label, sql in (
+        ("purchase_orders",
+         'SELECT count(*), count(DISTINCT org_id) FROM containermgmt.purchase_orders WHERE supplier_id = :id'),
+        ("vendor_quotes",
+         'SELECT count(*), 0 FROM containermgmt.vendor_quotes WHERE supplier_id = :id'),
+        ("bills_of_lading",
+         'SELECT count(*), count(DISTINCT org_id) FROM containermgmt.bill_of_landing WHERE "Supplier" = :id'),
+        ("products",
+         'SELECT count(*), count(DISTINCT org_id) FROM containermgmt.products WHERE default_supplier_id = :id'),
+    ):
+        try:
+            row = db.execute(sqltext(sql), {"id": supplier_id}).first()
+            counts[label] = int(row[0] or 0)
+            counts.setdefault("_orgs", set()).update([row[1]] if row[1] else [])
+        except Exception:
+            counts[label] = 0
+    orgs = counts.pop("_orgs", set())
+    total = sum(v for v in counts.values())
+    return {"counts": counts, "total": total, "companies": max(orgs) if orgs else 0}
 from Utils.blob_storage import blob_storage
 from Routes.Orders.OrderRouter import is_accounts_user
 
@@ -647,8 +685,11 @@ def update_supplier_master(
     supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found.")
-    if supplier.is_shared and not org_context.is_root:
-        raise HTTPException(status_code=403, detail="Shared suppliers can only be updated by root organisation users.")
+
+    # A shared vendor is edited by whoever holds the permission, from any
+    # company -- root is not a separate gate. One edit is seen by every company
+    # at once, so what moved and who moved it is recorded below.
+    before = snapshot(supplier, SUPPLIER_AUDITED_FIELDS)
 
     if "name" in payload and payload["name"]:
         supplier.name = payload["name"].strip()
@@ -682,8 +723,16 @@ def update_supplier_master(
             if not org_context.is_root:
                 raise HTTPException(status_code=403, detail="Only root organisation users can change supplier scope.")
             supplier.is_shared = requested_shared
-            supplier.org_id = None if requested_shared else org_context.org_id
+            # org_id is NOT NULL and records who entered the vendor; is_shared
+            # alone decides visibility. Setting it to None raised an
+            # IntegrityError and returned a 500.
+            if not requested_shared:
+                supplier.org_id = org_context.org_id
 
+    record_changes(
+        db, "supplier", supplier.supplier_id, before, supplier, current_user.id,
+        org_id=None if supplier.is_shared else supplier.org_id,
+    )
     db.commit()
     return {"success": True, "message": f"Supplier '{supplier.name}' updated successfully."}
 
@@ -733,13 +782,40 @@ def delete_supplier_master(
     supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found.")
-    if supplier.is_shared and not org_context.is_root:
-        raise HTTPException(status_code=403, detail="Shared suppliers can only be deleted by root organisation users.")
-
+    # Retiring a shared vendor takes it out of every company's picker, so what
+    # already depends on it is recorded with the deletion.
+    usage = _supplier_usage(db, supplier.supplier_id)
+    record_event(
+        db, "supplier", supplier.supplier_id, "deleted", current_user.id,
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name="is_deleted", old_value=False, new_value=True,
+    )
     supplier.is_deleted = True
     supplier.is_active = False
     db.commit()
-    return {"success": True, "message": f"Supplier '{supplier.name}' deleted."}
+    return {
+        "success": True,
+        "message": f"Supplier '{supplier.name}' deleted.",
+        "was_used_by": usage,
+    }
+
+
+@MasterDataRouter.get("/suppliers/{id}/usage")
+def get_supplier_usage(
+    id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """What already depends on this vendor, for the screen to show before retiring it."""
+    supplier_query = db.query(Supplier).filter(Supplier.supplier_id == id, Supplier.is_deleted != True)
+    supplier = apply_shared_or_org_filter(supplier_query, Supplier, org_context).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found.")
+    usage = _supplier_usage(db, id)
+    usage["is_shared"] = bool(supplier.is_shared)
+    usage["name"] = supplier.name
+    return usage
 
 
 # ── 5. Organization Base Currency Endpoints ───────────────────────────────────

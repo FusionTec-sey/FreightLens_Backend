@@ -19,6 +19,7 @@ from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import is_financial_user, has_permission, can_view_supplier_user
 from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
+from Services.master_data_audit import snapshot, record_changes, record_event
 from Utils.blob_storage import blob_storage
 from Services.search_service import sync_product_document, remove_product_document, search_products, search_products_with_total
 
@@ -392,15 +393,29 @@ def _require_same_catalogue(db: Session, parent_id, catalogue):
 
 
 def _require_may_manage(cat: ProductCategory, org_context: OrgContext):
-    """The group catalogue is the root organisation's to manage, like a shared supplier."""
-    if cat.is_shared and not org_context.is_root:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"'{cat.name}' is in the group catalogue, which is managed by the root "
-                "organisation. Create a category in this company's own catalogue instead."
-            ),
-        )
+    """Anyone holding Manage_ProductCategory may edit the group catalogue.
+
+    Shared does not mean read-only: a company that can see a category and holds
+    the permission can correct it. One edit is seen by every company at once, so
+    what moved and who moved it is recorded instead of being prevented.
+    """
+    return None
+
+
+CATEGORY_AUDITED_FIELDS = ("name", "description", "parent_id", "is_shared")
+
+
+def _category_usage(db: Session, category_id: int) -> dict:
+    """What already sits in a category, and how many companies it spans."""
+    ids = _get_descendant_category_ids(db, category_id)
+    rows = db.query(Product.org_id, func.count(Product.id)).filter(
+        Product.category_id.in_(ids), Product.is_deleted == False
+    ).group_by(Product.org_id).all()
+    return {
+        "products": sum(int(c) for _o, c in rows),
+        "companies": len(rows),
+        "subcategories": max(len(ids) - 1, 0),
+    }
 
 
 def _require_category_for_org(db: Session, category_id, org_id):
@@ -1933,6 +1948,32 @@ def list_categories(
     return flat_list if flat else _build_category_tree(flat_list, parent_id=None)
 
 
+@InventoryRouter.get("/categories/{category_id}/usage")
+def get_category_usage(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context)
+):
+    """What sits in a category, for the screen to show before deleting it.
+
+    A category in the group catalogue is deleted for every company at once, so
+    what it holds across all of them is counted, not just the caller's share.
+    """
+    if not has_permission(current_user, "View_ProductCategory"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to view product categories.")
+    cat = apply_shared_or_org_filter(
+        db.query(ProductCategory).filter(ProductCategory.id == category_id, ProductCategory.is_deleted == False),
+        ProductCategory, org_context
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+    usage = _category_usage(db, category_id)
+    usage["name"] = cat.name
+    usage["is_shared"] = bool(cat.is_shared)
+    return usage
+
+
 @InventoryRouter.get("/categories/catalogue")
 def get_catalogue_state(
     db: Session = Depends(get_db),
@@ -2126,6 +2167,7 @@ def update_category(
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
     _require_may_manage(cat, org_context)
+    before = snapshot(cat, CATEGORY_AUDITED_FIELDS)
     # Protect root
     if cat.parent_id is None and cat.name == "Products":
         if payload.name and payload.name.strip() != "Products":
@@ -2146,6 +2188,10 @@ def update_category(
     if payload.attachments is not None:
         cat.attachments = payload.attachments
 
+    record_changes(
+        db, "product_category", cat.id, before, cat, current_user.id,
+        org_id=None if cat.is_shared else cat.org_id,
+    )
     cat.updated_by = current_user.id
     cat.updated_at = datetime.utcnow()
     db.commit()
@@ -2202,6 +2248,11 @@ def delete_category(
         ProductCategory.is_deleted == False
     ).update({ProductCategory.parent_id: new_parent_id}, synchronize_session=False)
 
+    record_event(
+        db, "product_category", cat.id, "deleted", current_user.id,
+        org_id=None if cat.is_shared else cat.org_id,
+        field_name="is_deleted", old_value=False, new_value=True,
+    )
     cat.is_deleted = True
     cat.updated_by = current_user.id
     cat.updated_at = datetime.utcnow()

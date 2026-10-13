@@ -40,6 +40,7 @@ from .MasterData.Currency import Currency, CurrencyExchangeRate
 from .MasterData.PaymentTerm import PaymentTerm
 from .MasterData.DocumentType import MasterDocumentType
 from .MasterData.DocumentNumberSeries import DocumentNumberSeries
+from .MasterData.MasterDataAudit import MasterDataAudit
 from .Report.ReportTemplate import ReportTemplate
 from .Report.ReportTemplateVersion import ReportTemplateVersion
 from .Report.ReportRenderJob import ReportRenderJob

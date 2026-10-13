@@ -178,6 +178,8 @@ async def startup_event():
     ensure_unique_shared_suppliers()
     from Utils.migrate_20261013_group_product_catalogue import ensure_group_product_catalogue
     ensure_group_product_catalogue()
+    from Utils.migrate_20261013_master_data_audit import ensure_master_data_audit_schema
+    ensure_master_data_audit_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
