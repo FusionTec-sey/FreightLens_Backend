@@ -327,6 +327,29 @@ def _seed_taxonomy_recursive(db: Session, org_id: int, user_id: int, parent_id: 
 # classified two incompatible ways and reports that double-count.
 
 
+def _own_root(db: Session, org_id: int):
+    """A company's own tree root, if it keeps one instead of using the group's."""
+    return db.query(ProductCategory).filter(
+        ProductCategory.org_id == org_id,
+        ProductCategory.is_shared == False,
+        ProductCategory.parent_id == None,
+        ProductCategory.is_deleted == False,
+    ).first()
+
+
+def _catalogue_for_org(db: Session, org_id: int):
+    """Which catalogue a company reads: its own if it has one, otherwise the group's.
+
+    Never both. Two roots in front of one company means the same products
+    classified two incompatible ways, and reports that double-count or miss.
+    Having its own tree is what takes a company off the group one.
+    """
+    own = _own_root(db, org_id)
+    if own is not None:
+        return "own", own
+    return "group", _group_root(db)
+
+
 def _catalogue_of(cat: ProductCategory):
     """Which catalogue a category belongs to. Shared ones are all one catalogue."""
     return "shared" if cat.is_shared else ("own", cat.org_id)
@@ -1856,15 +1879,154 @@ def list_categories(
 
     target_org_id = org_context.org_id
     _ensure_root_category(db, target_org_id, current_user.id)
-    # is_shared has been on this table all along but nothing read it, so a
-    # category marked shared was invisible to every other company.
-    query = apply_shared_or_org_filter(
-        db.query(ProductCategory).filter(ProductCategory.is_deleted == False),
-        ProductCategory, org_context
-    )
+    # One catalogue, not the union of both: a company on its own tree must not
+    # also see the group's, or it has two roots in front of it.
+    kind, _root = _catalogue_for_org(db, target_org_id)
+    query = db.query(ProductCategory).filter(ProductCategory.is_deleted == False)
+    if kind == "own":
+        query = query.filter(
+            ProductCategory.org_id == target_org_id,
+            ProductCategory.is_shared == False,
+        )
+    else:
+        query = query.filter(ProductCategory.is_shared == True)
     cats = query.order_by(ProductCategory.name.asc()).all()
     flat_list = [_category_to_dict(c, db) for c in cats]
     return flat_list if flat else _build_category_tree(flat_list, parent_id=None)
+
+
+@InventoryRouter.get("/categories/catalogue")
+def get_catalogue_state(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context)
+):
+    """Which catalogue this company reads, and whether it may change.
+
+    Without this the choice was invisible: a company inherited the group
+    catalogue silently and had no way to see that, let alone start its own.
+    """
+    if not has_permission(current_user, "View_ProductCategory"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to view product categories.")
+
+    org_id = org_context.org_id
+    kind, root = _catalogue_for_org(db, org_id)
+
+    # Switching re-files products, so the count is what decides whether it is
+    # offered -- and what the refusal says if it is not.
+    filed_here = db.query(Product).filter(
+        Product.org_id == org_id,
+        Product.category_id != None,
+        Product.is_deleted == False,
+    ).count()
+
+    group_root = _group_root(db)
+    owns_group = bool(group_root and group_root.org_id == org_id)
+
+    return {
+        "catalogue": kind,
+        "root_id": root.id if root else None,
+        "root_name": root.name if root else None,
+        "owns_group_catalogue": owns_group,
+        "group_catalogue_exists": group_root is not None,
+        "categorised_products": filed_here,
+        # The root organisation's tree IS the group catalogue, so it cannot
+        # step off it without taking everyone else's catalogue away.
+        "can_switch": (not owns_group) and has_permission(current_user, "Manage_ProductCategory"),
+    }
+
+
+@InventoryRouter.post("/categories/catalogue")
+def set_catalogue(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context)
+):
+    """Move this company onto its own category tree, or back onto the group's.
+
+    All or none, by construction: a company has one root or the other, so a
+    branch can never hang under a parent from the other catalogue.
+    """
+    if not has_permission(current_user, "Manage_ProductCategory"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage product categories.")
+
+    wanted = (payload or {}).get("catalogue")
+    if wanted not in ("own", "group"):
+        raise HTTPException(status_code=400, detail="catalogue must be 'own' or 'group'.")
+
+    org_id = org_context.org_id
+    group_root = _group_root(db)
+    if group_root is not None and group_root.org_id == org_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This company's tree is the group catalogue that every other company "
+                "reads, so it cannot be switched. Give another company its own "
+                "catalogue instead."
+            ),
+        )
+
+    current, _root = _catalogue_for_org(db, org_id)
+    if current == wanted:
+        return {"catalogue": current, "message": "Already using this catalogue."}
+
+    # Products keep pointing at categories from the catalogue being left, which
+    # this company would no longer be able to see. Re-filing them is a decision
+    # about each product, so it is asked for rather than guessed at.
+    filed = db.query(Product).filter(
+        Product.org_id == org_id,
+        Product.category_id != None,
+        Product.is_deleted == False,
+    ).count()
+    if filed:
+        leaving = "the group catalogue" if current == "group" else "this company's own catalogue"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{filed} product(s) are filed under {leaving} and would lose their "
+                "category. Clear or re-file them first, then switch."
+            ),
+        )
+
+    if wanted == "own":
+        if _own_root(db, org_id) is None:
+            root = ProductCategory(
+                org_id=org_id, name="Products", description="Default root category",
+                parent_id=None, is_subcategory=False, is_shared=False,
+                created_by=current_user.id, updated_by=current_user.id,
+            )
+            db.add(root)
+            db.commit()
+            db.refresh(root)
+        return {
+            "catalogue": "own",
+            "message": "This company now keeps its own categories. The group catalogue is no longer shown here.",
+        }
+
+    # Back to the group catalogue: the company's own tree must be empty of
+    # anything but its root, or categories would be deleted behind the scenes.
+    own = _own_root(db, org_id)
+    if own is not None:
+        extra = db.query(ProductCategory).filter(
+            ProductCategory.org_id == org_id,
+            ProductCategory.is_shared == False,
+            ProductCategory.id != own.id,
+            ProductCategory.is_deleted == False,
+        ).count()
+        if extra:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"This company has {extra} of its own categories. Delete them before "
+                    "returning to the group catalogue, so none are removed unseen."
+                ),
+            )
+        own.is_deleted = True
+        own.updated_by = current_user.id
+        own.updated_at = datetime.utcnow()
+        db.commit()
+    return {"catalogue": "group", "message": "This company now reads the group catalogue."}
 
 
 @InventoryRouter.post("/categories")
@@ -1880,7 +2042,9 @@ def create_category(
     target_org_id = org_context.org_id
     parent_id = payload.parent_id
     if parent_id is None:
-        root = _ensure_root_category(db, target_org_id, current_user.id)
+        kind, root = _catalogue_for_org(db, target_org_id)
+        if root is None:
+            root = _ensure_root_category(db, target_org_id, current_user.id)
         parent_id = root.id
 
     # A category inherits its parent's catalogue: that is what keeps a tree
