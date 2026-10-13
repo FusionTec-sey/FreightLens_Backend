@@ -180,6 +180,8 @@ async def startup_event():
     ensure_group_product_catalogue()
     from Utils.migrate_20261013_master_data_audit import ensure_master_data_audit_schema
     ensure_master_data_audit_schema()
+    from Utils.migrate_20261013_vendor_snapshot import ensure_vendor_snapshot_schema
+    ensure_vendor_snapshot_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

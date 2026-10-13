@@ -22,6 +22,12 @@ class PurchaseOrder(OrgMixin, AuditMixin, Base):
     
     supplier_id = Column(Integer, ForeignKey("containermgmt.supplier.supplier_id"), nullable=True)
     company = Column(String(255), nullable=True)  # Supplier company name fallback
+    # The vendor as it stood when this order was raised. A vendor is shared and
+    # editable, so resolving its name live meant renaming it rewrote every
+    # historical order and every reprint. These are written once and not
+    # revisited, so a correction reaches new documents only.
+    supplier_name_at_issue = Column(String(255), nullable=True)
+    supplier_address_at_issue = Column(String(500), nullable=True)
     goods_description = Column(Text, nullable=True)
     material_ids = Column(JSON, nullable=True)  # List of selected material IDs
 

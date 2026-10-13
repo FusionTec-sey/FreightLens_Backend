@@ -18,6 +18,8 @@ class BillOfLanding(OrgMixin, AuditMixin, Base):
     Vessel = Column(Integer, ForeignKey("containermgmt.vessals.id"), index=True, nullable=True)
     ArrivalDate = Column(DateTime, index=True, nullable=True)
     Supplier = Column(Integer, ForeignKey("containermgmt.supplier.supplier_id"), index=True, nullable=True)
+    # The vendor as it stood when this bill was recorded -- see PurchaseOrder.
+    supplier_name_at_issue = Column(String(255), nullable=True)
     Provider = Column(Integer, ForeignKey("containermgmt.logisticsprovider.Id"), index=True, nullable=True)
     FreeDays = Column(Integer, nullable=True)
     status = Column(Integer, ForeignKey("containermgmt.status.status_id"), index=True, nullable=True)

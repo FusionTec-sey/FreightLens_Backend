@@ -1005,6 +1005,13 @@ def create_order(
         if not supp:
             raise HTTPException(status_code=404, detail="Supplier not available to this organisation")
         company = supp.name
+        # Recorded once, here. A vendor is shared and editable, so resolving its
+        # name at print time meant a later rename rewrote this order's history.
+        supplier_name_at_issue = supp.name
+        supplier_address_at_issue = supp.address
+    else:
+        supplier_name_at_issue = company or None
+        supplier_address_at_issue = None
 
     # Helpers
     def parse_d(val):
@@ -1027,6 +1034,8 @@ def create_order(
         request_id=payload.get("request_id"),
         supplier_id=supplier_id or None,
         company=company or None,
+        supplier_name_at_issue=supplier_name_at_issue,
+        supplier_address_at_issue=supplier_address_at_issue,
         goods_description=payload.get("goods_description", "").strip() or None,
         material_ids=payload.get("material_ids") or [],
         
@@ -1207,6 +1216,10 @@ def update_order(
             if not supp:
                 raise HTTPException(status_code=404, detail="Supplier not available to this organisation")
             order.company = supp.name
+            # Changing which vendor the order is on is a change to the order, not
+            # to the vendor, so the recorded name moves with it.
+            order.supplier_name_at_issue = supp.name
+            order.supplier_address_at_issue = supp.address
     if "company" in payload and is_accounts and not order.supplier_id:
         order.company = (payload.get("company") or "").strip() or None
     if "goods_description" in payload:

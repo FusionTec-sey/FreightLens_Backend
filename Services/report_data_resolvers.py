@@ -359,16 +359,21 @@ def resolve_purchase_order(
     if can_vendor and po.supplier_rel:
         sup = po.supplier_rel
         supplier_data = {
-            "name": getattr(sup, "company_name", None) or getattr(sup, "supplier_name", None) or po.company,
-            "code": getattr(sup, "supplier_code", None),
+            # The name recorded when the order was raised wins, so reprinting an
+            # old order shows the vendor as it was then. The live name is only a
+            # fallback for orders raised before snapshots existed.
+            # (company_name / supplier_name / supplier_code were never attributes
+            # of Supplier, so this used to print po.company or nothing at all.)
+            "name": po.supplier_name_at_issue or sup.name or po.company,
+            "code": getattr(sup, "code", None),
             "contact_person": getattr(sup, "contact_person", None),
             "email": getattr(sup, "email", None),
             "phone": getattr(sup, "phone", None),
-            "address": getattr(sup, "address", None),
+            "address": po.supplier_address_at_issue or getattr(sup, "address", None),
         }
     elif can_vendor:
         supplier_data = {
-            "name": po.company,
+            "name": po.supplier_name_at_issue or po.company,
             "code": None,
             "contact_person": None,
             "email": None,
