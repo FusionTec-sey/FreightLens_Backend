@@ -502,16 +502,50 @@ def _ensure_root_category(db: Session, org_id: int, user_id: int) -> ProductCate
     return root
 
 
-def _category_to_dict(c: ProductCategory, db: Session) -> dict:
-    descendant_ids = _get_descendant_category_ids(db, c.id)
-    total_count = db.query(Product).filter(
-        Product.category_id.in_(descendant_ids),
-        Product.is_deleted == False
-    ).count()
-    direct_count = db.query(Product).filter(
-        Product.category_id == c.id,
-        Product.is_deleted == False
-    ).count()
+def _category_counts(db: Session, org_context: OrgContext) -> dict:
+    """Products per category, counted only for the company doing the looking.
+
+    These counts carried no organisation filter at all. That went unnoticed
+    while every company had its own private categories, because only its own
+    products could be in them. Now that the group catalogue is shared, an
+    unfiltered count shows a company the volume of every other company's
+    catalogue -- products it cannot open, and has no business being told about.
+    """
+    rows = apply_org_filter(
+        db.query(Product.category_id, func.count(Product.id))
+          .filter(Product.category_id != None, Product.is_deleted == False),
+        Product, org_context,
+    ).group_by(Product.category_id).all()
+    return {category_id: count for category_id, count in rows}
+
+
+def _rollup_counts(db: Session, direct: dict) -> dict:
+    """Add each category's descendants into its total, in one pass over the tree."""
+    edges = db.query(ProductCategory.id, ProductCategory.parent_id).filter(
+        ProductCategory.is_deleted == False
+    ).all()
+    parent_of = {cid: pid for cid, pid in edges}
+    totals = {cid: 0 for cid, _ in edges}
+    for cid, count in direct.items():
+        node = cid
+        seen = set()
+        # Depth-capped: a parent chain that loops would otherwise never end.
+        while node is not None and node not in seen and len(seen) < 64:
+            seen.add(node)
+            totals[node] = totals.get(node, 0) + count
+            node = parent_of.get(node)
+    return totals
+
+
+def _category_to_dict(c: ProductCategory, db: Session, org_context: OrgContext = None,
+                      direct_counts: dict = None, total_counts: dict = None) -> dict:
+    """Serialise a category. Counts come precomputed when a whole tree is listed,
+    which turns three queries per category into two for the lot."""
+    if direct_counts is None or total_counts is None:
+        direct_counts = _category_counts(db, org_context) if org_context else {}
+        total_counts = _rollup_counts(db, direct_counts)
+    total_count = total_counts.get(c.id, 0)
+    direct_count = direct_counts.get(c.id, 0)
 
     return {
         "id": c.id,
@@ -1891,7 +1925,11 @@ def list_categories(
     else:
         query = query.filter(ProductCategory.is_shared == True)
     cats = query.order_by(ProductCategory.name.asc()).all()
-    flat_list = [_category_to_dict(c, db) for c in cats]
+    direct_counts = _category_counts(db, org_context)
+    total_counts = _rollup_counts(db, direct_counts)
+    flat_list = [
+        _category_to_dict(c, db, org_context, direct_counts, total_counts) for c in cats
+    ]
     return flat_list if flat else _build_category_tree(flat_list, parent_id=None)
 
 
@@ -2068,7 +2106,7 @@ def create_category(
     db.add(new_cat)
     db.commit()
     db.refresh(new_cat)
-    return _category_to_dict(new_cat, db)
+    return _category_to_dict(new_cat, db, org_context)
 
 
 @InventoryRouter.put("/categories/{category_id}")
@@ -2112,7 +2150,7 @@ def update_category(
     cat.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(cat)
-    return _category_to_dict(cat, db)
+    return _category_to_dict(cat, db, org_context)
 
 
 @InventoryRouter.delete("/categories/{category_id}")
