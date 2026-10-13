@@ -17,9 +17,22 @@ from Utils import migrate_report_templates, migrate_sourcing_and_quote_templates
 
 
 def test_owned_or_shared_master_models_have_explicit_owner_and_flag():
-    for model in (Supplier, PaymentTerm, MasterDocumentType, Product, ProductCategory):
+    for model in (Supplier, PaymentTerm, MasterDocumentType, ProductCategory):
         assert model.__table__.c.org_id.nullable is False
         assert model.__table__.c.is_shared.nullable is False
+
+
+def test_a_product_belongs_to_one_company_and_links_to_a_group_definition():
+    """A product is not shared.
+
+    Its row mixes universal facts with company facts -- internal code, unit
+    cost, stock, default supplier -- so it is copied from the group dictionary
+    rather than shared from it, and carries a link to the entry it came from.
+    The is_shared flag it used to have was never read by anything.
+    """
+    assert Product.__table__.c.org_id.nullable is False
+    assert "is_shared" not in Product.__table__.c
+    assert "definition_id" in Product.__table__.c
 
 
 def test_reporting_foundation_tables_expose_required_contract():

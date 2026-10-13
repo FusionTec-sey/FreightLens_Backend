@@ -41,7 +41,16 @@ class Product(OrgMixin, AuditMixin, Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     description_quick = Column(String(500), nullable=True)  # Short one-liner for lists
-    is_shared = Column(Boolean, default=False, nullable=False, index=True)
+    # Where this product was copied from, when it was adopted from the group
+    # dictionary. Provenance, not a dependency: SET NULL, so deleting a
+    # definition never breaks a company's catalogue. (It replaces an is_shared
+    # flag that nothing ever read -- the same trap product_categories.is_shared
+    # set, which kept a catalogue bug invisible for months.)
+    definition_id = Column(
+        Integer,
+        ForeignKey("containermgmt.product_definitions.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
 
     # status: 'active' | 'inactive'  (active by default)
     status = Column(String(20), default="active", nullable=False)

@@ -182,6 +182,8 @@ async def startup_event():
     ensure_master_data_audit_schema()
     from Utils.migrate_20261013_vendor_snapshot import ensure_vendor_snapshot_schema
     ensure_vendor_snapshot_schema()
+    from Utils.migrate_20261013_product_definitions import ensure_product_definitions_schema
+    ensure_product_definitions_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -299,6 +301,15 @@ app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS
 # "may see products or orders" rather than the Product Master permission alone.
 app.include_router(
     InventoryRouter,
+    dependencies=[
+        Depends(require_module("INVENTORY")),
+        Depends(require_any_permission("View_Product", "View_Order")),
+    ],
+)
+# The group product dictionary sits behind the same floor as the catalogue it
+# feeds: a product picker on an order screen reaches it too.
+app.include_router(
+    ProductDictionaryRouter,
     dependencies=[
         Depends(require_module("INVENTORY")),
         Depends(require_any_permission("View_Product", "View_Order")),
