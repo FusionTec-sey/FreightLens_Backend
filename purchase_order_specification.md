@@ -107,9 +107,14 @@ Two rules carry the table:
 | Vendor deviations on a quote line | built: quantity, availability, substitute | `vendor_quote_items` |
 | Quote supersession state | column exists, set on re-award only | `VendorQuote.status` |
 | **Award carries the quoted quantity** | **absent: price copied, quantity dropped** | `QuoteComparisonService.py:278` |
+| Split award into one PO per vendor | built, with lineage | `QuoteComparisonService.split_award` |
+| **Quantity split across vendors** | **absent: each child takes the whole line** | `QuoteComparisonService.py:490` |
+| Child PO snapshotted at birth | **absent** — only the RFQ is | `split_award` |
+| "Awarded" as a state of its own | **absent** — borrows the variance lock | `lifecycle_locked` |
+| Coverage of an RFQ across its children | **absent** | — |
 | Container fill known before shipping | **absent** — volume computed only after packing | `order_packing_lists.total_cbm` |
 | Dimensions on the masters | columns exist, **0 of 5,790 populated** | `products.length` / `width` / `height` |
-| Lock at `QUOTE_APPROVED` | **wrong stage** — locks everything past `DRAFT` | `OrderEntryPage.js:1259` |
+| Lock at `QUOTE_APPROVED` | **wrong stage**, and per document rather than per line | `OrderEntryPage.js:1259` |
 | Lock enforced server-side | **absent** — stage is never checked on write | `OrderRouter.py:1152` |
 | Revision path in the UI | **absent** — the stepper only advances | `LifecycleStepper.js` |
 | Permission to roll back | **absent** — only forward moves are guarded | `LifecycleRouter.py:187` |
@@ -257,6 +262,62 @@ Accepting a deviation writes the minimum back to the supplier link, and the orde
 entry screen warns when a line falls below a known minimum. That turns a surprise
 that costs a quoting round into master data captured once.
 
+## 7.5 After the award: one RFQ, several POs
+
+A split award turns one RFQ into a PO per vendor. It is built and in use: in the
+dev data `RFQ-2026-0005` (2 lines, 230 units, $16,965) became `PO-2026-0005A`
+(150 units, vendor 179, $5,925) and `PO-2026-0005B` (80 units, vendor 184,
+$11,040). Children carry `parent_rfq_id`, `split_index` and, per line,
+`source_rfq_item_id`, so the lineage exists.
+
+What is missing is the rule about **which document is live**. Once children exist
+the RFQ is a source record, not a working document: editing it changes nothing
+downstream, because the children are copies, while making the history claim
+something that never reached a vendor.
+
+| A change after the award | Lands on |
+| :--- | :--- |
+| Quantity, price or dates for one vendor | that child PO — a top-up or a change order |
+| A line nobody awarded yet | the RFQ, re-sent for that line only |
+| The whole request was wrong | roll the RFQ back — only after its children are cancelled |
+
+Three rules follow:
+
+1. **The lock is per line, not per document.** An awarded line is frozen on the
+   RFQ; an unawarded line stays live and can be revised and re-sent. Today the lock
+   is all-or-nothing, so a partly awarded RFQ freezes lines nobody has quoted on.
+2. **A rollback is refused while children live.** Two documents claiming the same
+   line is corruption, not a revision. The guard names the children and offers to
+   cancel them first.
+3. **Each child is snapshotted at birth,** `transition_type = "INITIAL"` with
+   `parent_snapshot_id` set to the RFQ's award snapshot, so the chain reads end to
+   end: RFQ v3 -> PO-A v1 -> PO-A v2. Today `capture_po_snapshot` runs once, for the
+   parent, so a child has no v1 to diff against.
+
+### 7.6 The coverage view
+
+Once a top-up lands on one child, the RFQ total stops equalling the sum of its
+children — correctly, and visibly rather than quietly. The RFQ grows a per-line
+reconciliation: **requested, awarded, ordered, received** across every child, each
+difference named ("+20 on PO-A, container fill"). It is a read-only view over data
+that already exists, and it is what makes a multi-PO award manageable at all.
+
+### 7.7 Two defects found here
+
+**A quantity cannot be split across vendors.** The allocation payload is
+`{po_item_id, quote_id, unit_price}` — no quantity — and each child copies
+`quantity_ordered` in full (`QuoteComparisonService.py:490`). Award one line of 100
+as 60/40 to two vendors and the system orders 100 from each. Only whole-line splits
+work today. The fix: a quantity on the allocation, a check that the allocated total
+does not exceed the line, and the remainder recorded against the RFQ line.
+
+**The award borrows the variance lock.** `split_award` sets
+`rfq.lifecycle_locked = True`, but that flag means "unresolved price variance"
+everywhere else: `transition_stage` refuses with that message, and
+`approve_proforma_variance` clears it. Approving an unrelated variance can therefore
+unlock an awarded RFQ, and the message the user sees names the wrong reason. Being
+awarded needs its own state.
+
 ## 8. Quotes against a revised document
 
 A quote answers one version of a request. When the request changes, that quote is
@@ -286,6 +347,8 @@ No new tables. Two columns:
   `quantity_ordered` once a deviation or a top-up is accepted.
 - `vendor_quotes.reconfirmation_required` — set by a top-up, cleared when the vendor
   confirms the price holds at the larger quantity.
+- `po_items.quantity_awarded` — how much of a line went to this vendor, so a line
+  can be split across children and the remainder stays visible.
 - `purchase_orders.quoted_against_version` — written when an RFQ is sent and copied
   onto each quote as it is recorded, so a quote states its own version rather than
   having it inferred from timestamps.
@@ -329,6 +392,14 @@ Everything else exists:
 7. Dimensions captured, and the fill bar that depends on them (7.3). Last, because
    it is worth nothing until the dimensions exist, and most useful once the
    dictionary is spreading them.
+
+Alongside, in the multi-PO area (7.5–7.7), in this order:
+
+1. Refuse a rollback while children live. One guard, and it prevents corruption.
+2. Snapshot each child at birth. Cheap, and every later change depends on it.
+3. Give "awarded" its own state instead of the variance flag.
+4. Quantity on the allocation, so a line can genuinely be split.
+5. The coverage view.
 
 ## 12. Out of scope
 
