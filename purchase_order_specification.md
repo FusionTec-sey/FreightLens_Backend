@@ -40,6 +40,29 @@ dividing line is who is changing their mind.
 > The buyer changes the request — that is a **revision**.
 > A vendor answers it differently — that is a **deviation**, and it lives on the quote.
 
+```
+                                 +-- Deviation ----------------------------+
+          vendor answers         |  lives on the quote line, and the award |
+          differently ---------->|  copies it onto the purchase order      |
+         /                       +-----------------------------------------+
+a change                         +-- Top-up --------------------------------+
+after the                        |  only raises already priced lines; the   |
+RFQ is sent                  +-->|  award stands, the vendor reconfirms     |
+         \                   |   +------------------------------------------+
+          buyer changes -----+
+          the request        |   +-- Revision ------------------------------+
+                             +-->|  anything else the buyer changes: roll   |
+                                 |  back with a reason, edit, re-send;      |
+                                 |  open quotes are superseded              |
+                                 +------------------------------------------+
+
+Once child POs exist the change lands on the child, and the RFQ cannot roll
+back until they are cancelled (section 7.5).
+```
+
+Only the third path moves the document. The first two leave it exactly as the
+vendors received it, which is what keeps their quotes comparable.
+
 If a vendor's minimum rewrote the RFQ, the other vendors would be answering a
 different question from the one they were sent, and five vendors would mean five
 rollbacks of a document that can hold only one quantity at a time. The RFQ stays
