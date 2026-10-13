@@ -77,6 +77,9 @@ class CategoryUpdateSchema(BaseModel):
     attachments: Optional[List[Any]] = None
 
 class ProductCreateSchema(BaseModel):
+    # Whether this product's specifications join the group dictionary as it is
+    # created, so the choice is made once rather than remembered as a follow-up.
+    publish_to_group: Optional[bool] = False
     code: Optional[str] = None
     sku: Optional[str] = None
     name: str
@@ -1607,6 +1610,14 @@ def create_product(
     db.add(new_prod)
     db.commit()
     db.refresh(new_prod)
+
+    if payload.publish_to_group and new_prod.sku and new_prod.sku.strip():
+        # Deduplicates on SKU like every other publish path, so creating a
+        # product the group already describes links to that entry.
+        from Routes.Inventory.ProductDictionaryRouter import _publish_one
+        _publish_one(db, new_prod, current_user.id)
+        db.commit()
+        db.refresh(new_prod)
 
     if payload.suppliers is not None:
         _sync_product_suppliers(db, new_prod, payload.suppliers, target_org_id, current_user.id)

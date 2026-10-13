@@ -54,6 +54,7 @@ def _serialize(d: ProductDefinition, adopted_id=None) -> dict:
 @ProductDictionaryRouter.get("")
 def list_definitions(
     search: Optional[str] = Query(None),
+    include_unlisted: bool = Query(False, description="Also show entries that have been unlisted, so they can be offered again"),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -63,10 +64,11 @@ def list_definitions(
     if not has_permission(current_user, "View_Product"):
         raise HTTPException(status_code=403, detail="Insufficient permissions to view products.")
 
-    query = db.query(ProductDefinition).filter(
-        ProductDefinition.is_deleted == False,
-        ProductDefinition.is_active == True,
-    )
+    query = db.query(ProductDefinition).filter(ProductDefinition.is_deleted == False)
+    if not include_unlisted:
+        # An unlisted entry is hidden by default but must stay reachable, or
+        # there would be no way to offer it again.
+        query = query.filter(ProductDefinition.is_active == True)
     if search and search.strip():
         like = f"%{search.strip()}%"
         query = query.filter(or_(
@@ -252,3 +254,106 @@ def adopt_definition(
     db.refresh(product)
     return {"product_id": product.id, "created": True, "note": note,
             "message": f"'{product.name}' added to this company. Stock, cost and supplier are its own."}
+
+
+@ProductDictionaryRouter.get("/{definition_id}/usage")
+def get_definition_usage(
+    definition_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Which companies have adopted this entry, shown before it is withdrawn."""
+    if not has_permission(current_user, "View_Product"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to view products.")
+    definition = db.query(ProductDefinition).filter(
+        ProductDefinition.id == definition_id, ProductDefinition.is_deleted == False
+    ).first()
+    if not definition:
+        raise HTTPException(status_code=404, detail="Dictionary entry not found.")
+
+    rows = db.query(Product.org_id, func.count(Product.id)).filter(
+        Product.definition_id == definition_id, Product.is_deleted == False
+    ).group_by(Product.org_id).all()
+    return {
+        "name": definition.name, "sku": definition.sku,
+        "adopted_by_companies": len(rows),
+        "adopted_products": sum(int(c) for _o, c in rows),
+        "is_active": bool(definition.is_active),
+    }
+
+
+@ProductDictionaryRouter.post("/{definition_id}/withdraw")
+def withdraw_definition(
+    definition_id: int,
+    payload: Optional[dict] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Take an entry out of the dictionary, or just stop offering it.
+
+    Nothing breaks either way, which is the whole point of copying rather than
+    sharing: every company that adopted it already holds its own product, with
+    its own stock, cost and supplier. Only the link back is affected, and only
+    on a full removal.
+    """
+    if not has_permission(current_user, "Edit_Product"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to modify products.")
+
+    definition = db.query(ProductDefinition).filter(
+        ProductDefinition.id == definition_id, ProductDefinition.is_deleted == False
+    ).first()
+    if not definition:
+        raise HTTPException(status_code=404, detail="Dictionary entry not found.")
+
+    adopted = db.query(func.count(Product.id)).filter(
+        Product.definition_id == definition_id, Product.is_deleted == False
+    ).scalar() or 0
+
+    # "unlist" keeps the entry and its links, and stops it being adopted again.
+    # "remove" deletes it; the FK is SET NULL, so the copies simply lose their
+    # provenance rather than their data.
+    mode = ((payload or {}).get("mode") or "unlist").lower()
+    if mode not in ("unlist", "remove"):
+        raise HTTPException(status_code=400, detail="mode must be 'unlist' or 'remove'.")
+
+    if mode == "unlist":
+        definition.is_active = False
+        definition.updated_by = current_user.id
+        db.commit()
+        return {"mode": "unlist", "adopted_products": adopted,
+                "message": (f"'{definition.name}' is no longer offered in the dictionary. "
+                            f"{adopted} product(s) already copied from it keep working.")}
+
+    db.query(Product).filter(Product.definition_id == definition_id).update(
+        {Product.definition_id: None}, synchronize_session=False
+    )
+    definition.is_deleted = True
+    definition.is_active = False
+    definition.updated_by = current_user.id
+    db.commit()
+    return {"mode": "remove", "adopted_products": adopted,
+            "message": (f"'{definition.name}' removed from the dictionary. "
+                        f"{adopted} product(s) copied from it keep their data and lose only the link.")}
+
+
+@ProductDictionaryRouter.post("/relist/{definition_id}")
+def relist_definition(
+    definition_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context),
+):
+    """Offer an unlisted entry again."""
+    if not has_permission(current_user, "Edit_Product"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to modify products.")
+    definition = db.query(ProductDefinition).filter(
+        ProductDefinition.id == definition_id, ProductDefinition.is_deleted == False
+    ).first()
+    if not definition:
+        raise HTTPException(status_code=404, detail="Dictionary entry not found.")
+    definition.is_active = True
+    definition.updated_by = current_user.id
+    db.commit()
+    return {"message": f"'{definition.name}' is offered in the dictionary again."}
