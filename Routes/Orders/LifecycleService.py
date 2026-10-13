@@ -284,6 +284,26 @@ class LifecycleService:
 
         transition_type = "ADVANCE" if tgt_idx > curr_idx else "ROLLBACK"
 
+        # A rollback while child POs are live would leave two documents claiming
+        # the same line: the RFQ reopened for editing, and a purchase order the
+        # vendor is already working to. That is corruption, not a revision.
+        if transition_type == "ROLLBACK":
+            live_children = db.query(PurchaseOrder).filter(
+                PurchaseOrder.parent_rfq_id == po.id,
+                PurchaseOrder.is_deleted == False,
+                PurchaseOrder.status != "CANCELLED",
+            ).all()
+            if live_children:
+                names = ", ".join(c.po_number or f"#{c.id}" for c in live_children)
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"This RFQ has already been awarded to {len(live_children)} purchase "
+                        f"order(s): {names}. Change them there, or cancel them before rolling "
+                        "the RFQ back."
+                    ),
+                )
+
         # Gate check only applies when advancing forward
         if transition_type == "ADVANCE":
             checklist = LifecycleService.get_gate_checklist(po, db)

@@ -13,6 +13,10 @@ class POItem(OrgMixin, AuditMixin, Base):
     
     item_code = Column(String(100), nullable=True)
     description = Column(Text, nullable=False)
+    # What the RFQ asked for, kept beside what was agreed. They differ whenever a
+    # vendor's minimum, carton multiple or substitute is accepted at award, and
+    # the difference is the thing a buyer needs to see on the order.
+    quantity_requested = Column(Numeric(12, 2), nullable=True)
     quantity_ordered = Column(Numeric(12, 2), nullable=False, default=1.0)
     quantity_packed = Column(Numeric(12, 2), nullable=False, default=0.0)
     quantity_received = Column(Numeric(12, 2), nullable=False, default=0.0)
