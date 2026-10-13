@@ -12,7 +12,7 @@ earlier. The link is what makes a copy attributable.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import has_permission
 from Utils.org_filter import OrgContext, apply_org_filter
+from Services.search_service import sync_product_document
 
 logger = logging.getLogger("containerMgmt.product_dictionary")
 
@@ -92,6 +93,15 @@ def list_definitions(
     return [_serialize(r, adopted.get(r.id)) for r in rows]
 
 
+def _reindex(background_tasks: Optional[BackgroundTasks], products):
+    """Push changed products back into the search index."""
+    for product in products:
+        if background_tasks is not None:
+            background_tasks.add_task(sync_product_document, product)
+        else:
+            sync_product_document(product)
+
+
 def _publish_one(db: Session, product: Product, user_id: int):
     """Publish a product, or link it to the entry its SKU already has.
 
@@ -124,6 +134,7 @@ def _publish_one(db: Session, product: Product, user_id: int):
 @ProductDictionaryRouter.post("/publish-bulk")
 def publish_products_bulk(
     payload: dict,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
@@ -147,16 +158,19 @@ def publish_products_bulk(
     products = apply_org_filter(query, Product, org_context).all()
 
     published, linked, skipped = 0, 0, 0
+    touched = []
     for product in products:
         if not (product.sku and product.sku.strip()):
             skipped += 1  # no SKU, so nothing to deduplicate it against
             continue
         _definition, created = _publish_one(db, product, current_user.id)
+        touched.append(product)
         if created:
             published += 1
         else:
             linked += 1
     db.commit()
+    _reindex(background_tasks, touched)
 
     parts = [f"{published} published"]
     if linked:
@@ -170,6 +184,7 @@ def publish_products_bulk(
 @ProductDictionaryRouter.post("/publish/{product_id}")
 def publish_product(
     product_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
@@ -189,6 +204,7 @@ def publish_product(
 
     definition, created = _publish_one(db, product, current_user.id)
     db.commit()
+    _reindex(background_tasks, [product])
     if not created:
         return {"definition_id": definition.id, "created": False,
                 "message": f"'{definition.name}' is already in the dictionary; this product now points at it."}
@@ -199,6 +215,7 @@ def publish_product(
 @ProductDictionaryRouter.post("/{definition_id}/adopt")
 def adopt_definition(
     definition_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
@@ -224,6 +241,7 @@ def adopt_definition(
         if already.definition_id is None:
             already.definition_id = definition.id
             db.commit()
+            _reindex(background_tasks, [already])
         return {"product_id": already.id, "created": False,
                 "message": f"This company already has '{already.name}'."}
 
@@ -252,6 +270,7 @@ def adopt_definition(
     db.add(product)
     db.commit()
     db.refresh(product)
+    _reindex(background_tasks, [product])
     return {"product_id": product.id, "created": True, "note": note,
             "message": f"'{product.name}' added to this company. Stock, cost and supplier are its own."}
 
@@ -286,6 +305,7 @@ def get_definition_usage(
 @ProductDictionaryRouter.post("/{definition_id}/withdraw")
 def withdraw_definition(
     definition_id: int,
+    background_tasks: BackgroundTasks,
     payload: Optional[dict] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -326,6 +346,10 @@ def withdraw_definition(
                 "message": (f"'{definition.name}' is no longer offered in the dictionary. "
                             f"{adopted} product(s) already copied from it keep working.")}
 
+    # Collected before the update, since afterwards nothing points at the entry.
+    unlinked_ids = [pid for (pid,) in db.query(Product.id).filter(
+        Product.definition_id == definition_id
+    ).all()]
     db.query(Product).filter(Product.definition_id == definition_id).update(
         {Product.definition_id: None}, synchronize_session=False
     )
@@ -333,6 +357,8 @@ def withdraw_definition(
     definition.is_active = False
     definition.updated_by = current_user.id
     db.commit()
+    if unlinked_ids:
+        _reindex(background_tasks, db.query(Product).filter(Product.id.in_(unlinked_ids)).all())
     return {"mode": "remove", "adopted_products": adopted,
             "message": (f"'{definition.name}' removed from the dictionary. "
                         f"{adopted} product(s) copied from it keep their data and lose only the link.")}

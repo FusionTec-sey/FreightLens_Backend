@@ -7,7 +7,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_, and_, desc, asc, func
 import math
-from Services.search_service import search_orders_with_total, sync_order_document, remove_order_document
+from Services.search_service import (
+    search_orders_with_total, sync_order_document, remove_order_document,
+    org_filter_clause,
+)
 from Routes.Orders.order_serialization import order_to_dict
 from Services.document_number_service import next_document_number
 
@@ -82,8 +85,9 @@ def list_orders(
     # ── High-Performance Meilisearch Integration ──
     if search and search.strip():
         meili_filters = ["is_deleted = false"]
-        if org_context and getattr(org_context, "org_id", None):
-            meili_filters.append(f"org_id = {org_context.org_id}")
+        org_clause = org_filter_clause(org_context)
+        if org_clause:
+            meili_filters.append(org_clause)
 
         if can_view_rfq and not can_view_po:
             meili_filters.append("doc_type = 'RFQ'")

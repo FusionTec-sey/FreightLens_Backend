@@ -9,6 +9,28 @@ MEILI_KEY = os.getenv("MEILISEARCH_MASTER_KEY") or os.getenv("MEILI_MASTER_KEY")
 
 _client = None
 
+
+def org_filter_clause(org_context) -> Optional[str]:
+    """The same tenant rule the SQL queries use, written as a Meilisearch filter.
+
+    apply_org_filter narrows to selected_org_id when a company is picked, and to
+    every allowed company otherwise. The search filters used to read
+    org_context.org_id, which collapses to the user's own company when nothing
+    is selected -- so searching in "All companies" mode quietly returned only
+    the root company's rows while clearing the search box returned them all.
+    One helper so the two paths cannot drift apart again.
+    """
+    if org_context is None:
+        return None
+    selected = getattr(org_context, "selected_org_id", None)
+    if selected:
+        return f"org_id = {int(selected)}"
+    allowed = [int(i) for i in (getattr(org_context, "allowed_org_ids", None) or [])]
+    if allowed:
+        return "(" + " OR ".join(f"org_id = {i}" for i in allowed) + ")"
+    own = getattr(org_context, "current_org_id", None)
+    return f"org_id = {int(own)}" if own else None
+
 def get_meili_client():
     global _client
     if _client is None:
@@ -19,6 +41,44 @@ def get_meili_client():
             logger.warning("Could not initialize Meilisearch client: %s", e)
             return None
     return _client
+
+def _prune_index(index, live_ids) -> int:
+    """Delete indexed documents whose database row is gone.
+
+    The bulk reindex only adds, so a hard-deleted row stayed searchable for
+    ever. The stale hits do not reach the screen -- both routers rebuild their
+    results from Postgres by id -- but they are counted in totalHits, so
+    pagination reported pages that render empty. Found with 333 documents
+    indexed against 121 orders, after purchase orders were hard-deleted and
+    duplicate vendors merged.
+    """
+    live = {int(i) for i in live_ids}
+    stale, offset = [], 0
+    try:
+        while True:
+            res = index.get_documents({"limit": 1000, "offset": offset, "fields": ["id"]})
+            rows = getattr(res, "results", None) or []
+            if not rows:
+                break
+            for row in rows:
+                doc_id = row.get("id") if isinstance(row, dict) else getattr(row, "id", None)
+                if doc_id is not None and int(doc_id) not in live:
+                    stale.append(doc_id)
+            offset += len(rows)
+            total = getattr(res, "total", None)
+            if total is not None and offset >= int(total):
+                break
+        for start in range(0, len(stale), 1000):
+            index.delete_documents(stale[start:start + 1000])
+    except Exception as e:
+        # Never let housekeeping break startup; a stale document is a wrong
+        # count, an exception here is no search at all.
+        logger.warning("Could not prune stale search documents: %s", e)
+        return 0
+    if stale:
+        logger.info("Pruned %d search document(s) with no row behind them.", len(stale))
+    return len(stale)
+
 
 def init_products_index():
     """Ensure the products index exists with proper searchable and filterable settings."""
@@ -51,6 +111,7 @@ def init_products_index():
             "is_deleted",
             "category_id",
             "default_supplier_id",
+            "definition_id",
             "org_id"
         ])
         logger.info("Meilisearch 'products' index initialized successfully.")
@@ -91,6 +152,7 @@ def format_product_doc(p) -> Dict[str, Any]:
             "currency": p.get("currency") or "USD",
             "tags": p.get("tags") or [],
             "status": p.get("status") or "active",
+            "definition_id": p.get("definition_id"),
             "is_deleted": bool(p.get("is_deleted", False)),
             "org_id": p.get("org_id")
         }
@@ -150,6 +212,7 @@ def format_product_doc(p) -> Dict[str, Any]:
         "currency": p.currency or "USD",
         "tags": getattr(p, "tags", None) or [],
         "status": p.status or "active",
+        "definition_id": getattr(p, "definition_id", None),
         "is_deleted": bool(getattr(p, "is_deleted", False)),
         "org_id": getattr(p, "org_id", None)
     }
@@ -237,9 +300,13 @@ def bulk_index_all_products(db):
         from Model.containermgmt.Orders.Product import Product
         products = db.query(Product).filter(Product.is_deleted == False).all()
         if not products:
+            # Still prune: an empty table with a populated index is the worst
+            # case, not a reason to skip the cleanup.
+            _prune_index(client.index("products"), [])
             return 0
         docs = [format_product_doc(p) for p in products]
         client.index("products").add_documents(docs, primary_key="id")
+        _prune_index(client.index("products"), [d["id"] for d in docs])
         logger.info("Successfully bulk indexed %d products to Meilisearch", len(docs))
         return len(docs)
     except Exception as e:
@@ -271,6 +338,7 @@ def init_orders_index():
             "goods_description",
             "origin_rfq_number",
             "consignee",
+            "supplier_name_current",
             "item_descriptions",
         ])
         index.update_filterable_attributes([
@@ -296,7 +364,8 @@ def format_order_doc(o) -> Dict[str, Any]:
             "id": o.get("id"),
             "po_number": o.get("po_number") or "",
             "po_nce": o.get("po_nce") or "",
-            "company": o.get("company") or "",
+            "company": o.get("supplier_name_at_issue") or o.get("company") or "",
+            "supplier_name_current": o.get("supplier_name_current") or o.get("company") or "",
             "goods_description": o.get("goods_description") or "",
             "origin_rfq_number": o.get("origin_rfq_number") or "",
             "consignee": o.get("consignee") or "",
@@ -320,17 +389,27 @@ def format_order_doc(o) -> Dict[str, Any]:
         if desc:
             item_descs.append(desc)
 
-    supp_name = ""
+    # The vendor name as the document was raised. Vendors are shared and
+    # editable, so resolving live would make search disagree with the printed
+    # order -- the same bug the snapshot column was added to close.
+    live_name = ""
     if getattr(o, "supplier_rel", None) and getattr(o.supplier_rel, "name", None):
-        supp_name = o.supplier_rel.name
-    elif getattr(o, "company", None):
-        supp_name = o.company
+        live_name = o.supplier_rel.name
+    supp_name = (
+        getattr(o, "supplier_name_at_issue", None)
+        or getattr(o, "company", None)
+        or live_name
+        or ""
+    )
 
     return {
         "id": o.id,
         "po_number": o.po_number or "",
         "po_nce": getattr(o, "po_nce", None) or "",
         "company": supp_name or "",
+        # Indexed as well, so correcting a vendor's name still finds its older
+        # documents -- the snapshot alone would hide them.
+        "supplier_name_current": live_name or supp_name or "",
         "goods_description": getattr(o, "goods_description", None) or "",
         "origin_rfq_number": getattr(o, "origin_rfq_number", None) or "",
         "consignee": getattr(o, "consignee", None) or "",
@@ -415,9 +494,11 @@ def bulk_index_all_orders(db):
             .all()
         )
         if not orders:
+            _prune_index(client.index("purchase_orders"), [])
             return 0
         docs = [format_order_doc(o) for o in orders]
         client.index("purchase_orders").add_documents(docs, primary_key="id")
+        _prune_index(client.index("purchase_orders"), [d["id"] for d in docs])
         logger.info("Successfully bulk indexed %d orders to Meilisearch", len(docs))
         return len(docs)
     except Exception as e:

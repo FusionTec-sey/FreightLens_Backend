@@ -21,7 +21,10 @@ from auth.security_guards import is_financial_user, has_permission, can_view_sup
 from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from Services.master_data_audit import snapshot, record_changes, record_event
 from Utils.blob_storage import blob_storage
-from Services.search_service import sync_product_document, remove_product_document, search_products, search_products_with_total
+from Services.search_service import (
+    sync_product_document, remove_product_document, search_products,
+    search_products_with_total, org_filter_clause,
+)
 
 logger = logging.getLogger("containerMgmt.inventory")
 
@@ -942,8 +945,9 @@ def lookup_products(
 
     # Try fast typo-tolerant Meilisearch first
     filters = ["status = 'active'", "is_deleted = false"]
-    if org_context and getattr(org_context, "org_id", None):
-        filters.append(f"org_id = {org_context.org_id}")
+    org_clause = org_filter_clause(org_context)
+    if org_clause:
+        filters.append(org_clause)
     if supplier_id:
         filters.append(f"default_supplier_id = {supplier_id}")
 
@@ -1086,8 +1090,9 @@ def list_products(
     # ── High-Performance Meilisearch Integration ──────────────────────────
     if search and search.strip():
         meili_filters = ["is_deleted = false"]
-        if org_context and getattr(org_context, "org_id", None):
-            meili_filters.append(f"org_id = {org_context.org_id}")
+        org_clause = org_filter_clause(org_context)
+        if org_clause:
+            meili_filters.append(org_clause)
         if status:
             meili_filters.append(f"status = '{status}'")
         if category_id:
