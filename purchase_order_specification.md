@@ -4,7 +4,7 @@ How a sourcing document is locked as it advances, how its contents are changed
 after it has been sent out, and what happens when a vendor answers with something
 other than what was asked.
 
-Status as of 2026-10-14: the lifecycle, the audit trail and the rollback mechanics
+Status as of 2026-10-14 (revised the same day, after the container-fill case): the lifecycle, the audit trail and the rollback mechanics
 are built. The **policy** is not, and two different mechanisms are missing, not one:
 
 - a **revision loop**, for when the buyer changes the request, and
@@ -58,6 +58,8 @@ fixed so the quotes stay comparable.
 | The quantity the company needs changed | buyer | RFQ line | **yes** |
 | A line is added or dropped | buyer | RFQ line | **yes** |
 | A specification changes what is being bought | buyer | RFQ line | **yes** |
+| The container would ship part-empty | buyer | quantities raised on existing lines | **yes — top-up** (section 7.2) |
+| A volume price break is within reach | buyer | quantities raised on existing lines | **yes — top-up**, price reconfirmed |
 | Any of the above after the quote was approved | buyer | roll back from `QUOTE_APPROVED` first | **yes** |
 | Any of the above after the PO was issued | buyer | change order | out of scope |
 
@@ -105,11 +107,13 @@ Two rules carry the table:
 | Vendor deviations on a quote line | built: quantity, availability, substitute | `vendor_quote_items` |
 | Quote supersession state | column exists, set on re-award only | `VendorQuote.status` |
 | **Award carries the quoted quantity** | **absent: price copied, quantity dropped** | `QuoteComparisonService.py:278` |
+| Container fill known before shipping | **absent** — volume computed only after packing | `order_packing_lists.total_cbm` |
+| Dimensions on the masters | columns exist, **0 of 5,790 populated** | `products.length` / `width` / `height` |
 | Lock at `QUOTE_APPROVED` | **wrong stage** — locks everything past `DRAFT` | `OrderEntryPage.js:1259` |
 | Lock enforced server-side | **absent** — stage is never checked on write | `OrderRouter.py:1152` |
 | Revision path in the UI | **absent** — the stepper only advances | `LifecycleStepper.js` |
 | Permission to roll back | **absent** — only forward moves are guarded | `LifecycleRouter.py:187` |
-| Minimum order quantity on the masters | columns exist, **0 rows populated** | `product_suppliers.min_order_qty` |
+| Minimum order quantity on the masters | columns exist, **0 of 3,723 populated** | `product_suppliers.min_order_qty` |
 
 The three that matter most:
 
@@ -187,7 +191,62 @@ The fix is an acceptance step, not a revision:
    one vendor's minimum, that is the moment a **revision** is the right answer. The
    screen offers both.
 
-### 7.1 Feeding the masters
+### 7.2 Top-up: changes that improve the deal
+
+Filling a container is as good a reason to change a sent document as a mistake is.
+A part-empty container costs the same to ship as a full one, so topping the order
+up is the buyer doing their job, not correcting a fault, and it needs a path of its
+own rather than being squeezed through the door built for errors.
+
+These changes land **late** by nature. The gap is visible only once quantities,
+volumes and prices are known: after the quotes are in, usually after the award,
+sometimes while loading is being planned. That is exactly where the lock is
+tightest, which makes "cancel and raise another one" the worst available answer —
+it discards an awarded price in order to buy goods the vendor is glad to sell.
+
+They also have a particular shape: **increase-only, on lines a vendor has already
+priced.** That earns a lighter path than a full re-solicitation.
+
+A **top-up revision**:
+
+1. raises quantities on existing lines, or adds a line the awarded vendor already
+   quoted — it may not drop a line, change a specification or introduce an item
+   nobody priced, each of which is an ordinary revision;
+2. leaves the award standing and the quotes in place;
+3. sets `vendor_quotes.reconfirmation_required`, because volume cuts both ways: the
+   vendor is asked whether the price holds at the larger quantity, and the flag
+   clears when they answer;
+4. supersedes the quote and re-decides that line only if the vendor re-prices;
+5. records the reason like any revision, so "container fill" is visible in the
+   history rather than looking like an unexplained quantity change.
+
+This gives section 8 its missing test. **Supersession follows price, not
+paperwork:** the question is whether the change alters what the vendor had to
+price. A delivery date or a corrected wording does not. A quantity does, which is
+why a top-up asks instead of assuming.
+
+### 7.3 The system cannot see the gap
+
+It cannot tell anyone the container is 72 percent full. `length`, `width`, `height`,
+`weight_per_unit`, `units_per_box`, `est_qty_20ft` and `est_qty_40hc` all exist on
+`products`, and on staging **0 of 5,790 rows carry any of them**. Volume is computed
+only after packing, as `order_packing_lists.total_cbm`, far too late to act on.
+
+So the decision is made in someone's head or a spreadsheet and the application can
+only record the outcome. Two things change that:
+
+1. **Estimated volume and weight on the order**, summed from the line dimensions and
+   shown as a fill bar against the intended container from `QUOTE_RECEIVED` onward.
+   The arithmetic is trivial; the inputs are the problem.
+2. **Dimensions captured once and shared.** The group product dictionary already
+   carries `length`, `width`, `height`, `weight_per_unit` and `dimension_unit`, so
+   one company measuring a product serves every company that adopts it.
+
+After the PO is issued a top-up becomes a change order. Worth noting for when that
+work starts: a quantity increase on an existing line, same vendor, same price, is
+the commonest and least risky change order there is, and is the one to build first.
+
+### 7.4 Feeding the masters
 
 The minimum could have been known before the RFQ went out. `product_suppliers.min_order_qty`
 and `products.min_quantity_order` both exist, and on staging **0 of 3,723 supplier
@@ -216,15 +275,17 @@ the one thing the buyer wants when the revision is small.
 non-commercial fields (a delivery date, a description's wording) should supersede
 quotes at all, or leave them live. Superseding everything is the safe default and
 is what this document specifies until that is decided. Deciding it the other way
-needs a rule for which fields are commercial, which is a business rule, not a
-technical one.
+has its test in section 7.2 — does the change alter what the vendor had to price?
+— and needs only the business decision to adopt it.
 
 ## 9. Data model
 
 No new tables. Two columns:
 
 - `po_items.quantity_requested` — what the RFQ asked for, kept beside
-  `quantity_ordered` once a deviation is accepted.
+  `quantity_ordered` once a deviation or a top-up is accepted.
+- `vendor_quotes.reconfirmation_required` — set by a top-up, cleared when the vendor
+  confirms the price holds at the larger quantity.
 - `purchase_orders.quoted_against_version` — written when an RFQ is sent and copied
   onto each quote as it is recorded, so a quote states its own version rather than
   having it inferred from timestamps.
@@ -252,6 +313,9 @@ Everything else exists:
 - Superseded quotes stay visible, greyed, labelled with their version, and excluded
   from ranking.
 - Order entry warns when a line falls below a known minimum order quantity.
+- A fill bar on the order from `QUOTE_RECEIVED` onward: estimated volume and weight
+  against the intended container, with the shortfall named in units of the largest
+  line, so a top-up decision needs no spreadsheet.
 
 ## 11. Build order
 
@@ -260,7 +324,11 @@ Everything else exists:
 2. Stage guard on `PUT /orders/{order_id}` (section 6.2), so the lock is real.
 3. Revise in the UI, with reason and permission (sections 6.1, 6.3).
 4. Quote supersession on revision (section 8).
-5. Minimum order quantity written back to the masters and read at entry (7.1).
+5. Minimum order quantity written back to the masters and read at entry (7.4).
+6. Top-up revision with price reconfirmation (7.2).
+7. Dimensions captured, and the fill bar that depends on them (7.3). Last, because
+   it is worth nothing until the dimensions exist, and most useful once the
+   dictionary is spreading them.
 
 ## 12. Out of scope
 
