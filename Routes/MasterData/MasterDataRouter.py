@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc, asc, text as sqltext
+from sqlalchemy import or_, and_, desc, asc, func, text as sqltext
 import math
 from typing import Optional, List
 from datetime import date
@@ -13,9 +13,13 @@ from Model.containermgmt.MasterData.DocumentType import MasterDocumentType
 from Model.containermgmt.Cinfo.Supplier import Supplier
 from Model.Credentials.Organisation import Organisation
 from auth.dependencies import get_current_user, get_org_context
-from auth.security_guards import can_view_supplier_user
+from auth.security_guards import can_view_supplier_user, is_financial_user
 from Utils.org_filter import OrgContext, apply_shared_or_org_filter
 from Services.master_data_audit import snapshot, record_changes, record_event
+from Services.search_service import (
+    remove_supplier_document, search_suppliers_with_total, supplier_scope_filter,
+    sync_supplier_document,
+)
 
 
 # What a trail records for a vendor. Identity and terms -- the things another
@@ -508,6 +512,38 @@ def delete_payment_term(
 
 # ── 4. Enhanced Suppliers Master Endpoints ───────────────────────────────────
 
+def _clean_supplier_code(raw) -> Optional[str]:
+    return (raw or "").strip() or None
+
+
+def _issue_supplier_code(supplier_id: int) -> str:
+    """The form the directory has always displayed, now stored on the row.
+
+    Deliberately meaningless: no company or group segment, because a supplier
+    created by one company and later shared across the group would carry a code
+    that lies, and recoding it would break every document that quoted it.
+    """
+    return f"VEND-{supplier_id:04d}"
+
+
+def _assert_supplier_code_free(db: Session, code: str, exclude_id: Optional[int] = None) -> None:
+    """Codes are unique across the group -- one vendor, one reference.
+
+    Checked here as well as by the unique index so the answer is a 409 a person
+    can read rather than a 500 out of the driver.
+    """
+    query = db.query(Supplier).filter(
+        func.lower(func.trim(Supplier.code)) == code.strip().lower(),
+        Supplier.is_deleted != True,
+    )
+    if exclude_id is not None:
+        query = query.filter(Supplier.supplier_id != exclude_id)
+    clash = query.first()
+    if clash:
+        raise HTTPException(status_code=409, detail=(
+            f"Supplier code {code} is already used by '{clash.name}'."))
+
+
 @MasterDataRouter.get("/suppliers")
 def get_suppliers_master(
     page: Optional[int] = Query(None, ge=1),
@@ -516,6 +552,17 @@ def get_suppliers_master(
     sort_by: Optional[str] = Query(None),
     sort_dir: Optional[str] = Query("asc"),
     active_only: bool = False,
+    status: Optional[str] = Query(
+        None,
+        pattern="^(active|inactive)$",
+        description="Narrow to active or inactive vendors. The directory's own "
+                    "filter: without it a retired vendor is still listed.",
+    ),
+    currency: Optional[str] = Query(
+        None,
+        description="Narrow to one default trade currency. Filtered here rather "
+                    "than in the browser, so it holds across pages.",
+    ),
     for_org_id: Optional[int] = Query(
         None,
         description=(
@@ -530,8 +577,13 @@ def get_suppliers_master(
     can_view_supplier = can_view_supplier_user(current_user)
     query = db.query(Supplier).filter(Supplier.is_deleted != True)
     query = apply_shared_or_org_filter(query, Supplier, org_context)
-    if active_only:
+    if active_only or status == "active":
         query = query.filter(Supplier.is_active == True)
+    elif status == "inactive":
+        query = query.filter(Supplier.is_active == False)
+
+    if currency:
+        query = query.filter(func.upper(Supplier.default_currency) == currency.strip().upper())
 
     # A user whose context spans several organisations otherwise sees suppliers
     # that a document belonging to one of them cannot accept -- the vendor quote
@@ -542,7 +594,35 @@ def get_suppliers_master(
             or_(Supplier.is_shared == True, Supplier.org_id == for_org_id)
         )
 
-    if search:
+    # A typed search goes to the index when there is one. Seven ILIKE clauses
+    # cannot cope with a typo or two words in the wrong order, and suppliers are
+    # now indexed alongside products and orders. The SQL path below stays as the
+    # fallback for when Meilisearch is unavailable -- an outage must narrow the
+    # directory's search, never empty it.
+    indexed_ids = None
+    indexed_total = 0
+    if search and search.strip():
+        filters = ["is_deleted = false"]
+        scope = supplier_scope_filter(org_context)
+        if scope:
+            filters.append(scope)
+        if active_only or status == "active":
+            filters.append("is_active = true")
+        elif status == "inactive":
+            filters.append("is_active = false")
+        if currency:
+            filters.append(f'default_currency = "{currency.strip().upper()}"')
+        hits, indexed_total = search_suppliers_with_total(
+            search.strip(), filters=filters,
+            limit=(limit or 25), offset=((max(1, page or 1) - 1) * (limit or 25)),
+        )
+        if hits is not None:
+            indexed_ids = [
+                int(h.get("supplier_id") or h.get("id"))
+                for h in hits if (h.get("supplier_id") or h.get("id"))
+            ]
+
+    if search and indexed_ids is None:
         s = f"%{search.strip()}%"
         query = query.filter(
             or_(
@@ -550,7 +630,8 @@ def get_suppliers_master(
                 Supplier.code.ilike(s),
                 Supplier.contact_person.ilike(s),
                 Supplier.email.ilike(s),
-                Supplier.phone.ilike(s)
+                Supplier.phone.ilike(s),
+                Supplier.country.ilike(s),
             )
         )
 
@@ -571,12 +652,15 @@ def get_suppliers_master(
             "id": s.supplier_id,
             "supplier_id": s.supplier_id,
             "name": s.name,
-            "code": s.code or f"VEND-{s.supplier_id:04d}",
+            "code": s.code,
             "address": s.address,
             "email": s.email,
             "phone": s.phone,
             "contact_person": s.contact_person,
-            "country": s.country or "Seychelles",
+            # Not defaulted to Seychelles any more: 136 of 136 vendors have no
+            # country recorded, and a fabricated one is the field deduplication
+            # and verification will later be matched on.
+            "country": s.country,
             "logo_url": s.logo_url,
             "logo_signed_url": (
                 blob_storage.signed_url(s.logo_url, ttl=15 * 60)
@@ -604,6 +688,26 @@ def get_suppliers_master(
             "variance_threshold_pct": float(s.variance_threshold_pct or 2.0),
             "notes": s.notes,
             "is_active": s.is_active if s.is_active is not None else True,
+        }
+
+    if indexed_ids is not None:
+        # The index decided the page and the ranking; the database still decides
+        # what the user may see, so the rows are re-read under the scope filter
+        # and anything it drops stays dropped.
+        p = page or 1
+        l = limit or 25
+        if not indexed_ids:
+            return {"items": [], "total": indexed_total, "page": p, "limit": l,
+                    "pages": math.ceil(indexed_total / l) if indexed_total > 0 else 1}
+        rows = query.filter(Supplier.supplier_id.in_(indexed_ids)).all()
+        by_id = {r.supplier_id: r for r in rows}
+        ordered = [by_id[i] for i in indexed_ids if i in by_id]
+        return {
+            "items": [serialize_supplier(s) for s in ordered],
+            "total": indexed_total,
+            "page": p,
+            "limit": l,
+            "pages": math.ceil(indexed_total / l) if indexed_total > 0 else 1,
         }
 
     if page is not None or limit is not None:
@@ -642,11 +746,19 @@ def create_supplier_master(
     if existing:
         raise HTTPException(status_code=400, detail=f"Supplier '{name_clean}' already exists.")
 
+    code_clean = _clean_supplier_code(payload.code)
+    if code_clean:
+        _assert_supplier_code_free(db, code_clean)
+
     supplier = Supplier(
-        org_id=None if payload.is_shared else org_context.org_id,
+        # org_id is NOT NULL and records who entered the vendor; is_shared alone
+        # decides who may see it. Writing None here raised an IntegrityError and
+        # returned a 500 -- on the normal case, since 136 of 136 vendors are
+        # shared. The update path already works this way.
+        org_id=org_context.org_id,
         is_shared=payload.is_shared,
         name=name_clean,
-        code=payload.code.strip() if payload.code else None,
+        code=_clean_supplier_code(payload.code),
         address=payload.address.strip() if payload.address else None,
         email=payload.email.strip() if payload.email else None,
         phone=payload.phone.strip() if payload.phone else None,
@@ -665,9 +777,12 @@ def create_supplier_master(
     db.refresh(supplier)
 
     if not supplier.code:
-        supplier.code = f"VEND-{supplier.supplier_id:04d}"
+        supplier.code = _issue_supplier_code(supplier.supplier_id)
         db.commit()
 
+    # The index is what the directory searches, so a vendor that is not in it
+    # cannot be found by the screen that was just used to create it.
+    sync_supplier_document(supplier)
     return {"success": True, "message": f"Supplier '{supplier.name}' registered successfully.", "supplier_id": supplier.supplier_id}
 
 @MasterDataRouter.put("/suppliers/{id}")
@@ -694,7 +809,16 @@ def update_supplier_master(
     if "name" in payload and payload["name"]:
         supplier.name = payload["name"].strip()
     if "code" in payload:
-        supplier.code = payload["code"].strip() if payload["code"] else None
+        # Immutable once issued: it is quoted on purchase orders and delivery
+        # notes, and changing it silently rewrites what those documents mean.
+        requested_code = _clean_supplier_code(payload["code"])
+        if supplier.code and requested_code and requested_code.lower() != supplier.code.lower():
+            raise HTTPException(status_code=409, detail=(
+                f"Supplier code {supplier.code} cannot be changed. It is the "
+                "reference on documents already issued."))
+        if not supplier.code and requested_code:
+            _assert_supplier_code_free(db, requested_code)
+            supplier.code = requested_code
     if "address" in payload:
         supplier.address = payload["address"].strip() if payload["address"] else None
     if "email" in payload:
@@ -734,6 +858,7 @@ def update_supplier_master(
         org_id=None if supplier.is_shared else supplier.org_id,
     )
     db.commit()
+    sync_supplier_document(supplier, [i["value"] for i in _identifier_rows(db, supplier.supplier_id)])
     return {"success": True, "message": f"Supplier '{supplier.name}' updated successfully."}
 
 @MasterDataRouter.post("/suppliers/{id}/logo")
@@ -793,6 +918,7 @@ def delete_supplier_master(
     supplier.is_deleted = True
     supplier.is_active = False
     db.commit()
+    remove_supplier_document(supplier.supplier_id)
     return {
         "success": True,
         "message": f"Supplier '{supplier.name}' deleted.",
@@ -816,6 +942,818 @@ def get_supplier_usage(
     usage["is_shared"] = bool(supplier.is_shared)
     usage["name"] = supplier.name
     return usage
+
+
+
+# ── 4b. Supplier profile: one vendor, everything it is attached to ───────────
+#
+# The directory could only ever show a row. Opening a vendor is where a buyer
+# answers the questions that matter before using it: what do we buy from them,
+# what is outstanding, what did they last quote, and what breaks if we retire
+# them. Each tab is paged on the server, because a vendor with four hundred
+# order lines must not arrive as one response.
+
+# What a usable vendor record needs filled in. Deliberately short: a long list
+# nobody can satisfy gets ignored, and these are the fields documents and
+# payments actually need.
+SUPPLIER_COMPLETENESS_FIELDS = (
+    ("code", "Vendor code"),
+    ("name", "Name"),
+    ("country", "Country"),
+    ("contact_person", "Contact person"),
+    ("email", "Email"),
+    ("phone", "Phone"),
+    ("address", "Address"),
+    ("default_currency", "Default currency"),
+    ("default_payment_term_id", "Payment terms"),
+)
+
+
+def _supplier_or_404(db: Session, supplier_id: int, org_context: OrgContext) -> Supplier:
+    query = db.query(Supplier).filter(
+        Supplier.supplier_id == supplier_id, Supplier.is_deleted != True
+    )
+    supplier = apply_shared_or_org_filter(query, Supplier, org_context).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found.")
+    return supplier
+
+
+def _org_scope(org_context: OrgContext):
+    """The organisations whose documents this user may count or list.
+
+    Returned as SQL plus parameters rather than applied in Python, so a tab
+    never pages over rows it then has to drop.
+    """
+    if org_context.selected_org_id:
+        return "org_id = :scope_org", {"scope_org": org_context.selected_org_id}
+    allowed = list(org_context.allowed_org_ids or [])
+    if not allowed:
+        # No organisation at all means nothing to show, not everything.
+        return "1 = 0", {}
+    return "org_id = ANY(:scope_orgs)", {"scope_orgs": allowed}
+
+
+def _paged(page: Optional[int], limit: Optional[int]):
+    p = max(1, page or 1)
+    l = min(200, max(1, limit or 25))
+    return p, l, (p - 1) * l
+
+
+def _page_envelope(items: list, total: int, page: int, limit: int) -> dict:
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if total > 0 else 1,
+    }
+
+
+def _identifier_rows(db: Session, supplier_id: int) -> list:
+    rows = db.execute(sqltext("""
+        SELECT id, id_type, country, value, is_primary, verified_at, notes
+        FROM containermgmt.supplier_identifiers
+        WHERE supplier_id = :id AND is_deleted IS NOT TRUE
+        ORDER BY is_primary DESC, id_type ASC, id ASC
+    """), {"id": supplier_id}).mappings().all()
+    return [
+        {
+            "id": r["id"],
+            "id_type": r["id_type"],
+            "country": r["country"],
+            "value": r["value"],
+            "is_primary": bool(r["is_primary"]),
+            # An identifier proves nothing until someone checked it against a
+            # register, so the screen says which ones were.
+            "verified": r["verified_at"] is not None,
+            "verified_at": r["verified_at"].isoformat() if r["verified_at"] else None,
+            "notes": r["notes"],
+        }
+        for r in rows
+    ]
+
+
+@MasterDataRouter.get("/suppliers/{id}/profile")
+def get_supplier_profile(
+    id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    can_edit = is_accounts_user(current_user, org_context) and (
+        not supplier.is_shared or org_context.is_root
+    )
+    missing = [
+        label for field, label in SUPPLIER_COMPLETENESS_FIELDS
+        if not getattr(supplier, field, None)
+    ]
+    filled = len(SUPPLIER_COMPLETENESS_FIELDS) - len(missing)
+    return {
+        "id": supplier.supplier_id,
+        "supplier_id": supplier.supplier_id,
+        "name": supplier.name,
+        "code": supplier.code,
+        "address": supplier.address,
+        "email": supplier.email,
+        "phone": supplier.phone,
+        "contact_person": supplier.contact_person,
+        "country": supplier.country,
+        "logo_url": supplier.logo_url,
+        "logo_signed_url": (
+            blob_storage.signed_url(supplier.logo_url, ttl=15 * 60)
+            if can_view_supplier_user(current_user) and supplier.logo_url else None
+        ),
+        "is_shared": bool(supplier.is_shared),
+        "is_active": supplier.is_active if supplier.is_active is not None else True,
+        "org_id": supplier.org_id,
+        "org_name": (
+            (supplier.organisation.display_name or supplier.organisation.name)
+            if supplier.organisation else None
+        ),
+        "default_currency": supplier.default_currency or "USD",
+        "default_payment_term_id": supplier.default_payment_term_id,
+        "payment_term": {
+            "id": supplier.payment_term.id,
+            "code": supplier.payment_term.code,
+            "name": supplier.payment_term.name,
+        } if supplier.payment_term else None,
+        "variance_threshold_pct": float(supplier.variance_threshold_pct or 2.0),
+        "notes": supplier.notes,
+        # The counterparty seam: null until a vendor's own tenant is linked.
+        "linked_org_id": supplier.linked_org_id,
+        "identifiers": _identifier_rows(db, supplier.supplier_id),
+        "usage": _supplier_usage(db, supplier.supplier_id),
+        "completeness": {
+            "filled": filled,
+            "of": len(SUPPLIER_COMPLETENESS_FIELDS),
+            "missing": missing,
+        },
+        # Said once, here, so buttons match the server's answer instead of
+        # discovering a 403 on click.
+        "permissions": {
+            "can_edit": can_edit,
+            "can_view_financials": is_financial_user(current_user, org_context),
+        },
+    }
+
+
+@MasterDataRouter.get("/suppliers/{id}/products")
+def get_supplier_products(
+    id: int,
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """What we buy from this vendor, preferred or not.
+
+    Costs are shown only to financial staff; the rest of the row -- their SKU,
+    minimum order quantity and lead time -- is what a buyer needs to write a
+    requisition, so it is never hidden.
+    """
+    _supplier_or_404(db, id, org_context)
+    show_money = is_financial_user(current_user, org_context)
+    p, l, offset = _paged(page, limit)
+
+    total = db.execute(sqltext("""
+        SELECT count(*) FROM containermgmt.product_suppliers ps
+        JOIN containermgmt.products pr ON pr.id = ps.product_id
+        WHERE ps.supplier_id = :id AND ps.is_deleted IS NOT TRUE
+          AND pr.is_deleted IS NOT TRUE
+    """), {"id": id}).scalar() or 0
+
+    rows = db.execute(sqltext("""
+        SELECT ps.id AS link_id, ps.product_id, pr.code, pr.sku, pr.name,
+               pr.unit, ps.factory_code, ps.vendor_product_name,
+               ps.unit_cost, ps.currency, ps.min_order_qty, ps.lead_time_days,
+               ps.is_default, ps.notes,
+               (pr.default_supplier_id = :id) AS is_product_default
+        FROM containermgmt.product_suppliers ps
+        JOIN containermgmt.products pr ON pr.id = ps.product_id
+        WHERE ps.supplier_id = :id AND ps.is_deleted IS NOT TRUE
+          AND pr.is_deleted IS NOT TRUE
+        ORDER BY ps.is_default DESC, pr.name ASC
+        LIMIT :limit OFFSET :offset
+    """), {"id": id, "limit": l, "offset": offset}).mappings().all()
+
+    items = [
+        {
+            "link_id": r["link_id"],
+            "product_id": r["product_id"],
+            "code": r["code"],
+            "sku": r["sku"],
+            "name": r["name"],
+            "unit": r["unit"],
+            # Their article number: the join key a shared catalogue will map
+            # onto, and what a vendor actually quotes against.
+            "factory_code": r["factory_code"],
+            "vendor_product_name": r["vendor_product_name"],
+            "unit_cost": float(r["unit_cost"]) if (show_money and r["unit_cost"] is not None) else None,
+            "currency": r["currency"] if show_money else None,
+            "min_order_qty": float(r["min_order_qty"]) if r["min_order_qty"] is not None else None,
+            "lead_time_days": r["lead_time_days"],
+            "is_preferred": bool(r["is_default"]),
+            "is_product_default": bool(r["is_product_default"]),
+            "notes": r["notes"],
+        }
+        for r in rows
+    ]
+    return _page_envelope(items, int(total), p, l)
+
+
+@MasterDataRouter.get("/suppliers/{id}/orders")
+def get_supplier_orders(
+    id: int,
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    doc_type: Optional[str] = Query(None, description="PO or RFQ; both when omitted."),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Orders and requisitions addressed to this vendor, in this user's scope.
+
+    A shared vendor is used by several companies, and a user sees only the
+    documents of the companies they belong to -- filtered in the query, so the
+    pager counts what the user can actually open.
+    """
+    _supplier_or_404(db, id, org_context)
+    show_money = is_financial_user(current_user, org_context)
+    p, l, offset = _paged(page, limit)
+    scope_sql, params = _org_scope(org_context)
+    params = {**params, "id": id}
+
+    type_sql = ""
+    if doc_type:
+        type_sql = " AND doc_type = :doc_type"
+        params["doc_type"] = doc_type.strip().upper()
+
+    total = db.execute(sqltext(f"""
+        SELECT count(*) FROM containermgmt.purchase_orders
+        WHERE supplier_id = :id AND is_deleted IS NOT TRUE AND {scope_sql}{type_sql}
+    """), params).scalar() or 0
+
+    rows = db.execute(sqltext(f"""
+        SELECT id, po_number, doc_type, lifecycle_stage, status_label, status,
+               order_mail_date, created_at, currency, total_amount, org_id
+        FROM containermgmt.purchase_orders
+        WHERE supplier_id = :id AND is_deleted IS NOT TRUE AND {scope_sql}{type_sql}
+        ORDER BY created_at DESC, id DESC
+        LIMIT :limit OFFSET :offset
+    """), {**params, "limit": l, "offset": offset}).mappings().all()
+
+    items = [
+        {
+            "id": r["id"],
+            "po_number": r["po_number"],
+            "doc_type": r["doc_type"],
+            "lifecycle_stage": r["lifecycle_stage"],
+            "status": r["status_label"] or r["status"],
+            # order_mail_date is when it went to the vendor; created_at is
+            # when it was raised, which every document has.
+            "order_date": (r["order_mail_date"] or r["created_at"]).isoformat() if (r["order_mail_date"] or r["created_at"]) else None,
+            "currency": r["currency"] if show_money else None,
+            "total_amount": float(r["total_amount"]) if (show_money and r["total_amount"] is not None) else None,
+            "org_id": r["org_id"],
+        }
+        for r in rows
+    ]
+    return _page_envelope(items, int(total), p, l)
+
+
+@MasterDataRouter.get("/suppliers/{id}/quotes")
+def get_supplier_quotes(
+    id: int,
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """What this vendor has quoted, newest first.
+
+    Quote amounts are financial data, so the list is refused outright rather
+    than served with its numbers stripped: a quote with no price is not a quote.
+    """
+    _supplier_or_404(db, id, org_context)
+    if not is_financial_user(current_user, org_context):
+        raise HTTPException(
+            status_code=403,
+            detail="Quote history needs financial access.",
+        )
+    p, l, offset = _paged(page, limit)
+    scope_sql, params = _org_scope(org_context)
+    params = {**params, "id": id}
+
+    total = db.execute(sqltext(f"""
+        SELECT count(*) FROM containermgmt.vendor_quotes q
+        JOIN containermgmt.purchase_orders po ON po.id = q.po_id
+        WHERE q.supplier_id = :id AND q.is_deleted IS NOT TRUE AND po.{scope_sql}
+    """), params).scalar() or 0
+
+    rows = db.execute(sqltext(f"""
+        SELECT q.id, q.quote_reference, q.quote_date, q.valid_until,
+               q.total_quoted_amount, q.currency, q.status, q.rank,
+               q.delivery_lead_time_days, po.po_number, po.id AS po_id
+        FROM containermgmt.vendor_quotes q
+        JOIN containermgmt.purchase_orders po ON po.id = q.po_id
+        WHERE q.supplier_id = :id AND q.is_deleted IS NOT TRUE AND po.{scope_sql}
+        ORDER BY q.quote_date DESC, q.id DESC
+        LIMIT :limit OFFSET :offset
+    """), {**params, "limit": l, "offset": offset}).mappings().all()
+
+    items = [
+        {
+            "id": r["id"],
+            "quote_reference": r["quote_reference"],
+            "quote_date": r["quote_date"].isoformat() if r["quote_date"] else None,
+            "valid_until": r["valid_until"].isoformat() if r["valid_until"] else None,
+            "total_quoted_amount": float(r["total_quoted_amount"] or 0),
+            "currency": r["currency"],
+            "status": r["status"],
+            "rank": r["rank"],
+            "lead_time_days": r["delivery_lead_time_days"],
+            "po_number": r["po_number"],
+            "po_id": r["po_id"],
+        }
+        for r in rows
+    ]
+    return _page_envelope(items, int(total), p, l)
+
+
+
+# ── 4c. Who they are, and merging two rows that are one vendor ──────────────
+
+# The claims worth recording. Anything else is a note, not an identifier.
+IDENTIFIER_TYPES = ("TAX", "VAT", "REGISTRATION", "GLN", "DUNS", "LEI", "OTHER")
+
+
+class SupplierIdentifierSchema(BaseModel):
+    id_type: str
+    value: str
+    country: Optional[str] = None
+    is_primary: Optional[bool] = False
+    notes: Optional[str] = None
+
+
+class SupplierMergeSchema(BaseModel):
+    into_supplier_id: int
+    reason: str
+
+
+class SupplierRetireSchema(BaseModel):
+    reason: str
+
+
+def _require_reason(reason: Optional[str], message: str) -> str:
+    """A reason, or a 422. The same rule as a revision or a revoked award.
+
+    Five characters is not a quality bar; it rejects "x" and "ok" while leaving
+    the judgement to the person. What matters is that the record exists, because
+    months later it is the only thing that explains the decision.
+    """
+    cleaned = (reason or "").strip()
+    if len(cleaned) < 5:
+        raise HTTPException(status_code=422, detail=message)
+    return cleaned
+
+
+def _assert_may_edit_supplier(supplier: Supplier, org_context: OrgContext, current_user) -> None:
+    if not is_accounts_user(current_user, org_context):
+        raise HTTPException(status_code=403, detail="Only Accounts/Finance or Admin users can change suppliers.")
+    if supplier.is_shared and not org_context.is_root:
+        raise HTTPException(status_code=403, detail="Shared suppliers are managed by the root organisation.")
+
+
+@MasterDataRouter.get("/suppliers/{id}/identifiers")
+def list_supplier_identifiers(
+    id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    _supplier_or_404(db, id, org_context)
+    return {"items": _identifier_rows(db, id), "types": list(IDENTIFIER_TYPES)}
+
+
+@MasterDataRouter.post("/suppliers/{id}/identifiers")
+def add_supplier_identifier(
+    id: int,
+    payload: SupplierIdentifierSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Record a tax or registration number against a vendor.
+
+    Unverified on purpose: the row says what the vendor claims, and someone
+    checking it against a register later is a separate, recorded act.
+    """
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    id_type = (payload.id_type or "").strip().upper()
+    if id_type not in IDENTIFIER_TYPES:
+        raise HTTPException(status_code=400, detail=(
+            f"'{id_type}' is not an identifier type. Use one of: {', '.join(IDENTIFIER_TYPES)}."))
+    value = (payload.value or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="An identifier needs a value.")
+    country = (payload.country or "").strip() or None
+
+    # The same registration number in the same country is the same company.
+    # Said here with the holder named, rather than left to the unique index.
+    clash = db.execute(sqltext("""
+        SELECT i.supplier_id, s.name, s.code
+        FROM containermgmt.supplier_identifiers i
+        JOIN containermgmt.supplier s ON s.supplier_id = i.supplier_id
+        WHERE i.is_deleted IS NOT TRUE AND i.id_type = :t
+          AND lower(coalesce(i.country, '')) = lower(coalesce(:c, ''))
+          AND lower(trim(i.value)) = lower(:v)
+        LIMIT 1
+    """), {"t": id_type, "c": country, "v": value}).mappings().first()
+    if clash:
+        if clash["supplier_id"] == id:
+            raise HTTPException(status_code=409, detail="This vendor already holds that identifier.")
+        raise HTTPException(status_code=409, detail=(
+            f"{id_type} {value} is already recorded against '{clash['name']}' "
+            f"({clash['code']}). If they are the same company, merge the two records."))
+
+    if payload.is_primary:
+        db.execute(sqltext("""
+            UPDATE containermgmt.supplier_identifiers SET is_primary = FALSE
+            WHERE supplier_id = :id AND is_deleted IS NOT TRUE
+        """), {"id": id})
+
+    new_id = db.execute(sqltext("""
+        INSERT INTO containermgmt.supplier_identifiers
+            (supplier_id, id_type, country, value, is_primary, notes, created_by)
+        VALUES (:id, :t, :c, :v, :p, :n, :u)
+        RETURNING id
+    """), {
+        "id": id, "t": id_type, "c": country, "v": value,
+        "p": bool(payload.is_primary), "n": (payload.notes or "").strip() or None,
+        "u": getattr(current_user, "id", None),
+    }).scalar()
+
+    record_event(
+        db, "supplier", id, "identifier_added", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=id_type, new_value=value,
+    )
+    db.commit()
+    sync_supplier_document(supplier, [i["value"] for i in _identifier_rows(db, id)])
+    return {"success": True, "id": new_id, "items": _identifier_rows(db, id)}
+
+
+@MasterDataRouter.post("/suppliers/{id}/identifiers/{identifier_id}/verify")
+def verify_supplier_identifier(
+    id: int,
+    identifier_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Mark an identifier as checked, by whom and when.
+
+    Only the fact is recorded here. What counts as a check -- a public register,
+    a certificate on file -- is a policy decision, and the audit row is what
+    makes it reviewable either way.
+    """
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+    updated = db.execute(sqltext("""
+        UPDATE containermgmt.supplier_identifiers
+        SET verified_at = now(), verified_by = :u, updated_by = :u
+        WHERE id = :iid AND supplier_id = :id AND is_deleted IS NOT TRUE
+    """), {"iid": identifier_id, "id": id, "u": getattr(current_user, "id", None)}).rowcount
+    if not updated:
+        raise HTTPException(status_code=404, detail="Identifier not found.")
+    record_event(
+        db, "supplier", id, "identifier_verified", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=str(identifier_id), new_value="verified",
+    )
+    db.commit()
+    sync_supplier_document(supplier, [i["value"] for i in _identifier_rows(db, id)])
+    return {"success": True, "items": _identifier_rows(db, id)}
+
+
+@MasterDataRouter.delete("/suppliers/{id}/identifiers/{identifier_id}")
+def remove_supplier_identifier(
+    id: int,
+    identifier_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+    # Soft, like everything else here: a number that was once recorded against a
+    # vendor is part of why a payment or a document was accepted.
+    updated = db.execute(sqltext("""
+        UPDATE containermgmt.supplier_identifiers
+        SET is_deleted = TRUE, deleted_at = now(), deleted_by = :u
+        WHERE id = :iid AND supplier_id = :id AND is_deleted IS NOT TRUE
+    """), {"iid": identifier_id, "id": id, "u": getattr(current_user, "id", None)}).rowcount
+    if not updated:
+        raise HTTPException(status_code=404, detail="Identifier not found.")
+    record_event(
+        db, "supplier", id, "identifier_removed", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=str(identifier_id), old_value="present", new_value=None,
+    )
+    db.commit()
+    sync_supplier_document(supplier, [i["value"] for i in _identifier_rows(db, id)])
+    return {"success": True, "items": _identifier_rows(db, id)}
+
+
+# Every column in the database that points at supplier.supplier_id, read from
+# the live schema rather than listed by hand, so a reference added later cannot
+# be missed by a merge.
+_SUPPLIER_FK_QUERY = """
+    SELECT tc.table_schema, tc.table_name, kcu.column_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON kcu.constraint_name = tc.constraint_name
+    JOIN information_schema.constraint_column_usage ccu
+      ON ccu.constraint_name = tc.constraint_name
+    WHERE tc.constraint_type = 'FOREIGN KEY'
+      AND ccu.table_schema = 'containermgmt'
+      AND ccu.table_name = 'supplier'
+      AND ccu.column_name = 'supplier_id'
+"""
+
+# Filled on the survivor only where it has nothing, so a merge adds detail and
+# never overwrites it.
+_MERGE_FILLABLE = (
+    "address", "email", "phone", "contact_person", "country", "logo_url",
+    "default_currency", "default_payment_term_id", "notes",
+)
+
+
+@MasterDataRouter.get("/suppliers/{id}/merge-preview")
+def preview_supplier_merge(
+    id: int,
+    into_supplier_id: int = Query(..., description="The record that survives."),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """What a merge would move, before anyone agrees to it."""
+    loser = _supplier_or_404(db, id, org_context)
+    survivor = _supplier_or_404(db, into_supplier_id, org_context)
+    if loser.supplier_id == survivor.supplier_id:
+        raise HTTPException(status_code=400, detail="A supplier cannot be merged into itself.")
+    return {
+        "from": {"id": loser.supplier_id, "name": loser.name, "code": loser.code,
+                 "usage": _supplier_usage(db, loser.supplier_id)},
+        "into": {"id": survivor.supplier_id, "name": survivor.name, "code": survivor.code,
+                 "usage": _supplier_usage(db, survivor.supplier_id)},
+        "fields_to_fill": [
+            field for field in _MERGE_FILLABLE
+            if not getattr(survivor, field, None) and getattr(loser, field, None)
+        ],
+        "identifiers_to_move": _identifier_rows(db, loser.supplier_id),
+    }
+
+
+@MasterDataRouter.post("/suppliers/{id}/merge")
+def merge_supplier(
+    id: int,
+    payload: SupplierMergeSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Two rows that are one vendor become one row, with nothing orphaned.
+
+    The one-off migration merged the duplicates the import created, by name.
+    New ones keep arriving, and a name match cannot be trusted for this: it is
+    a judgement a person makes, with a reason, and this is where they record it.
+
+    Everything pointing at the merged record is repointed at the survivor, the
+    survivor keeps every value it already had, and the loser is retired rather
+    than deleted so its code and history stay readable.
+    """
+    loser = _supplier_or_404(db, id, org_context)
+    survivor = _supplier_or_404(db, payload.into_supplier_id, org_context)
+    _assert_may_edit_supplier(loser, org_context, current_user)
+    _assert_may_edit_supplier(survivor, org_context, current_user)
+
+    if loser.supplier_id == survivor.supplier_id:
+        raise HTTPException(status_code=400, detail="A supplier cannot be merged into itself.")
+    reason = _require_reason(payload.reason, (
+        "Say why these two records are the same vendor. The reason is kept "
+        "with the merge, and it is the only thing that explains it later."))
+
+    user_id = getattr(current_user, "id", None)
+    moved = {}
+
+    for field in _MERGE_FILLABLE:
+        if not getattr(survivor, field, None) and getattr(loser, field, None):
+            setattr(survivor, field, getattr(loser, field))
+
+    references = [
+        (row.table_schema, row.table_name, row.column_name)
+        for row in db.execute(sqltext(_SUPPLIER_FK_QUERY))
+    ]
+    for schema, table, column in references:
+        if table == "supplier_identifiers":
+            continue  # handled below, where a clash is possible
+        result = db.execute(sqltext(
+            f'UPDATE {schema}.{table} SET "{column}" = :survivor WHERE "{column}" = :loser'
+        ), {"survivor": survivor.supplier_id, "loser": loser.supplier_id})
+        if result.rowcount:
+            moved[f"{table}.{column}"] = result.rowcount
+
+    # Identifiers move unless the survivor already holds the same claim -- the
+    # unique index would reject the duplicate, and the claim is already there.
+    db.execute(sqltext("""
+        UPDATE containermgmt.supplier_identifiers i
+        SET supplier_id = :survivor, is_primary = FALSE, updated_by = :u
+        WHERE i.supplier_id = :loser AND i.is_deleted IS NOT TRUE
+          AND NOT EXISTS (
+            SELECT 1 FROM containermgmt.supplier_identifiers k
+            WHERE k.supplier_id = :survivor AND k.is_deleted IS NOT TRUE
+              AND k.id_type = i.id_type
+              AND lower(coalesce(k.country, '')) = lower(coalesce(i.country, ''))
+              AND lower(trim(k.value)) = lower(trim(i.value))
+          )
+    """), {"survivor": survivor.supplier_id, "loser": loser.supplier_id, "u": user_id})
+
+    # Whatever did not move is a claim the survivor already holds, so it is
+    # retired rather than left pointing at a merged-away record.
+    db.execute(sqltext("""
+        UPDATE containermgmt.supplier_identifiers
+        SET is_deleted = TRUE, deleted_at = now(), deleted_by = :u
+        WHERE supplier_id = :loser AND is_deleted IS NOT TRUE
+    """), {"loser": loser.supplier_id, "u": user_id})
+
+    # Repointing can list the same product against the survivor twice;
+    # product_suppliers has no uniqueness constraint to stop it.
+    db.execute(sqltext("""
+        DELETE FROM containermgmt.product_suppliers a
+        USING containermgmt.product_suppliers b
+        WHERE a.supplier_id = :survivor AND b.supplier_id = :survivor
+          AND a.product_id = b.product_id AND a.id > b.id
+    """), {"survivor": survivor.supplier_id})
+
+    # Nothing may still point at the record being merged away. A half-merge is
+    # worse than no merge: the history splits across two rows and looks
+    # authoritative on both.
+    db.flush()
+    orphans = {}
+    for schema, table, column in references:
+        if table == "supplier_identifiers":
+            # Duplicate claims stay on the loser, soft-deleted: they are a
+            # record of what was once held against that row, not a live link.
+            continue
+        left = db.execute(sqltext(
+            f'SELECT count(*) FROM {schema}.{table} WHERE "{column}" = :loser'
+        ), {"loser": loser.supplier_id}).scalar() or 0
+        if left:
+            orphans[f"{table}.{column}"] = int(left)
+    if orphans:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=(
+            "The merge was stopped: some records still point at "
+            f"{loser.code or loser.name} ({orphans}). Nothing was changed."))
+
+    loser.is_active = False
+    loser.is_deleted = True
+    loser.deleted_by = user_id
+    merged_note = (
+        f"Merged into {survivor.code or survivor.name} on "
+        f"{date.today().isoformat()}: {reason}"
+    )
+    loser.notes = f"{loser.notes}\n{merged_note}" if loser.notes else merged_note
+
+    for entity_id, action, old, new in (
+        (loser.supplier_id, "merged_away", loser.code, survivor.code),
+        (survivor.supplier_id, "merged_in", loser.code, survivor.code),
+    ):
+        record_event(
+            db, "supplier", entity_id, action, user_id,
+            org_id=None if survivor.is_shared else survivor.org_id,
+            field_name="merge_reason", old_value=old, new_value=f"{new} — {reason}",
+        )
+    db.commit()
+    # The merged-away record must stop being findable, and the survivor's own
+    # document now carries whatever moved onto it.
+    remove_supplier_document(loser.supplier_id)
+    sync_supplier_document(survivor, [i["value"] for i in _identifier_rows(db, survivor.supplier_id)])
+    return {
+        "success": True,
+        "message": (
+            f"'{loser.name}' merged into '{survivor.name}'. "
+            f"{sum(moved.values())} reference(s) repointed."
+        ),
+        "survivor_id": survivor.supplier_id,
+        "moved": moved,
+    }
+
+
+@MasterDataRouter.post("/suppliers/{id}/retire")
+def retire_supplier(
+    id: int,
+    payload: SupplierRetireSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Retire a vendor for good, with the reason on the record.
+
+    Different from deactivation, which is reversible and leaves the vendor in
+    the directory. Retirement takes it out of the directory for new work; every
+    document that already names it is untouched and stays readable.
+    """
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+    reason = _require_reason(payload.reason, (
+        "Say why this vendor is being retired. It is a shared record, and "
+        "the reason is what answers the question months later."))
+
+    usage = _supplier_usage(db, id)
+    user_id = getattr(current_user, "id", None)
+    record_event(
+        db, "supplier", id, "retired", user_id,
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name="retirement_reason", old_value=None, new_value=reason,
+    )
+    note = f"Retired on {date.today().isoformat()}: {reason}"
+    supplier.notes = f"{supplier.notes}\n{note}" if supplier.notes else note
+    supplier.is_active = False
+    supplier.is_deleted = True
+    supplier.deleted_by = user_id
+    db.commit()
+    remove_supplier_document(supplier.supplier_id)
+    return {
+        "success": True,
+        "message": f"'{supplier.name}' retired.",
+        "was_used_by": usage,
+    }
+
+
+@MasterDataRouter.get("/products/supplier-terms")
+def get_product_supplier_terms(
+    product_ids: str = Query(..., description="Comma-separated product ids."),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """What vendors have told us about these products, for the entry screen.
+
+    A minimum order quantity is only cheap to honour while the requisition is
+    being typed. Discovered when the quote comes back, it costs a re-quote, a
+    revision and an explanation; shown beside the quantity field, it costs
+    nothing. The preferred vendor's terms win, because that is who the line is
+    most likely going to.
+
+    Batched on purpose: a requisition with twenty lines asks once.
+    """
+    wanted = []
+    for raw in (product_ids or "").split(","):
+        raw = raw.strip()
+        if raw.isdigit():
+            wanted.append(int(raw))
+    wanted = wanted[:200]
+    if not wanted:
+        return {"items": {}}
+
+    rows = db.execute(sqltext("""
+        SELECT ps.product_id, ps.supplier_id, ps.min_order_qty, ps.lead_time_days,
+               ps.factory_code, ps.is_default, s.name AS supplier_name, s.code AS supplier_code,
+               count(*) OVER (PARTITION BY ps.product_id) AS vendor_count
+        FROM containermgmt.product_suppliers ps
+        JOIN containermgmt.supplier s ON s.supplier_id = ps.supplier_id
+        WHERE ps.product_id = ANY(:ids) AND ps.is_deleted IS NOT TRUE
+          AND s.is_deleted IS NOT TRUE AND s.is_active IS NOT FALSE
+        ORDER BY ps.product_id,
+                 ps.is_default DESC,
+                 (ps.min_order_qty IS NOT NULL) DESC,
+                 ps.min_order_qty DESC NULLS LAST
+    """), {"ids": wanted}).mappings().all()
+
+    terms = {}
+    for r in rows:
+        key = str(r["product_id"])
+        if key in terms:
+            continue  # the ordering already put the most relevant vendor first
+        terms[key] = {
+            "supplier_id": r["supplier_id"],
+            "supplier_name": r["supplier_name"],
+            "supplier_code": r["supplier_code"],
+            "is_preferred": bool(r["is_default"]),
+            "min_order_qty": float(r["min_order_qty"]) if r["min_order_qty"] is not None else None,
+            "lead_time_days": r["lead_time_days"],
+            "factory_code": r["factory_code"],
+            "vendor_count": int(r["vendor_count"] or 1),
+        }
+    return {"items": terms}
 
 
 # ── 5. Organization Base Currency Endpoints ───────────────────────────────────

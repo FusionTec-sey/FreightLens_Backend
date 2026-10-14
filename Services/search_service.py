@@ -314,6 +314,200 @@ def bulk_index_all_products(db):
         return 0
 
 
+# ── Suppliers Meilisearch Index ──────────────────────────────────────────────
+#
+# The directory was asked to search name, code, contact, email, phone and
+# country. Seven ILIKE clauses is not a search: it cannot cope with a typo, a
+# partial word or a vendor entered as "FOSHAN GENTLE" and asked for as "gentle
+# foshan". Products and orders are already indexed; suppliers are the same
+# problem with the same answer.
+#
+# A supplier is a group-level record -- shared vendors are visible to every
+# company -- so the filter is not simply org_id: it is "shared, or mine".
+
+def init_suppliers_index():
+    """Ensure the suppliers index exists with the right searchable fields."""
+    client = get_meili_client()
+    if not client:
+        return False
+    try:
+        try:
+            client.create_index("suppliers", {"primaryKey": "id"})
+        except Exception:
+            pass
+        index = client.index("suppliers")
+        try:
+            index.update(primary_key="id")
+        except Exception:
+            pass
+        index.update_searchable_attributes([
+            "name",
+            "code",
+            "contact_person",
+            "email",
+            "phone",
+            "country",
+            "identifier_values",
+        ])
+        index.update_filterable_attributes([
+            "is_active",
+            "is_deleted",
+            "is_shared",
+            "org_id",
+            "default_currency",
+            "country",
+        ])
+        logger.info("Meilisearch 'suppliers' index initialized successfully.")
+        return True
+    except Exception as e:
+        logger.exception("Failed to initialize Meilisearch 'suppliers' index: %s", e)
+        return False
+
+
+def format_supplier_doc(s, identifier_values: Optional[List[str]] = None) -> Dict[str, Any]:
+    """A supplier as the index sees it.
+
+    Identifiers are included because a buyer looking for a vendor by its tax or
+    registration number is looking for the vendor, and that is exactly the
+    search that stops a duplicate being created.
+    """
+    return {
+        "id": str(getattr(s, "supplier_id", None) or getattr(s, "id", "")),
+        "supplier_id": getattr(s, "supplier_id", None),
+        "name": getattr(s, "name", None),
+        "code": getattr(s, "code", None),
+        "contact_person": getattr(s, "contact_person", None),
+        "email": getattr(s, "email", None),
+        "phone": getattr(s, "phone", None),
+        "country": getattr(s, "country", None),
+        "address": getattr(s, "address", None),
+        "default_currency": getattr(s, "default_currency", None) or "USD",
+        "is_active": bool(getattr(s, "is_active", True)),
+        "is_shared": bool(getattr(s, "is_shared", False)),
+        "is_deleted": bool(getattr(s, "is_deleted", False)),
+        "org_id": getattr(s, "org_id", None),
+        "identifier_values": identifier_values or [],
+    }
+
+
+def supplier_scope_filter(org_context) -> Optional[str]:
+    """Shared vendors, plus the ones this user's companies own.
+
+    The same rule as apply_shared_or_org_filter. Written here so a search can
+    never widen what a list query would narrow.
+    """
+    if org_context is None:
+        return None
+    selected = getattr(org_context, "selected_org_id", None)
+    if selected:
+        return f"(is_shared = true OR org_id = {int(selected)})"
+    allowed = [int(i) for i in (getattr(org_context, "allowed_org_ids", None) or [])]
+    if allowed:
+        owned = " OR ".join(f"org_id = {i}" for i in allowed)
+        return f"(is_shared = true OR {owned})"
+    own = getattr(org_context, "current_org_id", None)
+    return f"(is_shared = true OR org_id = {int(own)})" if own else "is_shared = true"
+
+
+def sync_supplier_document(supplier, identifier_values: Optional[List[str]] = None):
+    """Adds or updates a single supplier in Meilisearch."""
+    client = get_meili_client()
+    if not client:
+        return
+    try:
+        doc = format_supplier_doc(supplier, identifier_values)
+        client.index("suppliers").add_documents([doc], primary_key="id")
+        logger.info("Synced supplier %s to Meilisearch", doc.get("id"))
+    except Exception as e:
+        logger.error("Failed to sync supplier to Meilisearch: %s", e)
+
+
+def remove_supplier_document(supplier_id: int):
+    """Removes a supplier from Meilisearch."""
+    client = get_meili_client()
+    if not client:
+        return
+    try:
+        client.index("suppliers").delete_document(str(supplier_id))
+        logger.info("Removed supplier %s from Meilisearch", supplier_id)
+    except Exception as e:
+        logger.error("Failed to remove supplier from Meilisearch: %s", e)
+
+
+def search_suppliers_with_total(
+    query_str: str,
+    filters: Optional[List[str]] = None,
+    limit: int = 25,
+    offset: int = 0
+):
+    """Search suppliers, returning the page and the true total.
+
+    Returns (None, 0) when there is no search engine, which the caller reads as
+    "fall back to SQL" -- never as "no suppliers".
+    """
+    client = get_meili_client()
+    if not client:
+        return None, 0
+    try:
+        search_params = {
+            "limit": limit,
+            "offset": offset,
+            # Every word must match. On the default strategy a search for the
+            # code VEND-0181 drops a term and matches all 136 vendors, because
+            # they all contain "VEND" -- the right row ranked first and the
+            # count said 136.
+            "matchingStrategy": "all",
+        }
+        if filters:
+            search_params["filter"] = " AND ".join(f for f in filters if f)
+        res = client.index("suppliers").search(query_str or "", search_params)
+        hits = res.get("hits", [])
+        total = res.get("totalHits") or res.get("estimatedTotalHits") or len(hits)
+        return hits, total
+    except Exception as e:
+        logger.error("Meilisearch search_suppliers_with_total error: %s", e)
+        return None, 0
+
+
+def bulk_index_all_suppliers(db):
+    """Bulk sync every live supplier, with its identifiers, to Meilisearch."""
+    client = get_meili_client()
+    if not client:
+        return 0
+    try:
+        init_suppliers_index()
+        from sqlalchemy import text as _text
+        from Model.containermgmt.Cinfo.Supplier import Supplier
+
+        suppliers = db.query(Supplier).filter(Supplier.is_deleted == False).all()
+        if not suppliers:
+            _prune_index(client.index("suppliers"), [])
+            return 0
+
+        values = {}
+        try:
+            for row in db.execute(_text("""
+                SELECT supplier_id, value FROM containermgmt.supplier_identifiers
+                WHERE is_deleted IS NOT TRUE
+            """)):
+                values.setdefault(row[0], []).append(row[1])
+        except Exception:
+            # The identifiers table may not exist yet on an older database.
+            values = {}
+
+        docs = [
+            format_supplier_doc(s, values.get(s.supplier_id, []))
+            for s in suppliers
+        ]
+        client.index("suppliers").add_documents(docs, primary_key="id")
+        _prune_index(client.index("suppliers"), [d["id"] for d in docs])
+        logger.info("Successfully bulk indexed %d suppliers to Meilisearch", len(docs))
+        return len(docs)
+    except Exception as e:
+        logger.exception("Failed to bulk index suppliers to Meilisearch: %s", e)
+        return 0
+
+
 # ── Orders & RFQs Meilisearch Index ──────────────────────────────────────────
 
 def init_orders_index():
