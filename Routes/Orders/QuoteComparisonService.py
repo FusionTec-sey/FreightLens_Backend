@@ -236,15 +236,22 @@ class QuoteComparisonService:
         }
 
     @staticmethod
-    def _deviation(po_item, quote_item) -> Optional[Dict[str, Any]]:
+    def _deviation(po_item, quote_item, expected_qty=None) -> Optional[Dict[str, Any]]:
         """What the vendor answered that differs from what was asked.
 
         A minimum order quantity, a carton multiple or a substitute all land
         here. None means the vendor answered the question exactly as put.
+
+        expected_qty is the share being asked of this vendor when the buyer is
+        deliberately splitting a line between several of them; without it, a
+        vendor quoting 1,000 of a 1,800 line looks like a deviation when it is
+        the buyer's own allocation.
         """
         if quote_item is None:
             return None
-        asked = Decimal(str(po_item.quantity_ordered or 0))
+        asked = Decimal(str(
+            expected_qty if expected_qty is not None else (po_item.quantity_ordered or 0)
+        ))
         offered = Decimal(str(quote_item.quantity_quoted or 0))
         kinds = []
         if offered > 0 and offered != asked:
@@ -529,6 +536,9 @@ class QuoteComparisonService:
             if not quote:
                 raise HTTPException(status_code=400, detail=f"Invalid quote #{quote_id} for RFQ #{rfq.id}.")
 
+            # How much of the line goes to this vendor. Absent means the whole
+            # line, which is every award made before quantities were supported.
+            alloc_qty = alloc.get("quantity")
             sup_id = quote.supplier_id
             if sup_id not in supplier_allocations:
                 supplier_allocations[sup_id] = {
@@ -537,11 +547,41 @@ class QuoteComparisonService:
                 }
             supplier_allocations[sup_id]["items"].append({
                 "rfq_item": rfq_item,
+                "quantity": alloc_qty,
                 "unit_price": unit_price if unit_price is not None else float(quote.total_quoted_amount)
             })
 
         if not supplier_allocations:
             raise HTTPException(status_code=400, detail="No valid allocations mapped to active RFQ items.")
+
+        # Splitting one line between two vendors used to order the whole line
+        # from each of them: there was no quantity in an allocation, and every
+        # child copied quantity_ordered in full. Now the parts are added up and
+        # may not exceed the line.
+        allocated_per_item: Dict[int, Decimal] = {}
+        for sup_data in supplier_allocations.values():
+            for idata in sup_data["items"]:
+                if idata.get("quantity") is None:
+                    continue
+                part = Decimal(str(idata["quantity"]))
+                if part <= 0:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"'{idata['rfq_item'].description}': an allocated quantity must be more than zero.",
+                    )
+                item_id = idata["rfq_item"].id
+                allocated_per_item[item_id] = allocated_per_item.get(item_id, Decimal("0")) + part
+        for item_id, allocated in allocated_per_item.items():
+            line = active_rfq_items[item_id]
+            requested = Decimal(str(line.quantity_ordered or 0))
+            if allocated > requested:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"'{line.description}': {allocated} allocated across vendors, but only "
+                        f"{requested} was requested. Revise the request first if more is wanted."
+                    ),
+                )
 
         # Same rule as a single award: a vendor answering differently is normal,
         # and applying it without a decision is not.
@@ -551,6 +591,7 @@ class QuoteComparisonService:
                 dev = QuoteComparisonService._deviation(
                     idata["rfq_item"],
                     QuoteComparisonService._quote_item_for(db, sup_data["quote"], idata["rfq_item"]),
+                    expected_qty=idata.get("quantity"),
                 )
                 if dev:
                     deviations.append(dev)
@@ -651,8 +692,16 @@ class QuoteComparisonService:
                 matching_qi = QuoteComparisonService._quote_item_for(db, quote, orig_it)
                 quoted = Decimal(str(matching_qi.quantity_quoted or 0)) if matching_qi else Decimal("0")
                 # The child PO is the document the vendor will ship against, so it
-                # carries the vendor's quantity; the request stays beside it.
-                qty = quoted if quoted > 0 else requested
+                # carries the vendor's quantity; the request stays beside it. An
+                # explicit allocation wins over both: it is this vendor's share of
+                # a line being split.
+                share = idata.get("quantity")
+                if share is not None:
+                    qty = Decimal(str(share))
+                elif quoted > 0:
+                    qty = quoted
+                else:
+                    qty = requested
                 line_total = qty * u_price
                 child_po_total += line_total
 
@@ -671,7 +720,7 @@ class QuoteComparisonService:
                         if matching_qi and matching_qi.is_substitute and matching_qi.description
                         else orig_it.description
                     ),
-                    quantity_requested=requested,
+                    quantity_requested=(Decimal(str(share)) if share is not None else requested),
                     quantity_ordered=qty,
                     unit=orig_it.unit,
                     draft_unit_price=orig_it.draft_unit_price or orig_it.unit_price,
@@ -705,7 +754,12 @@ class QuoteComparisonService:
         rfq.lifecycle_stage = "QUOTE_APPROVED"
         rfq.status = "SOURCING"
         rfq.status_label = "Awarded"
-        rfq.lifecycle_locked = True
+        # Deliberately not lifecycle_locked: that flag means "unresolved price
+        # variance" everywhere else, so approving an unrelated variance cleared
+        # it, the refusal it produced named the wrong reason, and the order
+        # screen went looking for variance details that never existed. Being
+        # awarded is protected by its own rules now -- a rollback is refused
+        # while children live, and the stage guard freezes awarded lines.
         rfq.lifecycle_version += 1
         rfq.total_amount = sum(c.total_amount for c in created_pos)
         if not rfq.order_mail_date:
@@ -737,30 +791,18 @@ class QuoteComparisonService:
         )
         db.flush()
 
-        # A child born without a v1 has nothing for its later changes to be a
-        # change *from*. Only the parent was snapshotted before this, so every
-        # child PO started life with an empty history.
-        for child in created_pos:
-            child_snap = LifecycleService.capture_po_snapshot(
-                po=child,
-                db=db,
-                transition_type="INITIAL",
-                change_summary=f"Issued from {rfq.po_number} on award to {child.company}",
-                user_id=user_id,
-            )
-            if child_snap is not None and parent_snapshot is not None:
-                child_snap.parent_snapshot_id = parent_snapshot.id
-        db.flush()
-
-        # Capture initial snapshot for each child PO
+        # Capture initial snapshot for each child PO, descended from the award
+        # snapshot of the RFQ so the chain reads end to end: RFQ v3 -> PO-A v1.
         for p in created_pos:
-            LifecycleService.capture_po_snapshot(
+            child_snap = LifecycleService.capture_po_snapshot(
                 po=p,
                 db=db,
                 transition_type="INITIAL",
                 change_summary=f"Created from {rfq.po_number} as official PO issued to {p.company}",
                 user_id=user_id
             )
+            if child_snap is not None and parent_snapshot is not None:
+                child_snap.parent_snapshot_id = parent_snapshot.id
 
         db.commit()
         for p in created_pos:

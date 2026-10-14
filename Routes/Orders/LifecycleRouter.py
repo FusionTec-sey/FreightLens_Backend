@@ -101,6 +101,9 @@ class SplitAwardAllocation(BaseModel):
     po_item_id: int
     quote_id: int
     unit_price: Optional[float] = None
+    # This vendor's share of the line. Omitted means the whole line, which is
+    # how every award worked before a line could be split.
+    quantity: Optional[float] = None
 
 class SplitAwardRequest(BaseModel):
     allocations: List[SplitAwardAllocation]

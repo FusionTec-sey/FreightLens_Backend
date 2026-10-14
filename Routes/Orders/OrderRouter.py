@@ -1181,6 +1181,14 @@ def _assert_lines_may_change(order, changed_items) -> None:
         return
 
     doc = order.po_number or f"#{order.id}"
+    if order.lifecycle_locked:
+        raise HTTPException(
+            status_code=423,
+            detail=(
+                f"{doc} is held for a price variance that has not been approved. Its lines "
+                "cannot change until the variance is settled."
+            ),
+        )
     if stage in SENT_STAGES:
         raise HTTPException(
             status_code=409,
