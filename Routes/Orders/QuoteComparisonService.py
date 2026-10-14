@@ -236,12 +236,118 @@ class QuoteComparisonService:
         }
 
     @staticmethod
+    def _deviation(po_item, quote_item, expected_qty=None) -> Optional[Dict[str, Any]]:
+        """What the vendor answered that differs from what was asked.
+
+        A minimum order quantity, a carton multiple or a substitute all land
+        here. None means the vendor answered the question exactly as put.
+
+        expected_qty is the share being asked of this vendor when the buyer is
+        deliberately splitting a line between several of them; without it, a
+        vendor quoting 1,000 of a 1,800 line looks like a deviation when it is
+        the buyer's own allocation.
+        """
+        if quote_item is None:
+            return None
+        asked = Decimal(str(
+            expected_qty if expected_qty is not None else (po_item.quantity_ordered or 0)
+        ))
+        offered = Decimal(str(quote_item.quantity_quoted or 0))
+        kinds = []
+        if offered > 0 and offered != asked:
+            kinds.append("quantity")
+        if bool(getattr(quote_item, "is_substitute", False)):
+            kinds.append("substitute")
+        if (quote_item.availability or "AVAILABLE") not in ("AVAILABLE", ""):
+            kinds.append((quote_item.availability or "").lower())
+        if not kinds:
+            return None
+        return {
+            "po_item_id": po_item.id,
+            "description": po_item.description,
+            "kinds": kinds,
+            "quantity_requested": float(asked),
+            "quantity_quoted": float(offered),
+            "is_substitute": bool(getattr(quote_item, "is_substitute", False)),
+            "substitute_description": quote_item.description if getattr(quote_item, "is_substitute", False) else None,
+            "availability": quote_item.availability or "AVAILABLE",
+        }
+
+    @staticmethod
+    def _apply_quoted_line(po, po_item, quote_item, user_id, db) -> None:
+        """Carry the vendor's answer onto the order line, not just their price.
+
+        The award used to copy unit_price and nothing else, so a quote for 5
+        became an order for 3 at the vendor's price: the quote totalled
+        quantity_quoted * unit_price while the order totalled quantity_ordered *
+        unit_price, and the two disagreed silently until the vendor invoiced.
+        """
+        from .LifecycleService import LifecycleService
+
+        if po_item.quantity_requested is None:
+            po_item.quantity_requested = po_item.quantity_ordered
+
+        offered = Decimal(str(quote_item.quantity_quoted or 0))
+        if offered > 0 and offered != Decimal(str(po_item.quantity_ordered or 0)):
+            old_qty = po_item.quantity_ordered
+            po_item.quantity_ordered = offered
+            LifecycleService.record_item_history(
+                po=po, item=po_item, action="QUANTITY_ACCEPTED",
+                field_name="quantity_ordered",
+                old_value=old_qty, new_value=offered,
+                reason="Vendor deviation accepted at award",
+                user_id=user_id, db=db,
+            )
+
+        if getattr(quote_item, "is_substitute", False) and quote_item.description:
+            old_desc = po_item.description
+            po_item.description = quote_item.description
+            if quote_item.item_code:
+                po_item.item_code = quote_item.item_code
+            if quote_item.inventory_product_id:
+                po_item.product_id = quote_item.inventory_product_id
+            LifecycleService.record_item_history(
+                po=po, item=po_item, action="SUBSTITUTE_ACCEPTED",
+                field_name="description",
+                old_value=old_desc, new_value=quote_item.description,
+                reason="Vendor substitute accepted at award",
+                user_id=user_id, db=db,
+            )
+
+    @staticmethod
+    def _quote_item_for(db, quote, po_item):
+        """The quote's answer to one order line.
+
+        The link comes first. Falling back to item_code was matching every line
+        of a catalogue that leaves codes blank -- `item_code == ''` is true for
+        all of them, so the first row won and line 2 was priced from line 1's
+        answer. The fallback stays for quotes typed without a link, but only
+        when there is an actual code on both sides.
+        """
+        linked = db.query(VendorQuoteItem).filter(
+            VendorQuoteItem.vendor_quote_id == quote.id,
+            VendorQuoteItem.po_item_id == po_item.id,
+        ).first()
+        if linked is not None:
+            return linked
+
+        code = (po_item.item_code or "").strip()
+        if not code:
+            return None
+        return db.query(VendorQuoteItem).filter(
+            VendorQuoteItem.vendor_quote_id == quote.id,
+            VendorQuoteItem.item_code == code,
+            VendorQuoteItem.po_item_id.is_(None),
+        ).first()
+
+    @staticmethod
     def award_quote(
         po_id: int,
         quote_id: int,
         line_awards: Optional[List[Dict[str, Any]]],
         user_id: Optional[int],
-        db: Session
+        db: Session,
+        accept_deviations: bool = False,
     ) -> Dict[str, Any]:
         """
         Awards a winning quote (or specific line-items). Copies prices to PO items
@@ -257,16 +363,51 @@ class QuoteComparisonService:
 
         active_items = {it.id: it for it in (po.items or []) if not it.is_deleted}
 
+        # Nothing is awarded past a deviation without someone saying so. The
+        # alternative -- applying it silently -- is how a quote for 5 became an
+        # order for 3; refusing outright would be worse, since a minimum order
+        # quantity is a normal answer, not an error.
+        awarded_ids = (
+            [a.get("po_item_id") for a in line_awards]
+            if line_awards else list(active_items.keys())
+        )
+        deviations = []
+        for item_id in awarded_ids:
+            po_item = active_items.get(item_id)
+            if not po_item:
+                continue
+            dev = QuoteComparisonService._deviation(
+                po_item, QuoteComparisonService._quote_item_for(db, winning_quote, po_item)
+            )
+            if dev:
+                deviations.append(dev)
+        if deviations and not accept_deviations:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": (
+                        "This quote answers differently from the request on "
+                        f"{len(deviations)} line(s). Accept the deviations to award, "
+                        "or revise the request instead."
+                    ),
+                    "deviations": deviations,
+                },
+            )
+
         if line_awards:
             # Split-award: user manually awarded specific line items to specific quotes
             for award in line_awards:
                 po_it_id = award.get("po_item_id")
                 unit_price = award.get("approved_unit_price")
                 if po_it_id in active_items and unit_price is not None:
-                    active_items[po_it_id].approved_unit_price = Decimal(str(unit_price))
-                    active_items[po_it_id].unit_price = Decimal(str(unit_price))
-                    if active_items[po_it_id].quantity_ordered:
-                        active_items[po_it_id].total_price = active_items[po_it_id].quantity_ordered * Decimal(str(unit_price))
+                    it = active_items[po_it_id]
+                    it.approved_unit_price = Decimal(str(unit_price))
+                    it.unit_price = Decimal(str(unit_price))
+                    qi = QuoteComparisonService._quote_item_for(db, winning_quote, it)
+                    if qi is not None:
+                        QuoteComparisonService._apply_quoted_line(po, it, qi, user_id, db)
+                    if it.quantity_ordered:
+                        it.total_price = it.quantity_ordered * Decimal(str(unit_price))
         else:
             # Award entire quote
             for qi in (winning_quote.items or []):
@@ -274,6 +415,7 @@ class QuoteComparisonService:
                     it = active_items[qi.po_item_id]
                     it.approved_unit_price = qi.unit_price
                     it.unit_price = qi.unit_price
+                    QuoteComparisonService._apply_quoted_line(po, it, qi, user_id, db)
                     if it.quantity_ordered:
                         it.total_price = it.quantity_ordered * qi.unit_price
 
@@ -348,7 +490,8 @@ class QuoteComparisonService:
         rfq_id: int,
         allocations: List[Dict[str, Any]],
         user_id: Optional[int],
-        db: Session
+        db: Session,
+        accept_deviations: bool = False,
     ) -> Dict[str, Any]:
         """
         Splits and awards line items of an RFQ across one or more vendor quotes.
@@ -393,6 +536,9 @@ class QuoteComparisonService:
             if not quote:
                 raise HTTPException(status_code=400, detail=f"Invalid quote #{quote_id} for RFQ #{rfq.id}.")
 
+            # How much of the line goes to this vendor. Absent means the whole
+            # line, which is every award made before quantities were supported.
+            alloc_qty = alloc.get("quantity")
             sup_id = quote.supplier_id
             if sup_id not in supplier_allocations:
                 supplier_allocations[sup_id] = {
@@ -401,11 +547,66 @@ class QuoteComparisonService:
                 }
             supplier_allocations[sup_id]["items"].append({
                 "rfq_item": rfq_item,
+                "quantity": alloc_qty,
                 "unit_price": unit_price if unit_price is not None else float(quote.total_quoted_amount)
             })
 
         if not supplier_allocations:
             raise HTTPException(status_code=400, detail="No valid allocations mapped to active RFQ items.")
+
+        # Splitting one line between two vendors used to order the whole line
+        # from each of them: there was no quantity in an allocation, and every
+        # child copied quantity_ordered in full. Now the parts are added up and
+        # may not exceed the line.
+        allocated_per_item: Dict[int, Decimal] = {}
+        for sup_data in supplier_allocations.values():
+            for idata in sup_data["items"]:
+                if idata.get("quantity") is None:
+                    continue
+                part = Decimal(str(idata["quantity"]))
+                if part <= 0:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"'{idata['rfq_item'].description}': an allocated quantity must be more than zero.",
+                    )
+                item_id = idata["rfq_item"].id
+                allocated_per_item[item_id] = allocated_per_item.get(item_id, Decimal("0")) + part
+        for item_id, allocated in allocated_per_item.items():
+            line = active_rfq_items[item_id]
+            requested = Decimal(str(line.quantity_ordered or 0))
+            if allocated > requested:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"'{line.description}': {allocated} allocated across vendors, but only "
+                        f"{requested} was requested. Revise the request first if more is wanted."
+                    ),
+                )
+
+        # Same rule as a single award: a vendor answering differently is normal,
+        # and applying it without a decision is not.
+        deviations = []
+        for sup_data in supplier_allocations.values():
+            for idata in sup_data["items"]:
+                dev = QuoteComparisonService._deviation(
+                    idata["rfq_item"],
+                    QuoteComparisonService._quote_item_for(db, sup_data["quote"], idata["rfq_item"]),
+                    expected_qty=idata.get("quantity"),
+                )
+                if dev:
+                    deviations.append(dev)
+        if deviations and not accept_deviations:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": (
+                        f"The chosen quotes answer differently from the request on "
+                        f"{len(deviations)} line(s). Accept the deviations to award, "
+                        "or revise the request instead."
+                    ),
+                    "deviations": deviations,
+                },
+            )
 
         is_multi_vendor = len(supplier_allocations) > 1
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -487,7 +688,20 @@ class QuoteComparisonService:
             for idata in items_data:
                 orig_it = idata["rfq_item"]
                 u_price = Decimal(str(idata["unit_price"]))
-                qty = Decimal(str(orig_it.quantity_ordered or 1.0))
+                requested = Decimal(str(orig_it.quantity_ordered or 1.0))
+                matching_qi = QuoteComparisonService._quote_item_for(db, quote, orig_it)
+                quoted = Decimal(str(matching_qi.quantity_quoted or 0)) if matching_qi else Decimal("0")
+                # The child PO is the document the vendor will ship against, so it
+                # carries the vendor's quantity; the request stays beside it. An
+                # explicit allocation wins over both: it is this vendor's share of
+                # a line being split.
+                share = idata.get("quantity")
+                if share is not None:
+                    qty = Decimal(str(share))
+                elif quoted > 0:
+                    qty = quoted
+                else:
+                    qty = requested
                 line_total = qty * u_price
                 child_po_total += line_total
 
@@ -501,8 +715,13 @@ class QuoteComparisonService:
                     request_item_id=orig_it.request_item_id,
                     product_id=orig_it.product_id,
                     item_code=orig_it.item_code,
-                    description=orig_it.description,
-                    quantity_ordered=orig_it.quantity_ordered,
+                    description=(
+                        matching_qi.description
+                        if matching_qi and matching_qi.is_substitute and matching_qi.description
+                        else orig_it.description
+                    ),
+                    quantity_requested=(Decimal(str(share)) if share is not None else requested),
+                    quantity_ordered=qty,
                     unit=orig_it.unit,
                     draft_unit_price=orig_it.draft_unit_price or orig_it.unit_price,
                     approved_unit_price=u_price,
@@ -524,13 +743,6 @@ class QuoteComparisonService:
                 orig_it.total_price = line_total
 
                 # Mark quote item as awarded
-                matching_qi = db.query(VendorQuoteItem).filter(
-                    VendorQuoteItem.vendor_quote_id == quote.id,
-                    or_(
-                        VendorQuoteItem.po_item_id == orig_it.id,
-                        VendorQuoteItem.item_code == orig_it.item_code
-                    )
-                ).first()
                 if matching_qi:
                     matching_qi.is_awarded = True
 
@@ -542,7 +754,12 @@ class QuoteComparisonService:
         rfq.lifecycle_stage = "QUOTE_APPROVED"
         rfq.status = "SOURCING"
         rfq.status_label = "Awarded"
-        rfq.lifecycle_locked = True
+        # Deliberately not lifecycle_locked: that flag means "unresolved price
+        # variance" everywhere else, so approving an unrelated variance cleared
+        # it, the refusal it produced named the wrong reason, and the order
+        # screen went looking for variance details that never existed. Being
+        # awarded is protected by its own rules now -- a rollback is refused
+        # while children live, and the stage guard freezes awarded lines.
         rfq.lifecycle_version += 1
         rfq.total_amount = sum(c.total_amount for c in created_pos)
         if not rfq.order_mail_date:
@@ -565,7 +782,7 @@ class QuoteComparisonService:
         # Capture snapshots
         from .LifecycleService import LifecycleService
         created_po_nums = [p.po_number for p in created_pos]
-        LifecycleService.capture_po_snapshot(
+        parent_snapshot = LifecycleService.capture_po_snapshot(
             po=rfq,
             db=db,
             transition_type="STAGE_CHANGE",
@@ -574,15 +791,18 @@ class QuoteComparisonService:
         )
         db.flush()
 
-        # Capture initial snapshot for each child PO
+        # Capture initial snapshot for each child PO, descended from the award
+        # snapshot of the RFQ so the chain reads end to end: RFQ v3 -> PO-A v1.
         for p in created_pos:
-            LifecycleService.capture_po_snapshot(
+            child_snap = LifecycleService.capture_po_snapshot(
                 po=p,
                 db=db,
                 transition_type="INITIAL",
                 change_summary=f"Created from {rfq.po_number} as official PO issued to {p.company}",
                 user_id=user_id
             )
+            if child_snap is not None and parent_snapshot is not None:
+                child_snap.parent_snapshot_id = parent_snapshot.id
 
         db.commit()
         for p in created_pos:
@@ -620,13 +840,29 @@ class QuoteComparisonService:
     def revoke_rfq_award(
         rfq_id: int,
         user_id: Optional[int],
-        db: Session
+        db: Session,
+        reason: str = "",
     ) -> Dict[str, Any]:
         """
         Safely revokes an existing award/split on an RFQ.
         Validates that none of the generated child POs have progressed beyond PO_ISSUED (no payments, shipments, etc.).
         Soft-deletes the child POs and restores the parent RFQ back to QUOTE_RECEIVED stage.
+
+        A revocation undoes a decision the company already made and cancels the
+        purchase orders it produced, so it takes a reason for the same reason a
+        revision does: the vendor who won was told, and somebody will ask why that
+        changed.
         """
+        reason = (reason or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Revoking an award needs a reason: the vendor was told they won, "
+                    "and the purchase orders it created are about to be cancelled."
+                ),
+            )
+
         rfq = db.query(PurchaseOrder).filter(PurchaseOrder.id == rfq_id).with_for_update(of=PurchaseOrder).first()
         if not rfq:
             raise HTTPException(status_code=404, detail="RFQ not found.")
@@ -699,7 +935,11 @@ class QuoteComparisonService:
             po=rfq,
             db=db,
             transition_type="STAGE_CHANGE",
-            change_summary=f"Revoked award and cancelled child POs: {', '.join(revoked_po_numbers)}",
+            change_summary=(
+                f"Award revoked: {reason}"
+                + (f" (cancelled {', '.join(revoked_po_numbers)})" if revoked_po_numbers else "")
+            ),
+            diff_data={"revocation_reason": reason, "cancelled_pos": revoked_po_numbers},
             user_id=user_id
         )
 

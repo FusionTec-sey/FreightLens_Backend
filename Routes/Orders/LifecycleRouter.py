@@ -94,14 +94,24 @@ class VendorQuoteUpdateRequest(BaseModel):
 
 class QuoteAwardRequest(BaseModel):
     line_awards: Optional[List[Dict[str, Any]]] = None
+    # Set once the buyer has seen what the vendor answered differently.
+    accept_deviations: Optional[bool] = False
 
 class SplitAwardAllocation(BaseModel):
     po_item_id: int
     quote_id: int
     unit_price: Optional[float] = None
+    # This vendor's share of the line. Omitted means the whole line, which is
+    # how every award worked before a line could be split.
+    quantity: Optional[float] = None
 
 class SplitAwardRequest(BaseModel):
     allocations: List[SplitAwardAllocation]
+    accept_deviations: Optional[bool] = False
+
+class ReviseRequest(BaseModel):
+    reason: str
+
 
 class VarianceApprovalRequest(BaseModel):
     justification: str
@@ -595,7 +605,8 @@ def award_quote_to_po(
         quote_id=quote_id,
         line_awards=line_awards,
         user_id=getattr(user, "id", None),
-        db=db
+        db=db,
+        accept_deviations=bool(req.accept_deviations) if req else False,
     )
 
 @LifecycleRouter.post("/{po_id}/quotes/split-award")
@@ -615,12 +626,47 @@ def split_award_quotes_endpoint(
         rfq_id=po_id,
         allocations=alloc_dicts,
         user_id=getattr(user, "id", None),
+        db=db,
+        accept_deviations=bool(req.accept_deviations),
+    )
+
+@LifecycleRouter.post("/{po_id}/revise")
+def revise_document(
+    po_id: int,
+    req: ReviseRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context)
+):
+    """
+    Reopens a sent RFQ for editing, recording why and standing down its open quotes.
+    """
+    # Revising invalidates work vendors have already done, so it is not the same
+    # authority as editing a draft. Until Revise_RFQ is granted in a role, whoever
+    # may approve a quote may revise, since that role already decides what the
+    # company commits to.
+    if not (has_permission(user, "Revise_RFQ") or has_permission(user, "Approve_Quote")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Permission 'Revise_RFQ' is required to revise a sent RFQ."
+        )
+
+    return LifecycleService.revise(
+        po_id=po_id,
+        reason=req.reason,
+        user_id=getattr(user, "id", None),
         db=db
     )
+
+
+class RevokeAwardRequest(BaseModel):
+    reason: str
+
 
 @LifecycleRouter.post("/{po_id}/quotes/revoke-award")
 def revoke_award_endpoint(
     po_id: int,
+    req: RevokeAwardRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_sourcing_permission("Approve_Quote")),
     org_context: OrgContext = Depends(get_org_context)
@@ -631,7 +677,8 @@ def revoke_award_endpoint(
     return QuoteComparisonService.revoke_rfq_award(
         rfq_id=po_id,
         user_id=getattr(user, "id", None),
-        db=db
+        db=db,
+        reason=req.reason,
     )
 
 

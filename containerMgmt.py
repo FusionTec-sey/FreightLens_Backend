@@ -184,6 +184,8 @@ async def startup_event():
     ensure_vendor_snapshot_schema()
     from Utils.migrate_20261013_product_definitions import ensure_product_definitions_schema
     ensure_product_definitions_schema()
+    from Utils.migrate_20261014_award_deviations import ensure_award_deviation_schema
+    ensure_award_deviation_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

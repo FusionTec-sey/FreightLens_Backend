@@ -20,7 +20,7 @@ class VendorQuoteItem(AuditMixin, Base):
     total_price = Column(Numeric(14, 2), nullable=False)
     currency = Column(String(10), default="USD")
     
-    availability = Column(String(30), default="AVAILABLE") # AVAILABLE, PARTIAL, OUT_OF_STOCK, SUBSTITUTE_OFFERED
+    availability = Column(String(30), default="AVAILABLE") # AVAILABLE, PARTIAL, SUBSTITUTE_OFFERED, OUT_OF_STOCK (carried, cannot supply now), NOT_QUOTED (not offered at all)
     lead_time_days = Column(Integer, nullable=True)
     
     is_substitute = Column(Boolean, default=False)

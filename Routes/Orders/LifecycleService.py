@@ -27,6 +27,10 @@ LIFECYCLE_SEQUENCE = [
 
 WARNING_LEVELS = {
     "DRAFT": "NONE",
+    # Confirmed lines are still editable -- nothing has gone to a vendor -- but the
+    # change is recorded with a reason all the same: a quantity that moved between
+    # confirmation and dispatch is exactly what nobody can account for afterwards.
+    # CAUTION, not WARNING: the reason belongs to the document, not to each line.
     "CONFIRMED": "CAUTION",
     "RFQ_SENT": "WARNING",
     "QUOTE_RECEIVED": "WARNING",
@@ -284,6 +288,26 @@ class LifecycleService:
 
         transition_type = "ADVANCE" if tgt_idx > curr_idx else "ROLLBACK"
 
+        # A rollback while child POs are live would leave two documents claiming
+        # the same line: the RFQ reopened for editing, and a purchase order the
+        # vendor is already working to. That is corruption, not a revision.
+        if transition_type == "ROLLBACK":
+            live_children = db.query(PurchaseOrder).filter(
+                PurchaseOrder.parent_rfq_id == po.id,
+                PurchaseOrder.is_deleted == False,
+                PurchaseOrder.status != "CANCELLED",
+            ).all()
+            if live_children:
+                names = ", ".join(c.po_number or f"#{c.id}" for c in live_children)
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"This RFQ has already been awarded to {len(live_children)} purchase "
+                        f"order(s): {names}. Change them there, or cancel them before rolling "
+                        "the RFQ back."
+                    ),
+                )
+
         # Gate check only applies when advancing forward
         if transition_type == "ADVANCE":
             checklist = LifecycleService.get_gate_checklist(po, db)
@@ -535,6 +559,120 @@ class LifecycleService:
         return po
 
     @staticmethod
+    def revise(
+        po_id: int,
+        reason: str,
+        user_id: Optional[int],
+        db: Session,
+    ) -> Dict[str, Any]:
+        """Reopen a sent document for editing, on the record.
+
+        A revision is the buyer changing the request, so it is deliberately
+        heavier than an edit: it needs a reason, it returns the document to the
+        stage where lines are editable, and it stands the open quotes down,
+        because they answered the previous version. Nothing is deleted -- the
+        quotes stay readable, marked superseded, and the rollback snapshot keeps
+        the version the vendors were sent.
+        """
+        reason = (reason or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(
+                status_code=422,
+                detail="A revision needs a reason: the vendors have to be told what changed and why.",
+            )
+
+        po = db.query(PurchaseOrder).filter(
+            PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False
+        ).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Document not found.")
+
+        stage = (po.lifecycle_stage or "DRAFT").upper()
+        if stage == "DRAFT":
+            raise HTTPException(
+                status_code=400,
+                detail=f"{po.po_number or 'This document'} is still a draft; edit it directly.",
+            )
+        if stage in ("PO_ISSUED", "PROFORMA"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{po.po_number or 'This document'} is an issued purchase order. "
+                    "Changing it is a change order, not a revision."
+                ),
+            )
+
+        # Quotes answer one version of a request. They are stood down here, not
+        # deleted: what a vendor offered against v1 is evidence, and the buyer
+        # usually wants to see it when deciding v2.
+        open_quotes = db.query(VendorQuote).filter(
+            VendorQuote.po_id == po.id,
+            VendorQuote.is_deleted == False,
+            VendorQuote.status == "PENDING",
+        ).all()
+        for quote in open_quotes:
+            quote.status = "SUPERSEDED"
+
+        version_before = po.lifecycle_version
+
+        # A confirmed requisition is already at the stage where lines are editable,
+        # so there is nothing to roll back -- but it is still closed to editing until
+        # someone says why they are reopening it. That is the whole point: the reason
+        # answers "why was this not settled before you confirmed it?". The marker is
+        # the snapshot itself; editing stays open until the requisition is sent.
+        if stage == "CONFIRMED":
+            po.lifecycle_version = (version_before or 1) + 1
+            LifecycleService.capture_po_snapshot(
+                po=po,
+                db=db,
+                transition_type="REVISION_OPENED",
+                change_summary=f"Revision: {reason}",
+                diff_data={"revision_reason": reason, "opened_at_stage": stage},
+                user_id=user_id,
+            )
+            db.commit()
+            db.refresh(po)
+            return {
+                "message": (
+                    f"{po.po_number or 'The document'} is open for editing. "
+                    "Make the changes and send it to vendors when ready."
+                ),
+                "po_id": po.id,
+                "lifecycle_stage": po.lifecycle_stage,
+                "lifecycle_version": po.lifecycle_version,
+                "revised_from_stage": stage,
+                "superseded_quotes": len(open_quotes),
+                "reason": reason,
+            }
+
+        # Through the ordinary machinery, so this revision gets the same
+        # snapshot, the same optimistic lock and the same refusal if child
+        # purchase orders are already live.
+        LifecycleService.transition_stage(
+            po_id=po.id,
+            target_stage="CONFIRMED",
+            expected_version=version_before,
+            user_id=user_id,
+            comment=f"Revision: {reason}",
+            db=db,
+        )
+        db.refresh(po)
+
+        return {
+            "message": (
+                f"{po.po_number or 'The document'} is open for editing again. "
+                f"{len(open_quotes)} open quote(s) were superseded; send it again when the "
+                "changes are made."
+            ),
+            "po_id": po.id,
+            "lifecycle_stage": po.lifecycle_stage,
+            "lifecycle_version": po.lifecycle_version,
+            "revised_from_stage": stage,
+            "superseded_quotes": len(open_quotes),
+            "reason": reason,
+        }
+
+    @staticmethod
     def record_item_history(
         po: PurchaseOrder,
         item: POItem,
@@ -551,6 +689,9 @@ class LifecycleService:
         Enforces mandatory reason when PO is at CRITICAL warning level.
         """
         warning_level = LifecycleService.get_warning_level(po.lifecycle_stage)
+        # The reason is asked for once, by Revise, before editing is opened at all.
+        # A save does not ask again -- the change summary it records is the version
+        # history, not a second justification.
         if warning_level == "CRITICAL" and (not reason or len(reason.strip()) < 5):
             raise HTTPException(
                 status_code=422,

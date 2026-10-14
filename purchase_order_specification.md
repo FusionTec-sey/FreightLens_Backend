@@ -129,18 +129,18 @@ Two rules carry the table:
 | Line-item delta audit | built | `po_item_history` |
 | Vendor deviations on a quote line | built: quantity, availability, substitute | `vendor_quote_items` |
 | Quote supersession state | column exists, set on re-award only | `VendorQuote.status` |
-| **Award carries the quoted quantity** | **absent: price copied, quantity dropped** | `QuoteComparisonService.py:278` |
+| **Award carries the quoted quantity** | built on `feature/procurement-revision` | `_apply_quoted_line` |
 | Split award into one PO per vendor | built, with lineage | `QuoteComparisonService.split_award` |
-| **Quantity split across vendors** | **absent: each child takes the whole line** | `QuoteComparisonService.py:490` |
-| Child PO snapshotted at birth | **absent** — only the RFQ is | `split_award` |
-| "Awarded" as a state of its own | **absent** — borrows the variance lock | `lifecycle_locked` |
+| Quantity split across vendors | built on the branch: `quantity` on the allocation | `split_award_rfq` |
+| Child PO snapshotted at birth | built all along; the parent link was added on the branch | `split_award` |
+| "Awarded" as a state of its own | the borrowed variance lock is gone; stage and the child guard carry it | `split_award_rfq` |
 | Coverage of an RFQ across its children | **absent** | — |
 | Container fill known before shipping | **absent** — volume computed only after packing | `order_packing_lists.total_cbm` |
 | Dimensions on the masters | columns exist, **0 of 5,790 populated** | `products.length` / `width` / `height` |
-| Lock at `QUOTE_APPROVED` | **wrong stage**, and per document rather than per line | `OrderEntryPage.js:1259` |
-| Lock enforced server-side | **absent** — stage is never checked on write | `OrderRouter.py:1152` |
-| Revision path in the UI | **absent** — the stepper only advances | `LifecycleStepper.js` |
-| Permission to roll back | **absent** — only forward moves are guarded | `LifecycleRouter.py:187` |
+| Lock at `QUOTE_APPROVED` | API correct on the branch; the screen is still per document | `OrderEntryPage.js:1259` |
+| Lock enforced server-side | built on the branch | `_assert_lines_may_change` |
+| Revision path in the UI | built on the branch | `POST /orders/{id}/revise`, Revise button |
+| Permission to roll back | built on the branch: `Revise_RFQ` | `LifecycleRouter` |
 | Minimum order quantity on the masters | columns exist, **0 of 3,723 populated** | `product_suppliers.min_order_qty` |
 
 The three that matter most:
@@ -312,10 +312,9 @@ Three rules follow:
 2. **A rollback is refused while children live.** Two documents claiming the same
    line is corruption, not a revision. The guard names the children and offers to
    cancel them first.
-3. **Each child is snapshotted at birth,** `transition_type = "INITIAL"` with
-   `parent_snapshot_id` set to the RFQ's award snapshot, so the chain reads end to
-   end: RFQ v3 -> PO-A v1 -> PO-A v2. Today `capture_po_snapshot` runs once, for the
-   parent, so a child has no v1 to diff against.
+3. **Each child's birth snapshot is descended from the award.** The snapshot
+   itself always existed; what was missing was `parent_snapshot_id`, so the chain
+   stopped at the child rather than reading end to end: RFQ v3 -> PO-A v1 -> PO-A v2.
 
 ### 7.6 The coverage view
 
@@ -327,19 +326,20 @@ that already exists, and it is what makes a multi-PO award manageable at all.
 
 ### 7.7 Two defects found here
 
-**A quantity cannot be split across vendors.** The allocation payload is
-`{po_item_id, quote_id, unit_price}` — no quantity — and each child copies
-`quantity_ordered` in full (`QuoteComparisonService.py:490`). Award one line of 100
-as 60/40 to two vendors and the system orders 100 from each. Only whole-line splits
-work today. The fix: a quantity on the allocation, a check that the allocated total
-does not exceed the line, and the remainder recorded against the RFQ line.
+**A quantity could not be split across vendors** (fixed on the branch). The
+allocation payload was `{po_item_id, quote_id, unit_price}` — no quantity — and
+each child copied `quantity_ordered` in full, so awarding one line of 100 as 60/40
+ordered 100 from each. An allocation now carries an optional `quantity`, the parts
+are added up and may not exceed the line, and a child records its own share as its
+`quantity_requested`. Omitting it still means the whole line, which is how every
+award worked before.
 
-**The award borrows the variance lock.** `split_award` sets
+**The award borrowed the variance lock** (fixed on the branch). `split_award` set
 `rfq.lifecycle_locked = True`, but that flag means "unresolved price variance"
-everywhere else: `transition_stage` refuses with that message, and
-`approve_proforma_variance` clears it. Approving an unrelated variance can therefore
-unlock an awarded RFQ, and the message the user sees names the wrong reason. Being
-awarded needs its own state.
+everywhere else: `transition_stage` refused with that message, `approve_proforma_variance`
+cleared it, and the order screen went looking for variance details that never
+existed. It is no longer set: an award is protected by the rollback guard and the
+stage guard, which say what they mean.
 
 ## 8. Quotes against a revised document
 
@@ -402,6 +402,33 @@ Everything else exists:
 - A fill bar on the order from `QUOTE_RECEIVED` onward: estimated volume and weight
   against the intended container, with the shortfall named in units of the largest
   line, so a top-up decision needs no spreadsheet.
+
+## 10.1 What is built, and where
+
+On `feature/procurement-revision`, not yet merged to `standalone-main`:
+
+1. The award carries the vendor's quantity and substitute, behind an explicit
+   acceptance (`409` listing the differences, then `accept_deviations`), with
+   `po_items.quantity_requested` keeping the request.
+2. `PUT /orders/{order_id}` refuses a line change once a document has been sent,
+   and on an awarded line outright; header fields stay writable.
+3. `POST /orders/{po_id}/revise` reopens a sent RFQ, demanding a reason,
+   superseding its open quotes, under `Revise_RFQ`.
+4. A rollback is refused while child POs are live; children are snapshotted at
+   birth.
+5. The screens: a Revise button and a banner that names the route, and a
+   comparison screen that shows the deviations for acceptance.
+
+Still to build: the top-up path with price reconfirmation (7.2), the coverage
+view (7.6), quantity on the allocation (7.7), minimum order quantity written back
+to the masters (7.4), dimensions and the fill bar (7.3), and the per-line lock in
+the screens.
+
+Two defects were found while building this and are fixed on the branch: a quote
+line was matched by `item_code`, which matches every line of a catalogue that
+leaves codes blank, so line 2 took line 1's answer; and the award button in the
+comparison screen passed its click handler bare, which would have delivered the
+click event as `accept_deviations`.
 
 ## 11. Build order
 
