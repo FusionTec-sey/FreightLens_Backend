@@ -72,6 +72,7 @@ PERMISSION_CATALOG = [
         ("Send_RFQ", "Send RFQs to suppliers"), ("View_VendorQuote", "View vendor quotations"),
         ("Add_VendorQuote", "Record vendor quotations"), ("Compare_Quote", "Compare vendor quotations"),
         ("Approve_Quote", "Approve a vendor quotation"), ("Issue_PO", "Issue an approved purchase order"),
+        ("Revise_RFQ", "Revise a sent RFQ and re-issue it to vendors"),
         ("Approve_Variance", "Approve price variances"),
         ("Add_Payment", "Record a payment"), ("Edit_Payment", "Edit a payment"),
         ("Delete_Payment", "Delete a payment"), ("View_OrderPayment", "View order payments"),

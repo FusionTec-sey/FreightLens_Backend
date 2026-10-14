@@ -555,6 +555,90 @@ class LifecycleService:
         return po
 
     @staticmethod
+    def revise(
+        po_id: int,
+        reason: str,
+        user_id: Optional[int],
+        db: Session,
+    ) -> Dict[str, Any]:
+        """Reopen a sent document for editing, on the record.
+
+        A revision is the buyer changing the request, so it is deliberately
+        heavier than an edit: it needs a reason, it returns the document to the
+        stage where lines are editable, and it stands the open quotes down,
+        because they answered the previous version. Nothing is deleted -- the
+        quotes stay readable, marked superseded, and the rollback snapshot keeps
+        the version the vendors were sent.
+        """
+        reason = (reason or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(
+                status_code=422,
+                detail="A revision needs a reason: the vendors have to be told what changed and why.",
+            )
+
+        po = db.query(PurchaseOrder).filter(
+            PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False
+        ).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Document not found.")
+
+        stage = (po.lifecycle_stage or "DRAFT").upper()
+        if stage in ("DRAFT", "CONFIRMED"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{po.po_number or 'This document'} has not been sent yet; edit it directly.",
+            )
+        if stage in ("PO_ISSUED", "PROFORMA"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{po.po_number or 'This document'} is an issued purchase order. "
+                    "Changing it is a change order, not a revision."
+                ),
+            )
+
+        # Quotes answer one version of a request. They are stood down here, not
+        # deleted: what a vendor offered against v1 is evidence, and the buyer
+        # usually wants to see it when deciding v2.
+        open_quotes = db.query(VendorQuote).filter(
+            VendorQuote.po_id == po.id,
+            VendorQuote.is_deleted == False,
+            VendorQuote.status == "PENDING",
+        ).all()
+        for quote in open_quotes:
+            quote.status = "SUPERSEDED"
+
+        version_before = po.lifecycle_version
+
+        # Through the ordinary machinery, so this revision gets the same
+        # snapshot, the same optimistic lock and the same refusal if child
+        # purchase orders are already live.
+        LifecycleService.transition_stage(
+            po_id=po.id,
+            target_stage="CONFIRMED",
+            expected_version=version_before,
+            user_id=user_id,
+            comment=f"Revision: {reason}",
+            db=db,
+        )
+        db.refresh(po)
+
+        return {
+            "message": (
+                f"{po.po_number or 'The document'} is open for editing again. "
+                f"{len(open_quotes)} open quote(s) were superseded; send it again when the "
+                "changes are made."
+            ),
+            "po_id": po.id,
+            "lifecycle_stage": po.lifecycle_stage,
+            "lifecycle_version": po.lifecycle_version,
+            "revised_from_stage": stage,
+            "superseded_quotes": len(open_quotes),
+            "reason": reason,
+        }
+
+    @staticmethod
     def record_item_history(
         po: PurchaseOrder,
         item: POItem,

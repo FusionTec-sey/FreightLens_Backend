@@ -1149,6 +1149,56 @@ def create_order(
     can_view_supp = can_user_view_supplier(current_user, org_context)
     return order_to_dict(new_order, is_accounts, can_view_supp)
 
+# Stages where a line may still be edited in place. Past them the document has
+# been sent to vendors, and a change has to go through Revise so they can be told
+# what changed -- which is also what keeps their quotes answering one question.
+LINE_EDITABLE_STAGES = {"DRAFT", "CONFIRMED"}
+SENT_STAGES = {"RFQ_SENT", "QUOTE_RECEIVED"}
+
+
+def _assert_lines_may_change(order, changed_items) -> None:
+    """Refuse a line change the stage does not allow.
+
+    The screens have made sent RFQs read-only for a while, but this endpoint
+    checked only permissions, so the lock lived entirely in the browser. Header
+    fields stay writable throughout: a delivery date or an internal note is not
+    part of what a vendor priced.
+    """
+    if not changed_items:
+        return
+
+    stage = (order.lifecycle_stage or "DRAFT").upper()
+    if stage in LINE_EDITABLE_STAGES and not order.lifecycle_locked:
+        awarded = [it for it in changed_items if it is not None and getattr(it, "awarded_vendor_id", None)]
+        if awarded:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"'{awarded[0].description}' has been awarded to a vendor. Change it on the "
+                    "purchase order it produced, or revoke the award first."
+                ),
+            )
+        return
+
+    doc = order.po_number or f"#{order.id}"
+    if stage in SENT_STAGES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{doc} has been sent to vendors, so its line items change through Revise, "
+                "which records why and lets the vendors be told. Dates, consignee and notes "
+                "can still be edited here."
+            ),
+        )
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"{doc} has been awarded and its lines are fixed. Change the purchase order it "
+            "produced, or cancel that order and revise this one."
+        ),
+    )
+
+
 @OrderRouter.put("/{order_id}")
 def update_order(
     order_id: int,
@@ -1371,7 +1421,36 @@ def update_order(
         
         existing_items_map = {it.id: it for it in (order.items or []) if not it.is_deleted}
         seen_ids = set()
-        
+
+        # What this payload would actually change, worked out before anything is
+        # written. The key being present is not a change: the screens send the
+        # whole order back when only a date was touched.
+        pending_changes = []
+        incoming_ids = {d.get("id") for d in incoming_items if d.get("id")}
+        for item_data in incoming_items:
+            desc_check = (item_data.get("description") or "").strip()
+            if not desc_check:
+                continue
+            check_id = item_data.get("id")
+            check_qty = parse_numeric(item_data.get("quantity_ordered")) or 1.0
+            check_price = parse_numeric(item_data.get("unit_price")) if can_set_financials else None
+            if check_id and check_id in existing_items_map:
+                known = existing_items_map[check_id]
+                known_qty = float(known.quantity_ordered or 0)
+                known_price = float(known.unit_price) if known.unit_price is not None else None
+                if (
+                    abs(known_qty - check_qty) > 0.001
+                    or (can_set_financials and known_price != check_price)
+                    or known.description != desc_check
+                ):
+                    pending_changes.append(known)
+            else:
+                pending_changes.append(None)  # a line being added
+        for known_id, known_item in existing_items_map.items():
+            if known_id not in incoming_ids:
+                pending_changes.append(known_item)
+        _assert_lines_may_change(order, pending_changes)
+
         for item_data in incoming_items:
             it_id = item_data.get("id")
             desc_text = (item_data.get("description") or "").strip()
