@@ -11,6 +11,7 @@ from Model.containermgmt.Orders.POItem import POItem
 from Model.containermgmt.Orders.VendorQuote import VendorQuote
 from Model.containermgmt.Orders.VendorQuoteItem import VendorQuoteItem
 from Model.containermgmt.Cinfo.Supplier import Supplier
+from Model.containermgmt.Orders.Product import ProductSupplier
 
 logger = logging.getLogger("containerMgmt.quote_comparison")
 
@@ -274,7 +275,7 @@ class QuoteComparisonService:
         }
 
     @staticmethod
-    def _apply_quoted_line(po, po_item, quote_item, user_id, db) -> None:
+    def _apply_quoted_line(po, po_item, quote_item, user_id, db, quote=None) -> None:
         """Carry the vendor's answer onto the order line, not just their price.
 
         The award used to copy unit_price and nothing else, so a quote for 5
@@ -299,6 +300,10 @@ class QuoteComparisonService:
                 user_id=user_id, db=db,
             )
 
+        QuoteComparisonService._learn_vendor_terms(
+            po, po_item, quote, quote_item, user_id, db,
+        )
+
         if getattr(quote_item, "is_substitute", False) and quote_item.description:
             old_desc = po_item.description
             po_item.description = quote_item.description
@@ -313,6 +318,74 @@ class QuoteComparisonService:
                 reason="Vendor substitute accepted at award",
                 user_id=user_id, db=db,
             )
+
+    @staticmethod
+    def _learn_vendor_terms(po, po_item, quote, quote_item, user_id, db) -> None:
+        """Write what the vendor just told us back onto the product-vendor link.
+
+        A minimum order quantity, a lead time and the vendor's own article
+        number arrive in every quote and were thrown away: `product_suppliers`
+        holds exactly these columns and was empty on every row, so the same
+        deviation was rediscovered at the next quote, and the next.
+
+        Only what the quote actually says is written, and only where the link
+        has nothing yet -- a figure a buyer typed is never overwritten by an
+        inference. The minimum is recorded only when the vendor offered *more*
+        than was asked for, because that is the only case where their quantity
+        reveals a floor rather than echoing the request.
+        """
+        if quote is None or not po_item.product_id or not quote.supplier_id:
+            return  # a free-text line has no product to attach terms to
+
+        requested = Decimal(str(po_item.quantity_requested or po_item.quantity_ordered or 0))
+        offered = Decimal(str(quote_item.quantity_quoted or 0))
+        learned_moq = offered if (offered > 0 and requested > 0 and offered > requested) else None
+        factory_code = (getattr(quote_item, "item_code", None) or "").strip() or None
+        vendor_name = (getattr(quote_item, "description", None) or "").strip() or None
+        lead_days = getattr(quote, "delivery_lead_time_days", None)
+        unit_cost = getattr(quote_item, "unit_price", None)
+
+        link = db.query(ProductSupplier).filter(
+            ProductSupplier.product_id == po_item.product_id,
+            ProductSupplier.supplier_id == quote.supplier_id,
+            ProductSupplier.is_deleted != True,
+        ).first()
+
+        if link is None:
+            link = ProductSupplier(
+                product_id=po_item.product_id,
+                supplier_id=quote.supplier_id,
+                org_id=po.org_id,
+                factory_code=factory_code,
+                vendor_product_name=vendor_name,
+                unit_cost=unit_cost,
+                currency=(quote.currency or "USD"),
+                min_order_qty=learned_moq,
+                lead_time_days=lead_days,
+                is_default=False,
+                notes=f"Learned from quote {quote.quote_reference or quote.id}",
+                created_by=user_id,
+            )
+            db.add(link)
+            return
+
+        # An existing link is topped up, never rewritten: the cost moves with
+        # the award because that is what we agreed to pay, and the rest is
+        # filled only where it was unknown.
+        if unit_cost is not None:
+            link.unit_cost = unit_cost
+            link.currency = quote.currency or link.currency
+        if factory_code and not link.factory_code:
+            link.factory_code = factory_code
+        if vendor_name and not link.vendor_product_name:
+            link.vendor_product_name = vendor_name
+        if lead_days is not None and link.lead_time_days is None:
+            link.lead_time_days = lead_days
+        if learned_moq is not None and (
+            link.min_order_qty is None or Decimal(str(link.min_order_qty)) < learned_moq
+        ):
+            link.min_order_qty = learned_moq
+        link.updated_by = user_id
 
     @staticmethod
     def _quote_item_for(db, quote, po_item):
@@ -405,7 +478,8 @@ class QuoteComparisonService:
                     it.unit_price = Decimal(str(unit_price))
                     qi = QuoteComparisonService._quote_item_for(db, winning_quote, it)
                     if qi is not None:
-                        QuoteComparisonService._apply_quoted_line(po, it, qi, user_id, db)
+                        QuoteComparisonService._apply_quoted_line(
+                            po, it, qi, user_id, db, quote=winning_quote)
                     if it.quantity_ordered:
                         it.total_price = it.quantity_ordered * Decimal(str(unit_price))
         else:
@@ -415,7 +489,8 @@ class QuoteComparisonService:
                     it = active_items[qi.po_item_id]
                     it.approved_unit_price = qi.unit_price
                     it.unit_price = qi.unit_price
-                    QuoteComparisonService._apply_quoted_line(po, it, qi, user_id, db)
+                    QuoteComparisonService._apply_quoted_line(
+                        po, it, qi, user_id, db, quote=winning_quote)
                     if it.quantity_ordered:
                         it.total_price = it.quantity_ordered * qi.unit_price
 
@@ -745,6 +820,11 @@ class QuoteComparisonService:
                 # Mark quote item as awarded
                 if matching_qi:
                     matching_qi.is_awarded = True
+                    # The split award is the other door onto the same event, so
+                    # the vendor's terms are learned here too.
+                    QuoteComparisonService._learn_vendor_terms(
+                        child_po, child_it, quote, matching_qi, user_id, db,
+                    )
 
             child_po.total_amount = child_po_total
             created_pos.append(child_po)

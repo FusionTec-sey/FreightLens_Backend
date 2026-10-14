@@ -186,6 +186,8 @@ async def startup_event():
     ensure_product_definitions_schema()
     from Utils.migrate_20261014_award_deviations import ensure_award_deviation_schema
     ensure_award_deviation_schema()
+    from Utils.migrate_20261014_supplier_identity import ensure_supplier_identity_schema
+    ensure_supplier_identity_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -221,12 +223,15 @@ async def startup_event():
         logger.error("Failed to initialize RustFS Object Storage: %s", e)
 
     # ── Initialize Meilisearch Search Engine ─────────────────────────────────
-    logger.info("Initializing Meilisearch Indices (Products & Orders)...")
+    logger.info("Initializing Meilisearch Indices (Products, Orders & Suppliers)...")
     try:
-        from Services.search_service import bulk_index_all_products, bulk_index_all_orders
+        from Services.search_service import (
+            bulk_index_all_products, bulk_index_all_orders, bulk_index_all_suppliers,
+        )
         meili_db = SessionLocal()
         bulk_index_all_products(meili_db)
         bulk_index_all_orders(meili_db)
+        bulk_index_all_suppliers(meili_db)
         meili_db.close()
     except Exception as e:
         logger.error("Failed to initialize Meilisearch: %s", e)
