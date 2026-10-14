@@ -24,6 +24,7 @@ from Model.containermgmt.Orders.DefectReport import DefectReport, DefectImage
 from Model.containermgmt.Orders.OrderPayment import OrderPayment
 from Model.containermgmt.Orders.OrderShipment import OrderShipment
 from Model.containermgmt.Orders.OrderStatusHistory import OrderStatusHistory
+from Model.containermgmt.Orders.POVersionSnapshot import POVersionSnapshot
 from Model.containermgmt.Orders.StoreRequest import StoreRequest, StoreRequestItem
 from Model.containermgmt.Orders.Notification import Notification
 from Model.containermgmt.Cinfo.Supplier import Supplier
@@ -101,7 +102,12 @@ def list_orders(
         if status and status != "ALL":
             meili_filters.append(f"(status = '{status}' OR status_label = '{status}')")
         if lifecycle_stage and lifecycle_stage != "ALL":
-            meili_filters.append(f"lifecycle_stage = '{lifecycle_stage}'")
+            # Comma-separated: a screen that covers a span of the lifecycle (the
+            # bidding desk, say) asks for that span in one call rather than paging
+            # the whole table and discarding most of it in the browser.
+            wanted = [v.strip() for v in lifecycle_stage.split(",") if v.strip()]
+            clause = " OR ".join(f"lifecycle_stage = '{v}'" for v in wanted)
+            meili_filters.append(f"({clause})" if len(wanted) > 1 else clause)
         if urgent_only:
             meili_filters.append("urgent_action = true")
 
@@ -193,9 +199,13 @@ def list_orders(
             or_(PurchaseOrder.status == status, PurchaseOrder.status_label == status)
         )
 
-    # Procurement Lifecycle Stage filter
+    # Procurement Lifecycle Stage filter (one stage, or several comma-separated)
     if lifecycle_stage and lifecycle_stage != "ALL":
-        query = query.filter(PurchaseOrder.lifecycle_stage == lifecycle_stage)
+        wanted = [v.strip() for v in lifecycle_stage.split(",") if v.strip()]
+        query = query.filter(
+            PurchaseOrder.lifecycle_stage.in_(wanted) if len(wanted) > 1
+            else PurchaseOrder.lifecycle_stage == wanted[0]
+        )
 
     # Urgent filter
     if urgent_only:
@@ -937,7 +947,13 @@ def get_order(
         if not (has_permission(current_user, "View_Order") or is_accounts):
             raise HTTPException(status_code=403, detail="Access forbidden: Missing View_Order permission")
 
-    return order_to_dict(order, is_accounts, can_view_supp)
+    payload = order_to_dict(order, is_accounts, can_view_supp)
+
+    # A requisition normally only moves forward, so sourcing stops editing it once
+    # it is confirmed. One that was revised back is the exception: it returned to
+    # CONFIRMED precisely so the lines could be changed, and the screen has to know.
+    payload["was_revised"] = _revision_is_open(order)
+    return payload
 
 @OrderRouter.post("")
 @OrderRouter.post("/")
@@ -1156,6 +1172,35 @@ LINE_EDITABLE_STAGES = {"DRAFT", "CONFIRMED"}
 SENT_STAGES = {"RFQ_SENT", "QUOTE_RECEIVED"}
 
 
+def _revision_is_open(order) -> bool:
+    """Has someone reopened this document for editing, and said why?
+
+    The marker is the audit trail itself rather than a flag on the row. Reading
+    newest first, the first snapshot that opens or closes a revision decides it: a
+    REVISION_OPENED (or the STAGE_ROLLBACK a revision from a sent stage leaves)
+    means open, a REVISION_APPLIED means the changes were saved and the window shut.
+    One reason buys one round of changes; the next needs its own reason.
+    """
+    def _touched_items(snap) -> bool:
+        diff = snap.diff_data or {}
+        return any(diff.get(k) for k in ("items_modified", "items_added", "items_removed"))
+
+    for snap in (order.version_snapshots or []):          # ordered id desc
+        if (snap.lifecycle_stage or "").upper() != "CONFIRMED":
+            continue
+        if snap.transition_type == "REVISION_APPLIED":
+            return False
+        # Any save that moved a line closes the window too, whoever wrote it and
+        # whatever it called itself. Reading the diff rather than trusting the
+        # label means a line changed through some other path cannot leave the
+        # window open behind it. A header-only save is not a line change.
+        if snap.transition_type == "MUTATION" and _touched_items(snap):
+            return False
+        if snap.transition_type in ("REVISION_OPENED", "STAGE_ROLLBACK"):
+            return True
+    return False
+
+
 def _assert_lines_may_change(order, changed_items) -> None:
     """Refuse a line change the stage does not allow.
 
@@ -1168,6 +1213,19 @@ def _assert_lines_may_change(order, changed_items) -> None:
         return
 
     stage = (order.lifecycle_stage or "DRAFT").upper()
+
+    # CONFIRMED is editable, but not on sight: Revise opens it, and Revise is what
+    # takes the reason. Without that the reason would have to be asked for on save,
+    # after the change was already made, which is the wrong order to ask a question in.
+    if stage == "CONFIRMED" and not _revision_is_open(order):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{order.po_number or 'This requisition'} is confirmed. Use Revise to reopen it "
+                "for editing -- it records why before the lines change."
+            ),
+        )
+
     if stage in LINE_EDITABLE_STAGES and not order.lifecycle_locked:
         awarded = [it for it in changed_items if it is not None and getattr(it, "awarded_vendor_id", None)]
         if awarded:
@@ -1421,6 +1479,7 @@ def update_order(
 
     # ── Line items update & audit delta tracking ──────────────────────────────
     items_mutated = False
+    revision_was_open = False
     if "items" in payload:
         from .LifecycleService import LifecycleService
         incoming_items = payload["items"]
@@ -1457,6 +1516,7 @@ def update_order(
         for known_id, known_item in existing_items_map.items():
             if known_id not in incoming_ids:
                 pending_changes.append(known_item)
+        revision_was_open = _revision_is_open(order)
         _assert_lines_may_change(order, pending_changes)
 
         for item_data in incoming_items:
@@ -1477,7 +1537,34 @@ def update_order(
                 old_qty = float(existing_item.quantity_ordered or 0)
                 old_price = float(existing_item.unit_price) if existing_item.unit_price is not None else None
                 
-                changed = (abs(old_qty - qty) > 0.001) or (can_set_financials and old_price != u_price) or (existing_item.description != desc_text)
+                # What a line IS does not change once it is on record. Quotes, item
+                # history and receipts all point back to this row, so rewriting its
+                # code or description turns it into a different product while every
+                # one of those records still reads as if it were the original. The
+                # right move is to remove the line and add the intended one, which
+                # leaves both visible. The screen locks these fields; this is the
+                # same rule for anything that posts straight to the API.
+                # A draft is still being written and nothing points at it yet, so a
+                # typo there is just a typo. From CONFIRMED on, the line is on record.
+                identity = {} if (order.lifecycle_stage or "DRAFT").upper() == "DRAFT" else {
+                    "item_code": ((item_data.get("item_code") or "").strip() or None, existing_item.item_code),
+                    "description": (desc_text, existing_item.description),
+                    "unit": (item_data.get("unit", "PCS"), existing_item.unit),
+                }
+                for field, (incoming, held) in identity.items():
+                    # Compared on the trimmed text: a client that re-sends the same
+                    # value with different whitespace has not changed anything.
+                    if (incoming or "").strip() != (held or "").strip():
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                f"Line {existing_item.id}: {field} cannot be changed on a saved line. "
+                                "Remove this line and add the intended product instead, so the "
+                                "original stays on the record."
+                            ),
+                        )
+
+                changed = (abs(old_qty - qty) > 0.001) or (can_set_financials and old_price != u_price)
                 if changed:
                     items_mutated = True
                     diff_items_mod.append({
@@ -1488,7 +1575,6 @@ def update_order(
                         "old_unit_price": old_price,
                         "new_unit_price": u_price
                     })
-                    existing_item.description = desc_text
                     existing_item.quantity_ordered = qty
                     if is_rfq:
                         existing_item.unit_price = None
@@ -1500,9 +1586,6 @@ def update_order(
                     elif can_set_financials:
                         existing_item.unit_price = u_price
                         existing_item.total_price = tot_price
-                    existing_item.item_code = (item_data.get("item_code") or "").strip() or None
-                    existing_item.unit = item_data.get("unit", "PCS")
-                    existing_item.product_id = item_data.get("product_id")
                     existing_item.notes = (item_data.get("notes") or "").strip() or None
                     existing_item.updated_by = current_user.id
                     
@@ -1599,16 +1682,22 @@ def update_order(
         if header_changes:
             parts.append(f"Header fields changed ({', '.join(header_changes.keys())})")
 
-        change_desc = (payload.get("revision_reason") or "").strip()
-        if not change_desc:
-            change_desc = "; ".join(parts) or "PO Updated"
+        # One line on the requisition that reads as both: why, and what it moved.
+        summary_of_changes = "; ".join(parts) or "PO Updated"
+        given_reason = (payload.get("revision_reason") or "").strip()
+        change_desc = f"{given_reason} ({summary_of_changes})" if given_reason else summary_of_changes
 
         db.flush()
         from .LifecycleService import LifecycleService
+        # Saving the lines spends the revision: the window closes and the next
+        # change asks for its own reason. A header-only save leaves it open --
+        # a delivery date is not what the reason was given for.
         LifecycleService.capture_po_snapshot(
             po=order,
             db=db,
-            transition_type="MUTATION",
+            transition_type=(
+                "REVISION_APPLIED" if (revision_was_open and items_mutated) else "MUTATION"
+            ),
             change_summary=change_desc,
             diff_data={
                 "items_modified": diff_items_mod,

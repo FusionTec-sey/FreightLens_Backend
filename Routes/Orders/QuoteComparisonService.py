@@ -840,13 +840,29 @@ class QuoteComparisonService:
     def revoke_rfq_award(
         rfq_id: int,
         user_id: Optional[int],
-        db: Session
+        db: Session,
+        reason: str = "",
     ) -> Dict[str, Any]:
         """
         Safely revokes an existing award/split on an RFQ.
         Validates that none of the generated child POs have progressed beyond PO_ISSUED (no payments, shipments, etc.).
         Soft-deletes the child POs and restores the parent RFQ back to QUOTE_RECEIVED stage.
+
+        A revocation undoes a decision the company already made and cancels the
+        purchase orders it produced, so it takes a reason for the same reason a
+        revision does: the vendor who won was told, and somebody will ask why that
+        changed.
         """
+        reason = (reason or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Revoking an award needs a reason: the vendor was told they won, "
+                    "and the purchase orders it created are about to be cancelled."
+                ),
+            )
+
         rfq = db.query(PurchaseOrder).filter(PurchaseOrder.id == rfq_id).with_for_update(of=PurchaseOrder).first()
         if not rfq:
             raise HTTPException(status_code=404, detail="RFQ not found.")
@@ -919,7 +935,11 @@ class QuoteComparisonService:
             po=rfq,
             db=db,
             transition_type="STAGE_CHANGE",
-            change_summary=f"Revoked award and cancelled child POs: {', '.join(revoked_po_numbers)}",
+            change_summary=(
+                f"Award revoked: {reason}"
+                + (f" (cancelled {', '.join(revoked_po_numbers)})" if revoked_po_numbers else "")
+            ),
+            diff_data={"revocation_reason": reason, "cancelled_pos": revoked_po_numbers},
             user_id=user_id
         )
 

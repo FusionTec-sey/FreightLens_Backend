@@ -659,9 +659,14 @@ def revise_document(
     )
 
 
+class RevokeAwardRequest(BaseModel):
+    reason: str
+
+
 @LifecycleRouter.post("/{po_id}/quotes/revoke-award")
 def revoke_award_endpoint(
     po_id: int,
+    req: RevokeAwardRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_sourcing_permission("Approve_Quote")),
     org_context: OrgContext = Depends(get_org_context)
@@ -672,7 +677,8 @@ def revoke_award_endpoint(
     return QuoteComparisonService.revoke_rfq_award(
         rfq_id=po_id,
         user_id=getattr(user, "id", None),
-        db=db
+        db=db,
+        reason=req.reason,
     )
 
 
