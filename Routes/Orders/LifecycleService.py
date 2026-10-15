@@ -51,6 +51,18 @@ STAGE_TITLES = {
 
 DEFAULT_VARIANCE_THRESHOLD = Decimal("2.0")  # ±2.0% fallback
 
+# What a reopened document shows in the lists while its revision window is open.
+# Rolling the stage back to CONFIRMED on its own left the old label in place, so a
+# requisition reopened from RFQ_SENT still read "RFQ Sent" everywhere but here.
+REVISION_STATUS_LABEL = "Under Revision"
+
+# How long a revision window stays open unattended. The window is meant to be
+# spent on the change it was opened for: whoever walks away from it leaves a
+# document editable with a reason already given for an edit nobody made. Leaving
+# the screen closes it outright; this is the backstop for the tab that was closed,
+# the browser that crashed and the session that was never came back to.
+REVISION_WINDOW_MINUTES = 60
+
 class LifecycleService:
 
     @staticmethod
@@ -430,6 +442,11 @@ class LifecycleService:
             if transition_type == "ADVANCE"
             else f"Rolled back to {target_stage} v1 from {old_stage} v{old_stage_v}"
         )
+        # The caller's comment carries the reason a user was made to type -- a
+        # revision's "why". Leaving it in diff_data only put it where the version
+        # history does not look, so a revision read as an unexplained rollback.
+        if comment:
+            change_desc = f"{change_desc} — {comment}"
         LifecycleService.capture_po_snapshot(
             po=po,
             db=db,
@@ -622,6 +639,7 @@ class LifecycleService:
         # the snapshot itself; editing stays open until the requisition is sent.
         if stage == "CONFIRMED":
             po.lifecycle_version = (version_before or 1) + 1
+            po.status_label = REVISION_STATUS_LABEL
             LifecycleService.capture_po_snapshot(
                 po=po,
                 db=db,
@@ -656,6 +674,10 @@ class LifecycleService:
             comment=f"Revision: {reason}",
             db=db,
         )
+        # After the rollback, not before: transition_stage sets its own labels for
+        # the stage it lands on, and this has to be what survives.
+        po.status_label = REVISION_STATUS_LABEL
+        db.commit()
         db.refresh(po)
 
         return {
@@ -670,6 +692,69 @@ class LifecycleService:
             "revised_from_stage": stage,
             "superseded_quotes": len(open_quotes),
             "reason": reason,
+        }
+
+    @staticmethod
+    def close_revision(
+        po_id: int,
+        user_id: Optional[int],
+        db: Session,
+        note: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Shut an open revision window without applying changes.
+
+        Reopening is a commitment to make a change and say why. Walking away from
+        it is not, so leaving the document locks it again and the next edit asks
+        for its own reason -- the alternative is a requisition sitting editable on
+        a reason given for an edit that never happened.
+
+        Nothing is rolled back: the stage, the superseded quotes and the reason
+        already given all stand, because they are what happened. Only the window
+        closes. Idempotent, so the screen can call it on the way out without
+        knowing whether a save has already closed it.
+        """
+        po = db.query(PurchaseOrder).filter(
+            PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False
+        ).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Document not found.")
+
+        # Reading the trail rather than a flag, the same way the window is opened
+        # and spent. Imported here: OrderRouter imports this service.
+        from .OrderRouter import _revision_is_open
+
+        if not _revision_is_open(po):
+            return {
+                "message": "No revision was open on this document.",
+                "po_id": po.id,
+                "closed": False,
+                "lifecycle_stage": po.lifecycle_stage,
+                "status_label": po.status_label,
+            }
+
+        stage = (po.lifecycle_stage or "DRAFT").upper()
+        po.lifecycle_version = (po.lifecycle_version or 1) + 1
+        po.status_label = STAGE_TITLES.get(stage, po.status_label)
+
+        LifecycleService.capture_po_snapshot(
+            po=po,
+            db=db,
+            transition_type="REVISION_CLOSED",
+            change_summary=note or "Revision closed without changes; the document is locked again.",
+            diff_data={"closed_without_changes": True, "note": note or None},
+            user_id=user_id,
+        )
+        db.commit()
+        db.refresh(po)
+        return {
+            "message": (
+                f"{po.po_number or 'The document'} is locked again. "
+                "Revising it needs a new reason."
+            ),
+            "po_id": po.id,
+            "closed": True,
+            "lifecycle_stage": po.lifecycle_stage,
+            "status_label": po.status_label,
         }
 
     @staticmethod

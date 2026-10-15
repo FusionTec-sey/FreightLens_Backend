@@ -1,6 +1,6 @@
 import logging
 import io
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
@@ -1178,8 +1178,10 @@ def _revision_is_open(order) -> bool:
     The marker is the audit trail itself rather than a flag on the row. Reading
     newest first, the first snapshot that opens or closes a revision decides it: a
     REVISION_OPENED (or the STAGE_ROLLBACK a revision from a sent stage leaves)
-    means open, a REVISION_APPLIED means the changes were saved and the window shut.
-    One reason buys one round of changes; the next needs its own reason.
+    means open, a REVISION_APPLIED means the changes were saved and the window shut,
+    a REVISION_CLOSED means it was left without changes. An opening older than
+    REVISION_WINDOW_MINUTES has expired. One reason buys one round of changes, and
+    only while it is being made; the next needs its own reason.
     """
     def _touched_items(snap) -> bool:
         diff = snap.diff_data or {}
@@ -1190,6 +1192,9 @@ def _revision_is_open(order) -> bool:
             continue
         if snap.transition_type == "REVISION_APPLIED":
             return False
+        # Left without applying anything: the window was closed on the way out.
+        if snap.transition_type == "REVISION_CLOSED":
+            return False
         # Any save that moved a line closes the window too, whoever wrote it and
         # whatever it called itself. Reading the diff rather than trusting the
         # label means a line changed through some other path cannot leave the
@@ -1197,8 +1202,24 @@ def _revision_is_open(order) -> bool:
         if snap.transition_type == "MUTATION" and _touched_items(snap):
             return False
         if snap.transition_type in ("REVISION_OPENED", "STAGE_ROLLBACK"):
-            return True
+            # Expired: a closed tab or a lost session cannot close the window on
+            # its way out, and an editable document left on an unspent reason is
+            # the thing the reason exists to prevent.
+            return not _window_expired(snap)
     return False
+
+
+def _window_expired(snap) -> bool:
+    """Has the revision window been open, untouched, for longer than allowed?"""
+    opened_at = getattr(snap, "created_at", None)
+    if opened_at is None:
+        return False
+    # Snapshot timestamps are stored with a timezone; a row written without one
+    # is read as UTC rather than crashing the comparison.
+    if opened_at.tzinfo is None:
+        opened_at = opened_at.replace(tzinfo=timezone.utc)
+    from .LifecycleService import REVISION_WINDOW_MINUTES
+    return datetime.now(timezone.utc) - opened_at > timedelta(minutes=REVISION_WINDOW_MINUTES)
 
 
 def _assert_lines_may_change(order, changed_items) -> None:
@@ -1688,10 +1709,14 @@ def update_order(
         change_desc = f"{given_reason} ({summary_of_changes})" if given_reason else summary_of_changes
 
         db.flush()
-        from .LifecycleService import LifecycleService
+        from .LifecycleService import LifecycleService, STAGE_TITLES
         # Saving the lines spends the revision: the window closes and the next
         # change asks for its own reason. A header-only save leaves it open --
         # a delivery date is not what the reason was given for.
+        if revision_was_open and items_mutated:
+            # The window is spent, so the label that announced it goes with it.
+            stage_now = (order.lifecycle_stage or "DRAFT").upper()
+            order.status_label = STAGE_TITLES.get(stage_now, order.status_label)
         LifecycleService.capture_po_snapshot(
             po=order,
             db=db,

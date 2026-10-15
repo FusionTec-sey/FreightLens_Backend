@@ -659,6 +659,33 @@ def revise_document(
     )
 
 
+@LifecycleRouter.post("/{po_id}/revise/close")
+def close_revision_window(
+    po_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    org_context: OrgContext = Depends(get_org_context)
+):
+    """
+    Locks a reopened document again when the revision was left without changes.
+
+    Takes no reason: nothing was changed, and the reason for reopening is already
+    on the record. Whoever may revise may close -- the same authority, and closing
+    only ever removes the ability to edit.
+    """
+    if not (has_permission(user, "Revise_RFQ") or has_permission(user, "Approve_Quote")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Permission 'Revise_RFQ' is required to close a revision."
+        )
+
+    return LifecycleService.close_revision(
+        po_id=po_id,
+        user_id=getattr(user, "id", None),
+        db=db
+    )
+
+
 class RevokeAwardRequest(BaseModel):
     reason: str
 
