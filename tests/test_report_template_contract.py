@@ -149,3 +149,40 @@ def test_saved_dataset_template_must_match_route(monkeypatch):
         )
 
     assert exc_info.value.status_code == 422
+
+
+def test_the_no_template_case_must_be_sent_as_null_not_as_a_word():
+    """The register screen sent "default" -- its own word for "no saved layout".
+
+    `template_id` is an integer or nothing, so the whole spec was rejected and
+    running, printing or exporting a register did nothing at all unless a saved
+    layout happened to be selected. Pinned here because the failure looked like
+    a broken report rather than a bad field.
+    """
+    with pytest.raises(ValidationError) as raised:
+        DatasetQuerySpec.model_validate({"template_id": "default", "page": 1, "limit": 25})
+
+    assert raised.value.errors()[0]["loc"] == ("template_id",)
+
+    assert DatasetQuerySpec.model_validate(
+        {"template_id": None, "page": 1, "limit": 25}
+    ).template_id is None
+    # A numeric string is what a <select> gives back, and has to keep working.
+    assert DatasetQuerySpec.model_validate(
+        {"template_id": "12", "page": 1, "limit": 25}
+    ).template_id == 12
+
+
+def test_a_layout_narrows_and_relabels_the_columns_it_names():
+    """What "applying a saved layout" has to mean by the time it is rendered."""
+    from Schema.ReportDatasetSchema import TabularColumnLayout
+
+    layout = [
+        TabularColumnLayout(key="container_no", label="RENAMED", align="center", width="40mm"),
+        TabularColumnLayout(key="container_type", align="right"),
+        TabularColumnLayout(key="supplier_name", visible=False),
+    ]
+
+    assert [column.key for column in layout if column.visible] == ["container_no", "container_type"]
+    assert layout[0].label == "RENAMED"
+    assert layout[1].label is None, "a column with no override keeps the register's own label"
