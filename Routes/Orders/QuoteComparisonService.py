@@ -15,6 +15,15 @@ from Model.containermgmt.Orders.Product import ProductSupplier
 
 logger = logging.getLogger("containerMgmt.quote_comparison")
 
+def _revision_open(order) -> bool:
+    """Imported late: OrderRouter reaches into this module too."""
+    try:
+        from .OrderRouter import _revision_is_open
+        return bool(_revision_is_open(order))
+    except Exception:
+        return False
+
+
 class QuoteComparisonService:
 
     @staticmethod
@@ -226,6 +235,9 @@ class QuoteComparisonService:
                 "child_pos": child_pos_serialized,
                 "lifecycle_stage": po.lifecycle_stage,
                 "lifecycle_version": po.lifecycle_version,
+                # The bidding desk is read-only while a revision is open: the
+                # lines being compared are the ones being rewritten.
+                "revision_open": _revision_open(po),
                 "selected_quote_id": po.selected_quote_id,
                 "currency": po.currency or "USD",
                 "eta_date": po.eta_date.isoformat() if po.eta_date else None,
@@ -430,6 +442,12 @@ class QuoteComparisonService:
         if not po:
             raise HTTPException(status_code=404, detail="Purchase Order not found.")
 
+        # Awarding a document somebody is revising would commit the company to
+        # lines that are being rewritten. Guarded here rather than in the router
+        # so no caller can route around it.
+        from .OrderRouter import assert_no_open_revision
+        assert_no_open_revision(po, "awarding this quote")
+
         winning_quote = db.query(VendorQuote).filter(VendorQuote.id == quote_id, VendorQuote.po_id == po_id).first()
         if not winning_quote:
             raise HTTPException(status_code=404, detail="Vendor Quote not found for this PO.")
@@ -576,6 +594,9 @@ class QuoteComparisonService:
         rfq = db.query(PurchaseOrder).filter(PurchaseOrder.id == rfq_id).with_for_update(of=PurchaseOrder).first()
         if not rfq:
             raise HTTPException(status_code=404, detail="RFQ not found.")
+
+        from .OrderRouter import assert_no_open_revision
+        assert_no_open_revision(rfq, "awarding these line items")
 
         # Prevent duplicate split/award if active child POs already exist
         existing_children = db.query(PurchaseOrder).filter(

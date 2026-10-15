@@ -1222,6 +1222,24 @@ def _window_expired(snap) -> bool:
     return datetime.now(timezone.utc) - opened_at > timedelta(minutes=REVISION_WINDOW_MINUTES)
 
 
+def assert_no_open_revision(order, action: str) -> None:
+    """Refuse an action that would compete with a revision in progress.
+
+    A reopened document is mid-change by someone who said why. Awarding it, or
+    moving it on, would commit the company to lines that are being rewritten --
+    and the award would be recorded against a version that no longer exists.
+    The revision finishes, or is closed, first.
+    """
+    if _revision_is_open(order):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{order.po_number or 'This requisition'} is open for revision. "
+                f"Finish or close the revision before {action}."
+            ),
+        )
+
+
 def _assert_lines_may_change(order, changed_items) -> None:
     """Refuse a line change the stage does not allow.
 
@@ -1709,14 +1727,10 @@ def update_order(
         change_desc = f"{given_reason} ({summary_of_changes})" if given_reason else summary_of_changes
 
         db.flush()
-        from .LifecycleService import LifecycleService, STAGE_TITLES
+        from .LifecycleService import LifecycleService
         # Saving the lines spends the revision: the window closes and the next
         # change asks for its own reason. A header-only save leaves it open --
         # a delivery date is not what the reason was given for.
-        if revision_was_open and items_mutated:
-            # The window is spent, so the label that announced it goes with it.
-            stage_now = (order.lifecycle_stage or "DRAFT").upper()
-            order.status_label = STAGE_TITLES.get(stage_now, order.status_label)
         LifecycleService.capture_po_snapshot(
             po=order,
             db=db,

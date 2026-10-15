@@ -51,11 +51,6 @@ STAGE_TITLES = {
 
 DEFAULT_VARIANCE_THRESHOLD = Decimal("2.0")  # ±2.0% fallback
 
-# What a reopened document shows in the lists while its revision window is open.
-# Rolling the stage back to CONFIRMED on its own left the old label in place, so a
-# requisition reopened from RFQ_SENT still read "RFQ Sent" everywhere but here.
-REVISION_STATUS_LABEL = "Under Revision"
-
 # How long a revision window stays open unattended. The window is meant to be
 # spent on the change it was opened for: whoever walks away from it leaves a
 # document editable with a reason already given for an edit nobody made. Leaving
@@ -639,7 +634,6 @@ class LifecycleService:
         # the snapshot itself; editing stays open until the requisition is sent.
         if stage == "CONFIRMED":
             po.lifecycle_version = (version_before or 1) + 1
-            po.status_label = REVISION_STATUS_LABEL
             LifecycleService.capture_po_snapshot(
                 po=po,
                 db=db,
@@ -650,6 +644,7 @@ class LifecycleService:
             )
             db.commit()
             db.refresh(po)
+            LifecycleService._sync_search(po)
             return {
                 "message": (
                     f"{po.po_number or 'The document'} is open for editing. "
@@ -674,11 +669,10 @@ class LifecycleService:
             comment=f"Revision: {reason}",
             db=db,
         )
-        # After the rollback, not before: transition_stage sets its own labels for
-        # the stage it lands on, and this has to be what survives.
-        po.status_label = REVISION_STATUS_LABEL
-        db.commit()
+        # transition_stage syncs the document as it leaves, before the revision is
+        # open on it, so the lists need telling again.
         db.refresh(po)
+        LifecycleService._sync_search(po)
 
         return {
             "message": (
@@ -693,6 +687,20 @@ class LifecycleService:
             "superseded_quotes": len(open_quotes),
             "reason": reason,
         }
+
+    @staticmethod
+    def _sync_search(po) -> None:
+        """Push a document to Meilisearch, which is what the lists read.
+
+        Opening and closing a revision changes nothing the stage transition
+        already synced, so without this the badge the lists draw stays stale --
+        the reopened state was invisible everywhere except the document itself.
+        """
+        try:
+            from Services.search_service import sync_order_document
+            sync_order_document(po)
+        except Exception as e:
+            logger.warning("Failed to sync order %s to Meilisearch: %s", po.id, e)
 
     @staticmethod
     def close_revision(
@@ -732,9 +740,7 @@ class LifecycleService:
                 "status_label": po.status_label,
             }
 
-        stage = (po.lifecycle_stage or "DRAFT").upper()
         po.lifecycle_version = (po.lifecycle_version or 1) + 1
-        po.status_label = STAGE_TITLES.get(stage, po.status_label)
 
         LifecycleService.capture_po_snapshot(
             po=po,
@@ -746,6 +752,7 @@ class LifecycleService:
         )
         db.commit()
         db.refresh(po)
+        LifecycleService._sync_search(po)
         return {
             "message": (
                 f"{po.po_number or 'The document'} is locked again. "

@@ -1,6 +1,25 @@
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 
 
+def _revision_open(order) -> bool:
+    """Is a revision open on this document?
+
+    Short-circuited on the stage, because reading the audit trail walks the
+    document's snapshots and the lists serialize a page of documents at a time.
+    A revision window only ever exists at CONFIRMED -- Revise lands the document
+    there and the window shuts before it leaves -- so nothing else needs asking.
+
+    Imported late: OrderRouter imports this module.
+    """
+    if (getattr(order, "lifecycle_stage", None) or "DRAFT").upper() != "CONFIRMED":
+        return False
+    try:
+        from .OrderRouter import _revision_is_open
+        return _revision_is_open(order)
+    except Exception:
+        return False
+
+
 def order_to_dict(order: PurchaseOrder, is_accounts: bool = True, can_view_supplier: bool = True) -> dict:
     doc_type = (getattr(order, "doc_type", "PO") or "PO").upper()
     is_rfq = (doc_type == "RFQ")
@@ -139,6 +158,11 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True, can_view_suppl
         
         # Procurement Lifecycle Stage (7-stage pipeline)
         "lifecycle_stage": order.lifecycle_stage or "DRAFT",
+        # Whether somebody has this document open for revision right now. Carried
+        # on the document rather than in its status, because the status master
+        # owns the workflow label and a revision is orthogonal to it: a reopened
+        # requisition is still CONFIRMED, it is just locked to everyone else.
+        "revision_open": _revision_open(order),
         "lifecycle_version": order.lifecycle_version or 1,
         "stage_version": getattr(order, "stage_version", 1) or 1,
         "lifecycle_locked": bool(order.lifecycle_locked),

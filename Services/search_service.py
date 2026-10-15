@@ -541,6 +541,9 @@ def init_orders_index():
             "status_label",
             "lifecycle_stage",
             "urgent_action",
+            # A reopened document is filterable in its own right: it is locked to
+            # everyone else, and the lists are where anyone would look for it.
+            "revision_open",
             "supplier_id",
             "is_deleted",
             "org_id",
@@ -550,6 +553,23 @@ def init_orders_index():
     except Exception as e:
         logger.exception("Failed to initialize Meilisearch 'purchase_orders' index: %s", e)
         return False
+
+def _revision_open_for_index(o) -> bool:
+    """Read from the document's own audit trail, the one source for this.
+
+    A stale value here would show the lists a lock that is not there, or hide one
+    that is, so it is derived at sync time rather than carried on the row.
+    """
+    # Only CONFIRMED can hold an open window, and this walks the document's
+    # snapshots, so everything else answers without a query.
+    if (getattr(o, "lifecycle_stage", None) or "DRAFT").upper() != "CONFIRMED":
+        return False
+    try:
+        from Routes.Orders.OrderRouter import _revision_is_open
+        return bool(_revision_is_open(o))
+    except Exception:
+        return False
+
 
 def format_order_doc(o) -> Dict[str, Any]:
     """Formats a PurchaseOrder model or dictionary into a Meilisearch document."""
@@ -568,6 +588,7 @@ def format_order_doc(o) -> Dict[str, Any]:
             "status_label": o.get("status_label") or "",
             "lifecycle_stage": o.get("lifecycle_stage") or "DRAFT",
             "urgent_action": bool(o.get("urgent_action", False)),
+            "revision_open": bool(o.get("revision_open", False)),
             "supplier_id": o.get("supplier_id"),
             "total_amount": float(o["total_amount"]) if o.get("total_amount") is not None else None,
             "currency": o.get("currency") or "USD",
@@ -612,6 +633,7 @@ def format_order_doc(o) -> Dict[str, Any]:
         "status_label": getattr(o, "status_label", None) or "",
         "lifecycle_stage": getattr(o, "lifecycle_stage", None) or "DRAFT",
         "urgent_action": bool(getattr(o, "urgent_action", False)),
+        "revision_open": _revision_open_for_index(o),
         "supplier_id": getattr(o, "supplier_id", None),
         "total_amount": float(o.total_amount) if getattr(o, "total_amount", None) is not None else None,
         "currency": getattr(o, "currency", None) or "USD",
