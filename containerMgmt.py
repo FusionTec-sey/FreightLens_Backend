@@ -188,6 +188,8 @@ async def startup_event():
     ensure_award_deviation_schema()
     from Utils.migrate_20261014_supplier_identity import ensure_supplier_identity_schema
     ensure_supplier_identity_schema()
+    from Utils.migrate_20261015_supplier_contacts_addresses import ensure_supplier_contacts_and_addresses
+    ensure_supplier_contacts_and_addresses()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

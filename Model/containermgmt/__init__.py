@@ -7,7 +7,7 @@ from .Report.ReportDetails import ReportDetails
 from .Report.ReportImages import ReportImage
 from .Report.DamageProduct import DamageProduct
 
-from .Cinfo.Supplier import Supplier, SupplierIdentifier
+from .Cinfo.Supplier import Supplier, SupplierAddress, SupplierContact, SupplierIdentifier
 from .Cinfo.Consignee import Consignee
 from .Cinfo.ContainerType import ContainerType
 from .Cinfo.DocType import ShippingDocument
@@ -52,7 +52,7 @@ from .Report.ReportTemplateAssignment import ReportTemplateAssignment
 __all__ = [
     "ContainerDetails", "ContainerDocs", "DocType", "BillOfLanding",
     "PackingList", "ReportDetails", "ReportImage", "DamageProduct",
-    "Supplier", "SupplierIdentifier", "Consignee", "ContainerType", "ShippingDocument",
+    "Supplier", "SupplierIdentifier", "SupplierContact", "SupplierAddress", "Consignee", "ContainerType", "ShippingDocument",
     "UnloadVenue", "Status", "Material", "container_products",
     "Vessal", "LogisticsProvider", "OrderStatus", "PurchaseOrder",
     "StoreRequest", "StoreRequestItem", "POItem", "OrderDocument",

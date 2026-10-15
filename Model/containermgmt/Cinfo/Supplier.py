@@ -42,6 +42,14 @@ class Supplier(AuditMixin, Base):
         "SupplierIdentifier", back_populates="supplier",
         cascade="all, delete-orphan", passive_deletes=True,
     )
+    contacts = relationship(
+        "SupplierContact", back_populates="supplier",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
+    addresses = relationship(
+        "SupplierAddress", back_populates="supplier",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
 
 
 class SupplierIdentifier(AuditMixin, Base):
@@ -74,3 +82,63 @@ class SupplierIdentifier(AuditMixin, Base):
 
     supplier = relationship("Supplier", back_populates="identifiers")
 
+
+class SupplierContact(AuditMixin, Base):
+    """A person at the vendor, with what they are the person for.
+
+    The supplier row has one contact_person, one email and one phone. A vendor
+    has a salesperson, someone in accounts and someone who answers about a late
+    shipment, and in one field the second of them overwrites the first. The
+    primary row is what the old single fields keep showing, so nothing that
+    reads them changes.
+    """
+    __tablename__ = 'supplier_contacts'
+    __table_args__ = {'schema': 'containermgmt'}
+
+    id = Column(Integer, primary_key=True)
+    supplier_id = Column(
+        Integer,
+        ForeignKey("containermgmt.supplier.supplier_id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    name = Column(String(150), nullable=False)
+    role = Column(String(30), nullable=True)       # SALES, ACCOUNTS, LOGISTICS, ESCALATION, OTHER
+    job_title = Column(String(100), nullable=True)
+    email = Column(String(150), nullable=True)
+    phone = Column(String(50), nullable=True)
+    mobile = Column(String(50), nullable=True)
+    is_primary = Column(Boolean, default=False, nullable=False)
+    notes = Column(Text, nullable=True)
+
+    supplier = relationship("Supplier", back_populates="contacts")
+
+
+class SupplierAddress(AuditMixin, Base):
+    """A place the vendor has, with what it is for.
+
+    A registered office is not the factory, the factory is not the warehouse
+    goods ship from, and none of them is where a payment advice should go. Each
+    is a different mistake on a different document, so each is its own row with
+    its own type.
+    """
+    __tablename__ = 'supplier_addresses'
+    __table_args__ = {'schema': 'containermgmt'}
+
+    id = Column(Integer, primary_key=True)
+    supplier_id = Column(
+        Integer,
+        ForeignKey("containermgmt.supplier.supplier_id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    address_type = Column(String(30), nullable=False, default="OTHER")  # REGISTERED, FACTORY, WAREHOUSE, REMIT_TO, OTHER
+    label = Column(String(100), nullable=True)
+    line1 = Column(String(200), nullable=True)
+    line2 = Column(String(200), nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(100), nullable=True)
+    postal_code = Column(String(30), nullable=True)
+    country = Column(String(100), nullable=True)
+    is_primary = Column(Boolean, default=False, nullable=False)
+    notes = Column(Text, nullable=True)
+
+    supplier = relationship("Supplier", back_populates="addresses")

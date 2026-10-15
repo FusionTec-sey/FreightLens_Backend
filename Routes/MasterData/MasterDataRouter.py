@@ -1085,6 +1085,10 @@ def get_supplier_profile(
         # The counterparty seam: null until a vendor's own tenant is linked.
         "linked_org_id": supplier.linked_org_id,
         "identifiers": _identifier_rows(db, supplier.supplier_id),
+        # The people and the places, sent with the profile so the tab opens on
+        # what it already knows rather than on a spinner.
+        "contacts": _contact_rows(db, supplier.supplier_id),
+        "addresses": _address_rows(db, supplier.supplier_id),
         "usage": _supplier_usage(db, supplier.supplier_id),
         "completeness": {
             "filled": filled,
@@ -1470,6 +1474,439 @@ def remove_supplier_identifier(
     db.commit()
     sync_supplier_document(supplier, [i["value"] for i in _identifier_rows(db, id)])
     return {"success": True, "items": _identifier_rows(db, id)}
+
+
+# ── 4d. The people and the places a vendor has ──────────────────────────────
+#
+# One contact_person and one address on the supplier row cannot hold what a
+# vendor actually is: a salesperson and someone in accounts, a registered
+# office that is not the factory. Each is a row, each knows what it is for, and
+# the row marked primary keeps the old single fields on the supplier correct so
+# that nothing still reading them shows something different.
+
+CONTACT_ROLES = ("SALES", "ACCOUNTS", "LOGISTICS", "ESCALATION", "OTHER")
+ADDRESS_TYPES = ("REGISTERED", "FACTORY", "WAREHOUSE", "REMIT_TO", "OTHER")
+
+
+class SupplierContactSchema(BaseModel):
+    name: str
+    role: Optional[str] = None
+    job_title: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    mobile: Optional[str] = None
+    is_primary: bool = False
+    notes: Optional[str] = None
+
+
+class SupplierAddressSchema(BaseModel):
+    address_type: Optional[str] = "OTHER"
+    label: Optional[str] = None
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    is_primary: bool = False
+    notes: Optional[str] = None
+
+
+def _contact_rows(db: Session, supplier_id: int) -> list:
+    rows = db.execute(sqltext("""
+        SELECT id, name, role, job_title, email, phone, mobile, is_primary, notes
+        FROM containermgmt.supplier_contacts
+        WHERE supplier_id = :id AND is_deleted IS NOT TRUE
+        ORDER BY is_primary DESC, name ASC
+    """), {"id": supplier_id}).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def _address_rows(db: Session, supplier_id: int) -> list:
+    rows = db.execute(sqltext("""
+        SELECT id, address_type, label, line1, line2, city, state, postal_code,
+               country, is_primary, notes
+        FROM containermgmt.supplier_addresses
+        WHERE supplier_id = :id AND is_deleted IS NOT TRUE
+        ORDER BY is_primary DESC, address_type ASC, id ASC
+    """), {"id": supplier_id}).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def _clear_other_primaries(db: Session, table: str, supplier_id: int, keep_id: Optional[int] = None) -> None:
+    """One primary per vendor.
+
+    The unique index enforces it, so demoting the previous holder has to happen
+    in the same transaction as promoting the new one -- otherwise the insert
+    fails on an index nobody asked about.
+    """
+    sql = f"""
+        UPDATE containermgmt.{table} SET is_primary = FALSE
+        WHERE supplier_id = :id AND is_primary IS TRUE AND is_deleted IS NOT TRUE
+    """
+    params = {"id": supplier_id}
+    if keep_id is not None:
+        sql += " AND id <> :keep"
+        params["keep"] = keep_id
+    db.execute(sqltext(sql), params)
+
+
+def _sync_primary_contact(db: Session, supplier: Supplier) -> None:
+    """Keep the supplier's own contact fields showing the primary contact.
+
+    Every screen, print template and export that reads contact_person, email or
+    phone keeps working, and keeps agreeing with the contacts tab.
+    """
+    primary = db.execute(sqltext("""
+        SELECT name, email, phone, mobile FROM containermgmt.supplier_contacts
+        WHERE supplier_id = :id AND is_primary IS TRUE AND is_deleted IS NOT TRUE
+        LIMIT 1
+    """), {"id": supplier.supplier_id}).mappings().first()
+    if not primary:
+        return
+    supplier.contact_person = primary["name"]
+    if primary["email"]:
+        supplier.email = primary["email"]
+    if primary["phone"] or primary["mobile"]:
+        supplier.phone = primary["phone"] or primary["mobile"]
+
+
+def _sync_primary_address(db: Session, supplier: Supplier) -> None:
+    """Keep the supplier's single address field showing the primary address."""
+    primary = db.execute(sqltext("""
+        SELECT line1, line2, city, state, postal_code, country
+        FROM containermgmt.supplier_addresses
+        WHERE supplier_id = :id AND is_primary IS TRUE AND is_deleted IS NOT TRUE
+        LIMIT 1
+    """), {"id": supplier.supplier_id}).mappings().first()
+    if not primary:
+        return
+    parts = [primary[k] for k in ("line1", "line2", "city", "state", "postal_code") if primary[k]]
+    one_line = ", ".join(str(p).strip() for p in parts)
+    if one_line:
+        supplier.address = one_line[:255]
+    if primary["country"] and not supplier.country:
+        supplier.country = primary["country"]
+
+
+@MasterDataRouter.get("/suppliers/{id}/contacts")
+def list_supplier_contacts(
+    id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    _supplier_or_404(db, id, org_context)
+    return {"items": _contact_rows(db, id), "roles": list(CONTACT_ROLES)}
+
+
+@MasterDataRouter.post("/suppliers/{id}/contacts")
+def add_supplier_contact(
+    id: int,
+    payload: SupplierContactSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="A contact needs a name.")
+    role = (payload.role or "OTHER").strip().upper()
+    if role not in CONTACT_ROLES:
+        raise HTTPException(status_code=400, detail=(
+            f"'{role}' is not a contact role. Use one of: {', '.join(CONTACT_ROLES)}."))
+
+    # The first contact is the primary one whether or not anyone said so: a
+    # vendor with contacts and no primary is a vendor whose purchase order has
+    # nobody to address.
+    existing = _contact_rows(db, id)
+    make_primary = bool(payload.is_primary) or not existing
+    if make_primary:
+        _clear_other_primaries(db, "supplier_contacts", id)
+
+    new_id = db.execute(sqltext("""
+        INSERT INTO containermgmt.supplier_contacts
+            (supplier_id, name, role, job_title, email, phone, mobile, is_primary, notes, created_by)
+        VALUES (:id, :n, :r, :jt, :e, :p, :m, :pr, :no, :u)
+        RETURNING id
+    """), {
+        "id": id, "n": name, "r": role,
+        "jt": (payload.job_title or "").strip() or None,
+        "e": (payload.email or "").strip() or None,
+        "p": (payload.phone or "").strip() or None,
+        "m": (payload.mobile or "").strip() or None,
+        "pr": make_primary, "no": (payload.notes or "").strip() or None,
+        "u": getattr(current_user, "id", None),
+    }).scalar()
+
+    if make_primary:
+        _sync_primary_contact(db, supplier)
+    record_event(
+        db, "supplier", id, "contact_added", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=role, new_value=name,
+    )
+    db.commit()
+    return {"success": True, "id": new_id, "items": _contact_rows(db, id)}
+
+
+@MasterDataRouter.put("/suppliers/{id}/contacts/{contact_id}")
+def update_supplier_contact(
+    id: int,
+    contact_id: int,
+    payload: SupplierContactSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="A contact needs a name.")
+    role = (payload.role or "OTHER").strip().upper()
+    if role not in CONTACT_ROLES:
+        raise HTTPException(status_code=400, detail=(
+            f"'{role}' is not a contact role. Use one of: {', '.join(CONTACT_ROLES)}."))
+
+    if payload.is_primary:
+        _clear_other_primaries(db, "supplier_contacts", id, keep_id=contact_id)
+
+    updated = db.execute(sqltext("""
+        UPDATE containermgmt.supplier_contacts
+        SET name = :n, role = :r, job_title = :jt, email = :e, phone = :p,
+            mobile = :m, is_primary = :pr, notes = :no,
+            updated_at = now(), updated_by = :u
+        WHERE id = :cid AND supplier_id = :id AND is_deleted IS NOT TRUE
+    """), {
+        "cid": contact_id, "id": id, "n": name, "r": role,
+        "jt": (payload.job_title or "").strip() or None,
+        "e": (payload.email or "").strip() or None,
+        "p": (payload.phone or "").strip() or None,
+        "m": (payload.mobile or "").strip() or None,
+        "pr": bool(payload.is_primary), "no": (payload.notes or "").strip() or None,
+        "u": getattr(current_user, "id", None),
+    }).rowcount
+    if not updated:
+        raise HTTPException(status_code=404, detail="Contact not found.")
+
+    if payload.is_primary:
+        _sync_primary_contact(db, supplier)
+    record_event(
+        db, "supplier", id, "contact_updated", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=role, new_value=name,
+    )
+    db.commit()
+    return {"success": True, "items": _contact_rows(db, id)}
+
+
+@MasterDataRouter.delete("/suppliers/{id}/contacts/{contact_id}")
+def remove_supplier_contact(
+    id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    row = db.execute(sqltext("""
+        SELECT name, is_primary FROM containermgmt.supplier_contacts
+        WHERE id = :cid AND supplier_id = :id AND is_deleted IS NOT TRUE
+    """), {"cid": contact_id, "id": id}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contact not found.")
+
+    db.execute(sqltext("""
+        UPDATE containermgmt.supplier_contacts
+        SET is_deleted = TRUE, deleted_at = now(), deleted_by = :u, is_primary = FALSE
+        WHERE id = :cid AND supplier_id = :id
+    """), {"cid": contact_id, "id": id, "u": getattr(current_user, "id", None)})
+
+    # Removing the primary leaves no primary, so the oldest remaining contact
+    # takes over rather than the vendor being left with nobody.
+    if row["is_primary"]:
+        heir = db.execute(sqltext("""
+            SELECT id FROM containermgmt.supplier_contacts
+            WHERE supplier_id = :id AND is_deleted IS NOT TRUE
+            ORDER BY id ASC LIMIT 1
+        """), {"id": id}).scalar()
+        if heir:
+            db.execute(sqltext("UPDATE containermgmt.supplier_contacts SET is_primary = TRUE WHERE id = :h"), {"h": heir})
+            _sync_primary_contact(db, supplier)
+
+    record_event(
+        db, "supplier", id, "contact_removed", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=str(contact_id), old_value=row["name"], new_value=None,
+    )
+    db.commit()
+    return {"success": True, "items": _contact_rows(db, id)}
+
+
+@MasterDataRouter.get("/suppliers/{id}/addresses")
+def list_supplier_addresses(
+    id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    _supplier_or_404(db, id, org_context)
+    return {"items": _address_rows(db, id), "types": list(ADDRESS_TYPES)}
+
+
+@MasterDataRouter.post("/suppliers/{id}/addresses")
+def add_supplier_address(
+    id: int,
+    payload: SupplierAddressSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    address_type = (payload.address_type or "OTHER").strip().upper()
+    if address_type not in ADDRESS_TYPES:
+        raise HTTPException(status_code=400, detail=(
+            f"'{address_type}' is not an address type. Use one of: {', '.join(ADDRESS_TYPES)}."))
+    if not (payload.line1 or "").strip() and not (payload.city or "").strip():
+        raise HTTPException(status_code=400, detail="An address needs at least a street or a city.")
+
+    existing = _address_rows(db, id)
+    make_primary = bool(payload.is_primary) or not existing
+    if make_primary:
+        _clear_other_primaries(db, "supplier_addresses", id)
+
+    new_id = db.execute(sqltext("""
+        INSERT INTO containermgmt.supplier_addresses
+            (supplier_id, address_type, label, line1, line2, city, state,
+             postal_code, country, is_primary, notes, created_by)
+        VALUES (:id, :t, :l, :l1, :l2, :c, :s, :pc, :co, :pr, :no, :u)
+        RETURNING id
+    """), {
+        "id": id, "t": address_type,
+        "l": (payload.label or "").strip() or None,
+        "l1": (payload.line1 or "").strip() or None,
+        "l2": (payload.line2 or "").strip() or None,
+        "c": (payload.city or "").strip() or None,
+        "s": (payload.state or "").strip() or None,
+        "pc": (payload.postal_code or "").strip() or None,
+        "co": (payload.country or "").strip() or None,
+        "pr": make_primary, "no": (payload.notes or "").strip() or None,
+        "u": getattr(current_user, "id", None),
+    }).scalar()
+
+    if make_primary:
+        _sync_primary_address(db, supplier)
+    record_event(
+        db, "supplier", id, "address_added", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=address_type, new_value=(payload.line1 or payload.city or "")[:200] or None,
+    )
+    db.commit()
+    return {"success": True, "id": new_id, "items": _address_rows(db, id)}
+
+
+@MasterDataRouter.put("/suppliers/{id}/addresses/{address_id}")
+def update_supplier_address(
+    id: int,
+    address_id: int,
+    payload: SupplierAddressSchema,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    address_type = (payload.address_type or "OTHER").strip().upper()
+    if address_type not in ADDRESS_TYPES:
+        raise HTTPException(status_code=400, detail=(
+            f"'{address_type}' is not an address type. Use one of: {', '.join(ADDRESS_TYPES)}."))
+
+    if payload.is_primary:
+        _clear_other_primaries(db, "supplier_addresses", id, keep_id=address_id)
+
+    updated = db.execute(sqltext("""
+        UPDATE containermgmt.supplier_addresses
+        SET address_type = :t, label = :l, line1 = :l1, line2 = :l2, city = :c,
+            state = :s, postal_code = :pc, country = :co, is_primary = :pr,
+            notes = :no, updated_at = now(), updated_by = :u
+        WHERE id = :aid AND supplier_id = :id AND is_deleted IS NOT TRUE
+    """), {
+        "aid": address_id, "id": id, "t": address_type,
+        "l": (payload.label or "").strip() or None,
+        "l1": (payload.line1 or "").strip() or None,
+        "l2": (payload.line2 or "").strip() or None,
+        "c": (payload.city or "").strip() or None,
+        "s": (payload.state or "").strip() or None,
+        "pc": (payload.postal_code or "").strip() or None,
+        "co": (payload.country or "").strip() or None,
+        "pr": bool(payload.is_primary), "no": (payload.notes or "").strip() or None,
+        "u": getattr(current_user, "id", None),
+    }).rowcount
+    if not updated:
+        raise HTTPException(status_code=404, detail="Address not found.")
+
+    if payload.is_primary:
+        _sync_primary_address(db, supplier)
+    record_event(
+        db, "supplier", id, "address_updated", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=address_type, new_value=(payload.line1 or payload.city or "")[:200] or None,
+    )
+    db.commit()
+    return {"success": True, "items": _address_rows(db, id)}
+
+
+@MasterDataRouter.delete("/suppliers/{id}/addresses/{address_id}")
+def remove_supplier_address(
+    id: int,
+    address_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    supplier = _supplier_or_404(db, id, org_context)
+    _assert_may_edit_supplier(supplier, org_context, current_user)
+
+    row = db.execute(sqltext("""
+        SELECT address_type, line1, is_primary FROM containermgmt.supplier_addresses
+        WHERE id = :aid AND supplier_id = :id AND is_deleted IS NOT TRUE
+    """), {"aid": address_id, "id": id}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Address not found.")
+
+    db.execute(sqltext("""
+        UPDATE containermgmt.supplier_addresses
+        SET is_deleted = TRUE, deleted_at = now(), deleted_by = :u, is_primary = FALSE
+        WHERE id = :aid AND supplier_id = :id
+    """), {"aid": address_id, "id": id, "u": getattr(current_user, "id", None)})
+
+    if row["is_primary"]:
+        heir = db.execute(sqltext("""
+            SELECT id FROM containermgmt.supplier_addresses
+            WHERE supplier_id = :id AND is_deleted IS NOT TRUE
+            ORDER BY id ASC LIMIT 1
+        """), {"id": id}).scalar()
+        if heir:
+            db.execute(sqltext("UPDATE containermgmt.supplier_addresses SET is_primary = TRUE WHERE id = :h"), {"h": heir})
+            _sync_primary_address(db, supplier)
+
+    record_event(
+        db, "supplier", id, "address_removed", getattr(current_user, "id", None),
+        org_id=None if supplier.is_shared else supplier.org_id,
+        field_name=str(address_id), old_value=row["line1"] or row["address_type"], new_value=None,
+    )
+    db.commit()
+    return {"success": True, "items": _address_rows(db, id)}
 
 
 # Every column in the database that points at supplier.supplier_id, read from

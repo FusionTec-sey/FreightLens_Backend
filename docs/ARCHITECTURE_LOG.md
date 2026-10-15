@@ -1,5 +1,25 @@
 # FreightLens Architecture Log
 
+## 2026-10-15 - Vendor contacts and addresses as rows
+
+- **Why:** the supplier row held one `contact_person` and one `address`, so the
+  second of either displaced the first. A vendor has a salesperson and someone
+  in accounts, and a registered office that is not the factory, which is not
+  where goods ship from.
+- **Change:** `supplier_contacts` and `supplier_addresses`, each typed, each
+  with one primary enforced by a partial unique index, with list/add/update/
+  remove endpoints under `/master-data/suppliers/{id}` and a Contacts & places
+  tab on the vendor profile. Every write records an audit event.
+- **Compatibility:** the old single columns stay and are kept in step with the
+  primary row, so every screen, print template and export still reading
+  `supplier.contact_person` or `supplier.address` keeps working and keeps
+  agreeing with the new tab. Removing the primary promotes the oldest remaining
+  row rather than leaving a vendor with nobody.
+- **Migration:** `migrate_20261015_supplier_contacts_addresses.py`, which seeds
+  each vendor's existing contact and address as its primary row. Idempotent:
+  only vendors with no rows yet are seeded.
+- **Undo:** revert the code; the tables can stay, since nothing else reads them.
+
 ## 2026-10-15 - Supplier master records, and a product's vendors
 
 - **Why:** the supplier record was a row in a directory. A buyer could not open a
