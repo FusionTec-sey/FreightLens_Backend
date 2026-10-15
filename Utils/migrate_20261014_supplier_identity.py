@@ -59,6 +59,14 @@ def ensure_supplier_identity_schema():
             logger.info("supplier table is not there yet; nothing to do.")
             return
 
+        # The code column lives in the model, not in a migration of its own, so a
+        # database older than that model would have the backfill fail on a column
+        # that is not there -- and these migrations run before the app serves, so
+        # that is a refusal to boot, not a warning.
+        if not _column_exists(conn, "supplier", "code"):
+            conn.execute(text("ALTER TABLE containermgmt.supplier ADD COLUMN code VARCHAR(50)"))
+            logger.info("Added the missing supplier.code column before backfilling it.")
+
         filled = conn.execute(text(_BACKFILL)).rowcount
         if filled:
             logger.info("Wrote down %s supplier code(s) that were only ever displayed.", filled)
