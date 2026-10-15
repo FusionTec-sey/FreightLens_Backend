@@ -105,10 +105,18 @@ PAGE_REGISTRY = [
              ("View_Product", "View_Order"), ("INVENTORY",), 40),
 
     # Reporting
-    PageSpec("REPORTS", "/reports", "Print & Reports", "Printer", "REPORTING",
-             ("View_Report", "View_Order", "View_Container"), (), 10),
+    # Two screens, two menu entries. They were one page behind a segmented
+    # toggle, so the registers half could not be put in a menu at all and users
+    # who needed only that had to know the other one existed first.
+    PageSpec("REPORT_DOCUMENT_TEMPLATES", "/reports/documents", "Print Document Templates",
+             "Printer", "REPORTING", ("View_Report", "View_Order", "View_Container"), (), 10),
+    PageSpec("REPORT_OPERATIONAL_REGISTERS", "/reports/registers", "Operational Registers",
+             "Table", "REPORTING", ("View_Report", "View_Order", "View_Container"), (), 15),
+    # Designing a layout is not a viewing right: the write endpoints require
+    # Manage_Report_Template, so admitting View_Report here only sent a viewer
+    # into the designer to be refused at the end of it.
     PageSpec("REPORT_EDITOR_NEW", "/reports/editor/new", "New Report Template", "FilePlus",
-             "REPORTING", ("Manage_Report_Template", "View_Report"), (), 20),
+             "REPORTING", ("Manage_Report_Template", "Manage_Operational_Template"), (), 20),
 
     # Master data
     PageSpec("MASTER_SUPPLIERS", "/master-data/suppliers", "Suppliers & Vendors", "Truck",

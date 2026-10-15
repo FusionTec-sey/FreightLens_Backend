@@ -1,5 +1,36 @@
 # FreightLens Architecture Log
 
+## 2026-10-15 - Reporting hub split, template preview, designer gated
+
+- **Why:** the hub listed templates with no way to look at one. Only managers had
+  any row actions at all, so a user could not see whether "Standard Purchase
+  Order" was the layout they wanted without printing a real document; and the
+  registers half lived behind a segmented toggle, so it could not be put in a
+  menu.
+- **Preview:** every row now has a View action, open to anyone who can open the
+  page. `TemplatePreviewModal` renders the published version through the
+  existing `POST /reports/render/preview` against the resolver's sample data --
+  no real record, no extra permission, since reading a blank form is not reading
+  anyone's data. The frame is `sandbox=""`, so a template can never run script
+  in the application's origin. Print and PDF come off the same render.
+- **Split:** `/reports/documents` (Print Document Templates) and
+  `/reports/registers` (Operational Registers) are separate routes with separate
+  page keys, so each can be placed in a menu. `/reports` and
+  `/reports/templates` redirect to the documents screen.
+- **Designing is not a viewing right:** the editor routes and
+  `REPORT_EDITOR_NEW` required `View_Report`, while every write endpoint
+  requires `Manage_Report_Template`. A viewer could lay out a template and be
+  refused at the save. Both now require the manage permissions.
+- **Removed:** the Print Profile shortcut from the hub header; a print profile
+  belongs to one company and is set per company in Settings.
+- **Migration:** `migrate_20261015_report_menu_split.py` repoints the menu rows
+  from the retired `REPORTS` key, renames the ones still called "Print &
+  Reports", and adds an Operational Registers entry beside each. It runs after
+  `sync_page_registry`, because `menu_items.page_key` is a foreign key into
+  `app_pages` and the key it moves rows to is created by that sync.
+- **Undo:** revert the code and repoint the menu rows back; the retired page row
+  stays inactive rather than deleted, so the foreign key survives either way.
+
 ## 2026-10-15 - Vendor activity feed, and the unbuilt tabs made visible
 
 - **Why:** every supplier write has recorded an audit row since the merge and

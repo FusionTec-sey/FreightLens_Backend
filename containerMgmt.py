@@ -203,6 +203,10 @@ async def startup_event():
         from auth.policy.page_registry import sync_page_registry
         sync_page_registry(db_session)
         db_session.commit()
+        # After the sync, because a menu row's page_key is a foreign key into
+        # app_pages and the key it is being moved to has just been created.
+        from Utils.migrate_20261015_report_menu_split import ensure_report_menu_split
+        ensure_report_menu_split()
         from Services.navigation_service import seed_root_organisation_menu
         seed_root_organisation_menu()
     except Exception as e:
