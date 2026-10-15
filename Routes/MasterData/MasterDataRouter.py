@@ -1909,6 +1909,198 @@ def remove_supplier_address(
     return {"success": True, "items": _address_rows(db, id)}
 
 
+# ── 4e. What happened to this vendor ────────────────────────────────────────
+#
+# Every write on a supplier has recorded an audit row since the merge and
+# retirement work: which field, from what, to what, by whom, when. Nothing read
+# them back, so the answer to "who changed the payment terms" existed in the
+# database and nowhere a buyer could reach -- and the reasons captured on merge
+# and retirement were written and never shown.
+
+# Plain language for the actions the supplier endpoints record. Anything not
+# listed falls back to its own name with the underscores removed, so a new
+# event appears in the feed the day it is first recorded rather than silently
+# vanishing from it.
+ACTIVITY_LABELS = {
+    "created": "Vendor created",
+    "updated": "Changed",
+    "deleted": "Retired",
+    "retired": "Retired",
+    "merged_away": "Merged into another vendor",
+    "merged_in": "Another vendor merged into this one",
+    "identifier_added": "Identifier recorded",
+    "identifier_verified": "Identifier verified",
+    "identifier_removed": "Identifier removed",
+    "contact_added": "Contact added",
+    "contact_updated": "Contact changed",
+    "contact_removed": "Contact removed",
+    "address_added": "Address added",
+    "address_updated": "Address changed",
+    "address_removed": "Address removed",
+}
+
+ACTIVITY_FIELD_LABELS = {
+    "name": "name",
+    "code": "vendor code",
+    "address": "address",
+    "email": "email",
+    "phone": "phone",
+    "contact_person": "contact person",
+    "country": "country",
+    "default_currency": "default currency",
+    "default_payment_term_id": "payment terms",
+    "variance_threshold_pct": "variance threshold",
+    "is_active": "status",
+    "is_shared": "visibility",
+    "is_deleted": "retirement",
+    "notes": "notes",
+    "merge_reason": "merge",
+    "retire_reason": "retirement",
+}
+
+# A contact's role and an address's type are recorded in field_name, so the
+# sentence has to read them as words rather than as the enum the table holds.
+ACTIVITY_KIND_WORDS = {
+    "SALES": "sales",
+    "ACCOUNTS": "accounts",
+    "LOGISTICS": "logistics",
+    "ESCALATION": "escalation",
+    "REGISTERED": "registered office",
+    "FACTORY": "factory",
+    "WAREHOUSE": "warehouse",
+    "REMIT_TO": "remit to",
+    "OTHER": "other",
+}
+
+# An action whose detail is nobody's business without the permission that
+# governs it. Bank accounts are not built yet; the filter is here so the feed
+# cannot start leaking them the day they are.
+ACTIVITY_FINANCIAL_PREFIXES = ("bank", "payment_account")
+
+
+def _activity_sentence(action: str, field: Optional[str], old, new) -> str:
+    """One readable line for one recorded change.
+
+    Built on the server so the feed, an export and anything else that reads it
+    tell the same story, rather than each re-deriving it from column values.
+    """
+    label = ACTIVITY_LABELS.get(action) or action.replace("_", " ").capitalize()
+    field_label = ACTIVITY_FIELD_LABELS.get(field or "", (field or "").replace("_", " "))
+
+    if action in ("updated",) and field:
+        if old and new:
+            return f"Changed {field_label} from “{old}” to “{new}”"
+        if new:
+            return f"Set {field_label} to “{new}”"
+        if old:
+            return f"Cleared {field_label} (was “{old}”)"
+        return f"Changed {field_label}"
+
+    if action in ("merged_away", "merged_in") and new:
+        return f"{label}: {new}"
+
+    if action in ("deleted", "retired"):
+        # The reason, when there is one, is the only part worth reading.
+        return f"{label}{f' — {new}' if new and new not in ('true', 'True') else ''}"
+
+    detail = new or old
+    # A contact or an address records its role or its type where a field edit
+    # would record a column, so it is read as a kind, not as a field.
+    # "Identifier verified: verified" says it twice; the label already said it.
+    if detail and detail.lower() in label.lower():
+        detail = None
+    kind = ACTIVITY_KIND_WORDS.get((field or "").upper())
+    if kind and detail:
+        return f"{label}: {detail} ({kind})"
+    if detail and field and not (field or "").isdigit():
+        return f"{label}: {field} {detail}"
+    if detail:
+        return f"{label}: {detail}"
+    if field_label and not (field or "").isdigit():
+        return f"{label} ({field_label})"
+    return label
+
+
+@MasterDataRouter.get("/suppliers/{id}/activity")
+def get_supplier_activity(
+    id: int,
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Who changed this vendor, what they changed it from, and when.
+
+    A shared vendor is edited by one company and seen by all of them, so an
+    event belongs either to the shared record itself -- recorded with no
+    org_id -- or to one company, and a user sees the shared ones plus their
+    own. Scoped in the query, so the pager counts what the user can read.
+    """
+    _supplier_or_404(db, id, org_context)
+    p, l, offset = _paged(page, limit)
+
+    # Shared-record events carry no org_id; company events carry theirs.
+    if org_context.selected_org_id:
+        scope_sql = "(a.org_id IS NULL OR a.org_id = :scope_org)"
+        params = {"scope_org": org_context.selected_org_id}
+    else:
+        allowed = list(org_context.allowed_org_ids or [])
+        if allowed:
+            scope_sql = "(a.org_id IS NULL OR a.org_id = ANY(:scope_orgs))"
+            params = {"scope_orgs": allowed}
+        else:
+            scope_sql = "a.org_id IS NULL"
+            params = {}
+
+    hide_financial = not is_financial_user(current_user, org_context)
+    money_sql = ""
+    if hide_financial:
+        money_sql = " AND NOT (" + " OR ".join(
+            f"a.action LIKE '{prefix}%'" for prefix in ACTIVITY_FINANCIAL_PREFIXES
+        ) + ")"
+
+    params["id"] = id
+    total = db.execute(sqltext(f"""
+        SELECT count(*) FROM containermgmt.master_data_audit a
+        WHERE a.entity_type = 'supplier' AND a.entity_id = :id
+          AND {scope_sql}{money_sql}
+    """), params).scalar() or 0
+
+    rows = db.execute(sqltext(f"""
+        SELECT a.id, a.action, a.field_name, a.old_value, a.new_value,
+               a.changed_at, a.changed_by, a.org_id, u.username
+        FROM containermgmt.master_data_audit a
+        LEFT JOIN usercredentials.users u ON u.id = a.changed_by
+        WHERE a.entity_type = 'supplier' AND a.entity_id = :id
+          AND {scope_sql}{money_sql}
+        ORDER BY a.changed_at DESC, a.id DESC
+        LIMIT :limit OFFSET :offset
+    """), {**params, "limit": l, "offset": offset}).mappings().all()
+
+    items = [
+        {
+            "id": r["id"],
+            "action": r["action"],
+            "label": ACTIVITY_LABELS.get(r["action"]) or r["action"].replace("_", " ").capitalize(),
+            "summary": _activity_sentence(r["action"], r["field_name"], r["old_value"], r["new_value"]),
+            "field_name": r["field_name"],
+            "field_label": ACTIVITY_FIELD_LABELS.get(r["field_name"] or "") or (r["field_name"] or None),
+            "old_value": r["old_value"],
+            "new_value": r["new_value"],
+            "changed_at": r["changed_at"].isoformat() if r["changed_at"] else None,
+            # The username, or nothing: an event recorded by a job has no actor,
+            # and inventing one would be worse than saying so.
+            "actor": r["username"],
+            "actor_id": r["changed_by"],
+            "org_id": r["org_id"],
+            "is_shared_event": r["org_id"] is None,
+        }
+        for r in rows
+    ]
+    return _page_envelope(items, int(total), p, l)
+
+
 # Every column in the database that points at supplier.supplier_id, read from
 # the live schema rather than listed by hand, so a reference added later cannot
 # be missed by a merge.

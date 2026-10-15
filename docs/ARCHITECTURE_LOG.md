@@ -1,5 +1,27 @@
 # FreightLens Architecture Log
 
+## 2026-10-15 - Vendor activity feed, and the unbuilt tabs made visible
+
+- **Why:** every supplier write has recorded an audit row since the merge and
+  retirement work, and nothing read them back. "Who changed the payment terms"
+  was answerable only by querying the database, and the reasons captured on
+  merge and retirement were written and never shown.
+- **Change:** `GET /master-data/suppliers/{id}/activity`, server-paged, with an
+  Activity tab on the profile. Each row is turned into a sentence on the server
+  ("Changed payment terms from 30 days to 60 days") so a feed, an export and
+  anything else reading it tell the same story. An action with no label yet
+  still renders, so a new event appears the day it is first recorded.
+- **Scope:** a shared vendor's events carry no `org_id` and a company's events
+  carry theirs; a user sees the shared ones plus their own, filtered in the
+  query so the pager counts what they can read. Actions prefixed `bank` or
+  `payment_account` are withheld from users without financial access -- the
+  filter exists before bank accounts do, so the feed cannot start leaking them.
+- **Bank accounts, Documents and Vendor network** now appear as tabs marked
+  SOON, each stating what will go in it and what it is waiting on, so the gaps
+  in the vendor record are visible in the product rather than only in a plan.
+- **Migration:** none; the audit table already existed.
+- **Undo:** revert the code.
+
 ## 2026-10-15 - Vendor contacts and addresses as rows
 
 - **Why:** the supplier row held one `contact_person` and one `address`, so the
