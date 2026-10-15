@@ -200,3 +200,30 @@ def test_an_award_with_no_quote_attached_learns_nothing():
     QuoteComparisonService._learn_vendor_terms(_po(), _line(), None, _quote_line(), 1, session)
 
     assert session.added == []
+
+
+# ── The scope a product's vendor list pages over ────────────────────────────
+#
+# GET /products/{id}/vendors shows the agreed terms on the link, which are
+# group-level master data, beside what this company last paid, which is not.
+# The second half reuses _org_scope, and the clause it returns is qualified
+# with the purchase order's alias inside the lateral join -- so "no company at
+# all" has to stay a narrower answer, not a wider one.
+from Routes.MasterData.MasterDataRouter import _org_scope
+
+
+def test_a_selected_company_scopes_the_last_order_to_itself():
+    clause, params = _org_scope(_Ctx(selected_org_id=2, allowed_org_ids=[1, 2], current_org_id=1))
+
+    assert clause == "org_id = :scope_org"
+    assert params == {"scope_org": 2}
+    assert f"po.{clause}" == "po.org_id = :scope_org", "qualifiable inside the lateral join"
+
+
+def test_a_user_with_no_company_sees_no_order_history():
+    clause, params = _org_scope(_Ctx(selected_org_id=None, allowed_org_ids=[], current_org_id=None))
+
+    assert clause == "1 = 0"
+    assert params == {}
+    # "1 = 0" names no column, so it must never be prefixed with the alias.
+    assert ("1 = 0" if clause == "1 = 0" else f"po.{clause}") == "1 = 0"

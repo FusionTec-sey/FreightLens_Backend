@@ -11,10 +11,11 @@ from Model.containermgmt.MasterData.Currency import Currency, CurrencyExchangeRa
 from Model.containermgmt.MasterData.PaymentTerm import PaymentTerm
 from Model.containermgmt.MasterData.DocumentType import MasterDocumentType
 from Model.containermgmt.Cinfo.Supplier import Supplier
+from Model.containermgmt.Orders.Product import Product
 from Model.Credentials.Organisation import Organisation
 from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import can_view_supplier_user, is_financial_user
-from Utils.org_filter import OrgContext, apply_shared_or_org_filter
+from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from Services.master_data_audit import snapshot, record_changes, record_event
 from Services.search_service import (
     remove_supplier_document, search_suppliers_with_total, supplier_scope_filter,
@@ -1754,6 +1755,115 @@ def get_product_supplier_terms(
             "vendor_count": int(r["vendor_count"] or 1),
         }
     return {"items": terms}
+
+
+@MasterDataRouter.get("/products/{product_id}/vendors")
+def get_product_vendors(
+    product_id: int,
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user = Depends(get_current_user)
+):
+    """Who can supply this product, and on what terms.
+
+    The other half of the vendor profile's Products tab. The same link rows
+    answer a different question here: not "what do we buy from this vendor"
+    but "who do we buy this from, and which of them is cheapest, fastest or
+    willing to sell the quantity we need". Awards now write each vendor's
+    article number, cost, lead time and minimum back onto the link, so the
+    comparison is a read rather than a round of e-mails.
+
+    Last ordered is scoped to the user's own companies -- what a shared vendor
+    charged another company is not this user's to see -- while the agreed terms
+    on the link are group-level master data and are not.
+    """
+    product = apply_org_filter(
+        db.query(Product).filter(Product.id == product_id, Product.is_deleted == False),
+        Product, org_context
+    ).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found.")
+
+    show_money = is_financial_user(current_user, org_context)
+    p, l, offset = _paged(page, limit)
+    scope_sql, scope_params = _org_scope(org_context)
+    # The scope clause is written for an unqualified table; inside the lateral
+    # join it has to name the purchase order, and "1 = 0" has no column to name.
+    po_scope = "1 = 0" if scope_sql == "1 = 0" else f"po.{scope_sql}"
+    params = {**scope_params, "pid": product_id}
+
+    total = db.execute(sqltext("""
+        SELECT count(*) FROM containermgmt.product_suppliers ps
+        JOIN containermgmt.supplier s ON s.supplier_id = ps.supplier_id
+        WHERE ps.product_id = :pid AND ps.is_deleted IS NOT TRUE
+          AND s.is_deleted IS NOT TRUE
+    """), {"pid": product_id}).scalar() or 0
+
+    # The preferred vendor first, then the ones that have quoted a price, then
+    # by name: a buyer scanning this list is looking for a reason to pick, and
+    # a row with no terms on it is not one.
+    rows = db.execute(sqltext(f"""
+        SELECT ps.id AS link_id, ps.supplier_id, s.name, s.code, s.country,
+               s.is_active, s.default_currency,
+               ps.factory_code, ps.vendor_product_name, ps.unit_cost, ps.currency,
+               ps.min_order_qty, ps.lead_time_days, ps.is_default, ps.notes,
+               (p.default_supplier_id = ps.supplier_id) AS is_product_default,
+               last_po.order_date AS last_order_date,
+               last_po.unit_price AS last_unit_price,
+               last_po.po_number AS last_po_number,
+               last_po.po_id AS last_po_id
+        FROM containermgmt.product_suppliers ps
+        JOIN containermgmt.supplier s ON s.supplier_id = ps.supplier_id
+        JOIN containermgmt.products p ON p.id = ps.product_id
+        LEFT JOIN LATERAL (
+            SELECT po.id AS po_id, po.po_number,
+                   coalesce(po.order_mail_date, po.created_at) AS order_date,
+                   pi.unit_price
+            FROM containermgmt.po_items pi
+            JOIN containermgmt.purchase_orders po ON po.id = pi.po_id
+            WHERE pi.product_id = ps.product_id
+              AND po.supplier_id = ps.supplier_id
+              AND pi.is_deleted IS NOT TRUE AND po.is_deleted IS NOT TRUE
+              AND {po_scope}
+            ORDER BY coalesce(po.order_mail_date, po.created_at) DESC, po.id DESC
+            LIMIT 1
+        ) last_po ON TRUE
+        WHERE ps.product_id = :pid AND ps.is_deleted IS NOT TRUE
+          AND s.is_deleted IS NOT TRUE
+        ORDER BY ps.is_default DESC,
+                 (ps.unit_cost IS NOT NULL) DESC,
+                 s.name ASC
+        LIMIT :limit OFFSET :offset
+    """), {**params, "limit": l, "offset": offset}).mappings().all()
+
+    items = [
+        {
+            "link_id": r["link_id"],
+            "supplier_id": r["supplier_id"],
+            "name": r["name"],
+            "code": r["code"],
+            "country": r["country"],
+            "is_active": bool(r["is_active"]),
+            # Their article number, which is what they quote against.
+            "factory_code": r["factory_code"],
+            "vendor_product_name": r["vendor_product_name"],
+            "unit_cost": float(r["unit_cost"]) if (show_money and r["unit_cost"] is not None) else None,
+            "currency": (r["currency"] or r["default_currency"]) if show_money else None,
+            "min_order_qty": float(r["min_order_qty"]) if r["min_order_qty"] is not None else None,
+            "lead_time_days": r["lead_time_days"],
+            "is_preferred": bool(r["is_default"]),
+            "is_product_default": bool(r["is_product_default"]),
+            "last_order_date": r["last_order_date"].isoformat() if r["last_order_date"] else None,
+            "last_unit_price": float(r["last_unit_price"]) if (show_money and r["last_unit_price"] is not None) else None,
+            "last_po_number": r["last_po_number"],
+            "last_po_id": r["last_po_id"],
+            "notes": r["notes"],
+        }
+        for r in rows
+    ]
+    return _page_envelope(items, int(total), p, l)
 
 
 # ── 5. Organization Base Currency Endpoints ───────────────────────────────────

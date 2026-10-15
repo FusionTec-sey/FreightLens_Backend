@@ -1,5 +1,31 @@
 # FreightLens Architecture Log
 
+## 2026-10-15 - Supplier master records, and a product's vendors
+
+- **Why:** the supplier record was a row in a directory. A buyer could not open a
+  vendor, see what we buy from them, what we have ordered or what they quoted,
+  and the code printed on a purchase order existed in no column.
+- **Change:** stored supplier codes (server-issued, case-insensitively unique,
+  immutable), a vendor profile with server-paged Products, Purchase orders,
+  Quotes and Identity tabs, `supplier_identifiers` as rows with cross-supplier
+  deduplication, merge with a preview and a reason, retirement with a reason,
+  and award-time write-back of each vendor's article number, cost, lead time and
+  minimum order quantity onto `product_suppliers`.
+- **Added here:** `GET /master-data/products/{id}/vendors`, the mirror of the
+  profile's Products tab, with the product's vendor comparison in a drawer on
+  Product Master. The agreed terms on the link are group-level master data; the
+  last order beside them is scoped to the user's own companies through
+  `_org_scope`.
+- **Migration:** `migrate_20261014_supplier_identity.py` (code backfill, unique
+  index skipped if codes clash, `supplier.linked_org_id` as an unused
+  counterparty seam, `supplier_identifiers`).
+- **Search:** suppliers are indexed in Meilisearch with `matchingStrategy: all`;
+  SQL remains the fallback when the engine is unavailable.
+- **Undo:** revert the code. The backfilled codes are what the serialiser already
+  displayed, so leaving them in place is harmless; dropping the unique index and
+  the identifiers table needs review because startup migrations are
+  forward-only.
+
 ## 2026-10-08 - Navigation page registry foundation
 
 - Added a developer-owned page registry (`auth/policy/page_registry.py`,
