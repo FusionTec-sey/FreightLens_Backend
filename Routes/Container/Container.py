@@ -266,18 +266,23 @@ def assert_po_unlinkable(db: Session, container, po) -> None:
     packing list, which is a deliberate act and not a side effect of editing a
     container. Draft lists carry no such weight: their lines are simply dropped.
     """
-    lists = (
-        db.query(OrderPackingList)
-        .join(PackingListItem, PackingListItem.packing_list_id == OrderPackingList.id)
-        .filter(
-            OrderPackingList.container_id == container.Container_ID,
-            OrderPackingList.is_deleted == False,
-            PackingListItem.po_id == po.id,
-            PackingListItem.is_deleted == False,
-        )
+    # Ids first: OrderPackingList.container is eagerly joined and carries json
+    # columns, and Postgres cannot DISTINCT over json.
+    list_ids = [
+        row[0] for row in db.query(PackingListItem.packing_list_id)
+        .filter(PackingListItem.po_id == po.id, PackingListItem.is_deleted == False)
         .distinct()
         .all()
-    )
+    ]
+    lists = (
+        db.query(OrderPackingList)
+        .filter(
+            OrderPackingList.id.in_(list_ids),
+            OrderPackingList.container_id == container.Container_ID,
+            OrderPackingList.is_deleted == False,
+        )
+        .all()
+    ) if list_ids else []
 
     blocking = [pl for pl in lists if (pl.status or "").upper() != "DRAFT"]
     if blocking:
@@ -651,7 +656,9 @@ class ContainerAPI:
                         ContainerDetails.BillOfLanding.ilike(term),
                         Organisation.display_name.ilike(term),
                         Supplier.name.ilike(term),
-                        Vessal.name.ilike(term)
+                        # The column is VessalNo. Vessal.name has never existed,
+                        # so every container search raised AttributeError here.
+                        Vessal.VessalNo.ilike(term)
                     )
                 )
 

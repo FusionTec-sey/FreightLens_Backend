@@ -2008,18 +2008,24 @@ def order_packing_summary(
         })
 
     from Model.containermgmt.Orders.OrderPackingList import OrderPackingList, PackingListItem
-    lists = (
-        db.query(OrderPackingList)
-        .join(PackingListItem, PackingListItem.packing_list_id == OrderPackingList.id)
-        .options(joinedload(OrderPackingList.container))
-        .filter(
-            PackingListItem.po_id == po.id,
-            PackingListItem.is_deleted == False,
-            OrderPackingList.is_deleted == False,
-        )
+    # DISTINCT over the rows themselves is not available here: the eagerly
+    # joined container carries json columns, and Postgres has no equality
+    # operator for json. Narrow it to the ids, which compare fine.
+    list_ids = [
+        row[0] for row in db.query(PackingListItem.packing_list_id)
+        .filter(PackingListItem.po_id == po.id, PackingListItem.is_deleted == False)
         .distinct()
         .all()
-    )
+    ]
+    lists = (
+        db.query(OrderPackingList)
+        .options(joinedload(OrderPackingList.container))
+        .filter(
+            OrderPackingList.id.in_(list_ids),
+            OrderPackingList.is_deleted == False,
+        )
+        .all()
+    ) if list_ids else []
 
     return {
         "po_id": po.id,

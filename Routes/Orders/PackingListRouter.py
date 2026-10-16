@@ -209,7 +209,7 @@ async def draft_from_container(
         return {
             "container_id": container.Container_ID,
             "container_no": container.container_no,
-            "packing_list_number": next_document_number(db, container.org_id, "PL"),
+            "packing_list_number": _suggest_number(db, container.org_id, container),
             "purchase_orders": [],
             "items": [],
             "warnings": ["No purchase orders are linked to this container yet."],
@@ -264,7 +264,7 @@ async def draft_from_container(
         "container_id": container.Container_ID,
         "container_no": container.container_no,
         "bill_of_lading": container.BillOfLanding,
-        "packing_list_number": next_document_number(db, container.org_id, "PL"),
+        "packing_list_number": _suggest_number(db, container.org_id, container),
         "purchase_orders": covered,
         "items": items,
         "warnings": warnings,
@@ -408,6 +408,33 @@ def _advance_orders(db: Session, pl: OrderPackingList) -> None:
                 ))
 
 
+def _suggest_number(db: Session, org_id, container, po=None) -> str:
+    """A packing list number, from the company's series or a readable fallback.
+
+    next_document_number returns None for a company with no series configured
+    -- by design, so the caller supplies its own format. packing_list_number is
+    NOT NULL, so there has to be one.
+    """
+    issued = next_document_number(db, org_id, "PL")
+    if issued:
+        return issued
+    if container is not None:
+        # Numbered within the container, so a second load reads as a second
+        # list rather than a collision.
+        seq = (
+            db.query(OrderPackingList)
+            .filter(
+                OrderPackingList.container_id == container.Container_ID,
+                OrderPackingList.is_deleted == False,
+            )
+            .count()
+        ) + 1
+        return f"PL-{container.container_no}-{seq}"
+    if po is not None:
+        return f"PL-{po.po_number}"
+    return f"PL-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+
+
 def _consignee_name(db: Session, bl) -> Optional[str]:
     """The consignee of a bill of lading is an organisation, by id."""
     if not bl or not getattr(bl, "Consignee", None):
@@ -534,7 +561,7 @@ async def create_packing_list(
 
     pl_number = (
         (payload.get("packing_list_number") or "").strip()
-        or next_document_number(db, org_id, "PL")
+        or _suggest_number(db, org_id, container, po)
     )
 
     new_pl = OrderPackingList(
