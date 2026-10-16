@@ -69,6 +69,8 @@ def format_packing_list(pl: OrderPackingList) -> dict:
         "date_issued": pl.date_issued.isoformat() if pl.date_issued else None,
         "status": pl.status,
         "notes": pl.notes,
+        "revisions": pl.revisions or [],
+        "revision_count": pl.revision_count or 0,
         "line_count": len(lines),
         "off_po_line_count": len([it for it in lines if not it.po_id]),
         "created_at": pl.created_at.isoformat() if pl.created_at else None,
@@ -593,6 +595,83 @@ async def create_packing_list(
     db.commit()
     db.refresh(new_pl)
     return format_packing_list(new_pl)
+
+
+@PackingListRouter.post("/{packing_id}/revise")
+async def revise_packing_list(
+    packing_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """Reopen a confirmed packing list for editing, on the record.
+
+    The same shape as revising a sent RFQ: the reason is asked for first and
+    recorded against the document, not collected on save. A confirmed list has
+    already moved quantities onto the orders, so reopening hands them back --
+    the lines keep their numbers and the draft holds them softly instead, which
+    is what lets the ceilings be recomputed honestly while it is being edited.
+    """
+    if not has_permission(current_user, "Edit_PackingList"):
+        raise HTTPException(status_code=403, detail="Access forbidden: 'Edit_PackingList' is required.")
+
+    reason = (payload.get("reason") or "").strip()
+    if len(reason) < 5:
+        raise HTTPException(
+            status_code=422,
+            detail="A revision needs a reason: this list has already been counted against the orders.",
+        )
+
+    pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail="Packing list not found")
+
+    status = (pl.status or "").upper()
+    if status == DRAFT:
+        raise HTTPException(status_code=409, detail=f"{pl.packing_list_number} is already a draft.")
+    if status in ("SHIPPED", "RECEIVED"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{pl.packing_list_number} is {status.lower()}. Goods have moved against it, "
+                "so it cannot be reopened here."
+            ),
+        )
+
+    returned = 0.0
+    for line in (pl.items or []):
+        if line.is_deleted or not line.po_item_id:
+            continue
+        item = db.query(POItem).filter(POItem.id == line.po_item_id).first()
+        if item:
+            before = float(item.quantity_packed or 0)
+            item.quantity_packed = max(0.0, before - float(line.quantity_packed or 0))
+            returned += before - float(item.quantity_packed)
+
+    entry = {
+        "at": datetime.utcnow().isoformat(timespec="seconds"),
+        "by": getattr(current_user, "id", None),
+        "by_name": getattr(current_user, "username", None),
+        "reason": reason,
+        "from_status": status,
+        "quantity_returned": returned,
+    }
+    # Reassigned rather than appended: SQLAlchemy does not see a mutation
+    # inside a plain JSON column, and the write would be dropped silently.
+    pl.revisions = list(pl.revisions or []) + [entry]
+    pl.revision_count = (pl.revision_count or 0) + 1
+    pl.status = DRAFT
+    pl.updated_by = current_user.id
+
+    db.commit()
+    db.refresh(pl)
+    return {
+        "message": (
+            f"{pl.packing_list_number} reopened for editing; {returned:g} returned to the orders."
+        ),
+        **format_packing_list(pl),
+    }
 
 
 @PackingListRouter.delete("/{packing_id}")

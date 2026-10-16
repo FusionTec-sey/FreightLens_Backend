@@ -44,6 +44,14 @@ def ensure_container_po_link_schema():
                     ALTER COLUMN po_id DROP NOT NULL;
                 """,
                 """
+                ALTER TABLE containermgmt.order_packing_lists
+                    ADD COLUMN IF NOT EXISTS revisions JSON;
+                """,
+                """
+                ALTER TABLE containermgmt.order_packing_lists
+                    ADD COLUMN IF NOT EXISTS revision_count INTEGER NOT NULL DEFAULT 0;
+                """,
+                """
                 ALTER TABLE containermgmt.order_shipments
                     ALTER COLUMN bill_of_lading_no DROP NOT NULL;
                 """,

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey, Numeric, JSON
 from sqlalchemy.orm import relationship
 from ...db import Base
 from ...mixins import AuditMixin, OrgMixin
@@ -24,6 +24,13 @@ class OrderPackingList(OrgMixin, AuditMixin, Base):
     date_issued = Column(Date, nullable=True)
     status = Column(String(50), default="CONFIRMED")  # DRAFT, CONFIRMED, SHIPPED, RECEIVED
     notes = Column(Text, nullable=True)
+
+    # Why a confirmed list was reopened, kept per revision rather than only the
+    # latest: the point of asking is that someone can read back what happened,
+    # and a field that only holds the most recent answer loses the rest.
+    # [{"at": iso, "by": user_id, "by_name": str, "reason": str}]
+    revisions = Column(JSON, nullable=True)
+    revision_count = Column(Integer, nullable=False, default=0)
 
     # Relationships
     purchase_order = relationship("PurchaseOrder", back_populates="packing_lists")
