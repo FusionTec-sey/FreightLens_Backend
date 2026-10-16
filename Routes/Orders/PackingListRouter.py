@@ -498,13 +498,13 @@ def _consignee_name(db: Session, bl) -> Optional[str]:
     return getattr(org, "display_name", None) if org else None
 
 
-@PackingListRouter.get("/{packing_id}/pdf")
-async def get_packing_list_pdf(
-    packing_id: int,
-    db: Session = Depends(get_db),
-    org_context: OrgContext = Depends(get_org_context),
-    current_user: User = Depends(get_current_user)
-):
+def build_print_context(db: Session, org_context: OrgContext, packing_id: int) -> dict:
+    """Everything a printed packing list needs, as template variables.
+
+    Shared by the built-in PDF and the report template engine, so a designed
+    template and the default one can never drift into showing different
+    numbers for the same document.
+    """
     pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
     if not pl:
         raise HTTPException(status_code=404, detail="Packing list not found")
@@ -512,36 +512,55 @@ async def get_packing_list_pdf(
     container = pl.container
     bl = getattr(container, "bill_of_landing", None) if container else None
     lines = [it for it in (pl.items or []) if not it.is_deleted]
+    covered = _covered_orders(pl)
+
+    def as_line(it):
+        return {
+            "item_code": it.item_code,
+            "description": it.description,
+            "po_number": (
+                it.purchase_order.po_number if it.purchase_order else it.po_number_text
+            ),
+            "quantity_packed": float(it.quantity_packed or 0),
+            "unit": it.unit or "PCS",
+            "carton_numbers": it.carton_numbers,
+            "notes": it.notes,
+        }
 
     groups = []
-    for covered in _covered_orders(pl):
-        group_lines = [it for it in lines if it.po_id == covered["id"]]
-        if group_lines:
-            label = covered["po_number"] or f"Order #{covered['id']}"
-            if covered["company"]:
-                label = f"{label} — {covered['company']}"
-            groups.append({"label": label, "lines": group_lines})
+    for order in covered:
+        if order["id"]:
+            group_lines = [it for it in lines if it.po_id == order["id"]]
+        else:
+            group_lines = [it for it in lines if not it.po_id and it.po_number_text == order["po_number"]]
+        if not group_lines:
+            continue
+        label = order["po_number"] or f"Order #{order['id']}"
+        if order.get("company"):
+            label = f"{label} — {order['company']}"
+        if not order.get("linked", True):
+            label = f"{label} (typed)"
+        groups.append({"label": label, "po_number": order["po_number"],
+                       "lines": [as_line(it) for it in group_lines]})
 
     # Hand-added goods last, and named so nobody reads them as ordered.
-    off_po = [it for it in lines if not it.po_id]
+    off_po = [it for it in lines if not it.po_id and not it.po_number_text]
     if off_po:
-        groups.append({"label": "Not on any purchase order", "lines": off_po})
+        groups.append({"label": "Not on any purchase order", "po_number": None,
+                       "lines": [as_line(it) for it in off_po]})
 
-    supplier = next(
-        (c["company"] for c in _covered_orders(pl) if c["company"]), None
-    )
-
-    pdf_bytes = generate_packing_list_pdf({
+    return {
         "packing_list_number": pl.packing_list_number,
         "is_draft": (pl.status or "").upper() == DRAFT,
         "status": pl.status,
-        "container_no": container.container_no if container else None,
+        "container_no": container.container_no if container else pl.container_no_text,
+        "container_is_linked": bool(pl.container_id),
         "seal_number": getattr(container, "seal_number", None) if container else None,
         "bill_of_lading": getattr(bl, "BillOfLanding", None) if bl else (
             container.BillOfLanding if container else None
         ),
         "consignee": _consignee_name(db, bl),
-        "supplier": supplier,
+        "supplier": next((c.get("company") for c in covered if c.get("company")), None),
         "date_issued": pl.date_issued.strftime("%d %b %Y") if pl.date_issued else None,
         "supplier_invoice_ref": pl.supplier_invoice_ref,
         "package_count": pl.package_count,
@@ -549,17 +568,33 @@ async def get_packing_list_pdf(
         "total_cbm": float(pl.total_cbm) if pl.total_cbm else None,
         "notes": pl.notes,
         "groups": groups,
+        "items": [as_line(it) for it in lines],
         "line_count": len(lines),
-        "order_count": len(_covered_orders(pl)),
+        "order_count": len(covered),
         "total_quantity": sum(float(it.quantity_packed or 0) for it in lines),
         "created_by": getattr(pl.created_by_user, "username", None),
+        "revision_count": pl.revision_count or 0,
         "generated_at": datetime.now().strftime("%d %b %Y %H:%M"),
-    })
+    }
 
+
+@PackingListRouter.get("/{packing_id}/pdf")
+async def get_packing_list_pdf(
+    packing_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """The built-in layout, for when no designed template has been made."""
+    context = build_print_context(db, org_context, packing_id)
+    pdf_bytes = generate_packing_list_pdf(context)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{pl.packing_list_number}.pdf"'}
+        headers={
+            "Content-Disposition":
+                f'inline; filename="{context["packing_list_number"]}.pdf"'
+        },
     )
 
 

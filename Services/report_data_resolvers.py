@@ -1677,6 +1677,109 @@ def resolve_quote_comparison(
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Packing List Resolver
+# ─────────────────────────────────────────────────────────────────────────────
+
+PACKING_LIST_SCHEMA_META = {
+    "packing_list_number": {"type": "string", "description": "Packing list document number", "example": "PL-CMAU9840399-1"},
+    "status": {"type": "string", "description": "DRAFT, CONFIRMED, SHIPPED or RECEIVED", "example": "CONFIRMED"},
+    "is_draft": {"type": "boolean", "description": "True while the list is still a draft; print a watermark on it", "example": False},
+    "container_no": {"type": "string", "description": "Container number, whether linked or typed", "example": "CMAU9840399"},
+    "container_is_linked": {"type": "boolean", "description": "False when the container is only a typed number", "example": True},
+    "seal_number": {"type": "string", "description": "Container seal", "example": "SL-99812"},
+    "bill_of_lading": {"type": "string", "description": "Bill of lading number", "example": "ZSN0875950"},
+    "consignee": {"type": "string", "description": "Consignee organisation", "example": "Sahaj Trading Ltd"},
+    "supplier": {"type": "string", "restricted": True, "permission": "View_Supplier", "description": "Supplier on the covered orders", "example": "Acme Industrial Co"},
+    "date_issued": {"type": "string", "description": "Date the list was issued", "example": "2026-10-16"},
+    "supplier_invoice_ref": {"type": "string", "description": "Supplier invoice reference", "example": "INV-2026-99"},
+    "package_count": {"type": "number", "description": "Number of packages", "example": 48},
+    "total_gross_weight": {"type": "number", "description": "Gross weight in kg", "example": 12450.5},
+    "total_cbm": {"type": "number", "description": "Volume in cubic metres", "example": 28.4},
+    "total_quantity": {"type": "number", "description": "Total packed quantity across all lines", "example": 19004},
+    "line_count": {"type": "number", "description": "Number of lines", "example": 3},
+    "order_count": {"type": "number", "description": "Number of purchase orders covered", "example": 2},
+    "notes": {"type": "string", "description": "Free notes on the list", "example": "Cartons 1-12 stacked at the door end."},
+    "created_by": {"type": "string", "description": "Who prepared it", "example": "admin_sahaj"},
+    "revision_count": {"type": "number", "description": "How many times it was reopened after confirming", "example": 1},
+    "groups": {"type": "array", "description": "Lines grouped by the order they came from", "example": []},
+    "items": {"type": "array", "description": "Every line, flat, for templates that do not group", "example": []},
+}
+
+PACKING_LIST_SAMPLE_CONTEXT = {
+    "packing_list_number": "PL-CMAU9840399-1",
+    "status": "CONFIRMED",
+    "is_draft": False,
+    "container_no": "CMAU9840399",
+    "container_is_linked": True,
+    "seal_number": "SL-99812",
+    "bill_of_lading": "ZSN0875950",
+    "consignee": "Sahaj Trading Ltd",
+    "supplier": "Acme Industrial Co",
+    "date_issued": "2026-10-16",
+    "supplier_invoice_ref": "INV-2026-99",
+    "package_count": 48,
+    "total_gross_weight": 12450.5,
+    "total_cbm": 28.4,
+    "total_quantity": 19004,
+    "line_count": 3,
+    "order_count": 2,
+    "notes": "Cartons 1-12 stacked at the door end.",
+    "created_by": "admin_sahaj",
+    "revision_count": 0,
+    "groups": [
+        {
+            "label": "PO-2026-0002 — Acme Industrial Co",
+            "po_number": "PO-2026-0002",
+            "lines": [
+                {"item_code": "GB-190", "description": "Glass Block 190x190x80mm Clear",
+                 "quantity_packed": 4000, "unit": "PCS", "carton_numbers": "1-20", "notes": None},
+                {"item_code": "PI-STD", "description": "Specialized Plastic Instrument",
+                 "quantity_packed": 15000, "unit": "PCS", "carton_numbers": "21-60", "notes": None},
+            ],
+        },
+        {
+            "label": "Not on any purchase order",
+            "po_number": None,
+            "lines": [
+                {"item_code": None, "description": "Pallet wrap, heavy duty",
+                 "quantity_packed": 4, "unit": "ROLL", "carton_numbers": None, "notes": None},
+            ],
+        },
+    ],
+    "items": [
+        {"item_code": "GB-190", "description": "Glass Block 190x190x80mm Clear", "po_number": "PO-2026-0002",
+         "quantity_packed": 4000, "unit": "PCS", "carton_numbers": "1-20", "notes": None},
+        {"item_code": "PI-STD", "description": "Specialized Plastic Instrument", "po_number": "PO-2026-0002",
+         "quantity_packed": 15000, "unit": "PCS", "carton_numbers": "21-60", "notes": None},
+        {"item_code": None, "description": "Pallet wrap, heavy duty", "po_number": None,
+         "quantity_packed": 4, "unit": "ROLL", "carton_numbers": None, "notes": None},
+    ],
+}
+
+
+@register_resolver(
+    key="packing_list",
+    name="Packing List",
+    category="ORDERS",
+    entity_type="PackingList",
+    description="Resolves a packing list: the container it loads, the orders it covers, every line with its cartons, and the weight and volume totals.",
+    schema_meta=PACKING_LIST_SCHEMA_META,
+    sample_context=PACKING_LIST_SAMPLE_CONTEXT,
+    print_permissions=["View_PackingList"],
+)
+def resolve_packing_list(
+    entity_id: int,
+    db: Session,
+    org_context: OrgContext,
+    user: User,
+    params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    from Routes.Orders.PackingListRouter import build_print_context
+
+    return build_print_context(db, org_context, entity_id)
+
+
 def resolve_report_data(
     resolver_key: str,
     entity_id: Optional[Any],

@@ -209,6 +209,8 @@ async def startup_event():
         # After seed_db, which creates the permission rows these grants need.
         from Utils.migrate_20261016_packing_permissions import ensure_packing_permissions
         ensure_packing_permissions()
+        from Utils.migrate_20261016_packing_list_template import ensure_packing_list_template
+        ensure_packing_list_template(db_session)
         db_session.commit()
         # After the sync, because a menu row's page_key is a foreign key into
         # app_pages and the key it is being moved to has just been created.
