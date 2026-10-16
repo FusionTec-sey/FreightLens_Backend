@@ -204,6 +204,9 @@ async def startup_event():
         seed_reporting_foundation(db_session)
         from auth.policy.page_registry import sync_page_registry
         sync_page_registry(db_session)
+        # After seed_db, which creates the permission rows these grants need.
+        from Utils.migrate_20261016_packing_permissions import ensure_packing_permissions
+        ensure_packing_permissions()
         db_session.commit()
         # After the sync, because a menu row's page_key is a foreign key into
         # app_pages and the key it is being moved to has just been created.

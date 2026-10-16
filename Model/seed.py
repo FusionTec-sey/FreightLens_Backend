@@ -73,6 +73,7 @@ _LEGACY_PERMISSION_NOTES = r"""
     ("Add_PackingList",      "Create or import a supplier packing list"),
     ("Edit_PackingList",     "Edit a packing list"),
     ("Delete_PackingList",   "Delete a packing list"),
+    ("Override_PackingQty",  "Pack more than a purchase order line still has outstanding"),
 
     # ── Goods Receiving actions ───────────────────────────────────────────────
     ("Verify_Receipt",       "Perform warehouse verification and receiving"),
@@ -381,7 +382,10 @@ def seed_db(db: Session):
 
         warehouse_perm_names = [
             "View_Dashboard", "View_Container", "View_GoodsReceipt", "Verify_Receipt",
-            "Edit_Receipt", "Submit_Receipt", "View_PackingList", "View_Defect", "Add_Defect", "Edit_Defect"
+            "Edit_Receipt", "Submit_Receipt", "View_Defect", "Add_Defect", "Edit_Defect",
+            # Packing a container is warehouse work, so this role builds the
+            # packing lists rather than only reading them.
+            "View_PackingList", "Add_PackingList", "Edit_PackingList"
         ]
         warehouse_perms = [p for p in all_perms if p.name in warehouse_perm_names]
         if warehouse_role_created:
