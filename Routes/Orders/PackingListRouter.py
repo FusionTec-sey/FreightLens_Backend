@@ -505,7 +505,26 @@ def build_print_context(db: Session, org_context: OrgContext, packing_id: int) -
     template and the default one can never drift into showing different
     numbers for the same document.
     """
-    pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
+    # Scoped to the organisations this user may see, not to the one selected in
+    # the top bar. A packing list is filed under its container's organisation,
+    # which is routinely not the one its orders live in, so the selected org is
+    # the wrong test for a document the user has explicitly opened and asked to
+    # print: reading it already works, and printing must not be narrower.
+    # allowed_org_ids is the real permission boundary; selected_org_id is a filter.
+    pl = (
+        db.query(OrderPackingList)
+        .options(
+            joinedload(OrderPackingList.purchase_order),
+            joinedload(OrderPackingList.container),
+            selectinload(OrderPackingList.items).joinedload(PackingListItem.purchase_order),
+        )
+        .filter(
+            OrderPackingList.id == packing_id,
+            OrderPackingList.is_deleted == False,
+            OrderPackingList.org_id.in_(org_context.allowed_org_ids),
+        )
+        .first()
+    )
     if not pl:
         raise HTTPException(status_code=404, detail="Packing list not found")
 
