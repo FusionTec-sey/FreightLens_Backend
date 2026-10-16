@@ -595,6 +595,65 @@ async def create_packing_list(
     return format_packing_list(new_pl)
 
 
+@PackingListRouter.delete("/{packing_id}")
+async def delete_packing_list(
+    packing_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove a draft, or void a confirmed list.
+
+    A confirmed list has already added its quantities to the orders, so
+    deleting the rows alone would leave them looking part-packed with nothing
+    to show for it. Voiding gives that quantity back, which is also what makes
+    unlinking the order possible again afterwards.
+    """
+    if not has_permission(current_user, "Delete_PackingList"):
+        raise HTTPException(status_code=403, detail="Access forbidden: 'Delete_PackingList' is required.")
+
+    pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail="Packing list not found")
+
+    status = (pl.status or "").upper()
+    if status in ("SHIPPED", "RECEIVED"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{pl.packing_list_number} is {status.lower()}. Goods have already moved against it, "
+                "so it cannot be voided here."
+            ),
+        )
+
+    returned = 0.0
+    for line in (pl.items or []):
+        if line.is_deleted:
+            continue
+        if status == CONFIRMED and line.po_item_id:
+            item = db.query(POItem).filter(POItem.id == line.po_item_id).first()
+            if item:
+                before = float(item.quantity_packed or 0)
+                item.quantity_packed = max(0.0, before - float(line.quantity_packed or 0))
+                returned += before - float(item.quantity_packed)
+        line.is_deleted = True
+        line.deleted_by = current_user.id
+
+    pl.is_deleted = True
+    pl.deleted_by = current_user.id
+    db.commit()
+
+    return {
+        "message": (
+            f"{pl.packing_list_number} voided; {returned:g} returned to the purchase orders."
+            if status == CONFIRMED
+            else f"{pl.packing_list_number} deleted."
+        ),
+        "id": pl.id,
+        "quantity_returned": returned,
+    }
+
+
 @PackingListRouter.put("/{packing_id}")
 async def update_packing_list(
     packing_id: int,
