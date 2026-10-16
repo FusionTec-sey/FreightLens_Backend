@@ -45,6 +45,9 @@ from auth.security_guards import (
 from Utils.org_filter import OrgContext, apply_org_filter
 from Utils.blob_storage import blob_storage
 from Utils.reportGenerator import generate_defect_report_pdf
+from Routes.Orders.PackingQuantityService import (
+    draft_held_map, open_items, is_packable_item,
+)
 
 logger = logging.getLogger("containerMgmt.orders")
 
@@ -239,6 +242,105 @@ def list_orders(
 
 # ── Document Endpoints (Must be before /{order_id}) ───────────────────────────
 # ── Document Endpoints (Must be before /{order_id}) ───────────────────────────
+PACKABLE_STAGES = ("PO_ISSUED", "PROFORMA")
+
+
+@OrderRouter.get("/open-for-container")
+def list_orders_open_for_container(
+    search: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=50),
+    container_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """Typeahead over the purchase orders a container can still be packed from.
+
+    Deliberately not routed through Meilisearch: quantity_packed moves on every
+    packing list and is not an indexed field, so a stale index would keep
+    offering orders that are already fully packed. The EXISTS below is the
+    cheap half of the test; draft holds are applied in Python over the handful
+    of rows that survive it (see PackingQuantityService).
+    """
+    if not (has_permission(current_user, "View_Order") or is_financial_user(current_user, org_context)):
+        raise HTTPException(status_code=403, detail="Access forbidden: 'View_Order' is required.")
+
+    # Committed quantities only -- cheap, indexable, and it throws away most rows.
+    has_unpacked = (
+        db.query(POItem.id)
+        .filter(
+            POItem.po_id == PurchaseOrder.id,
+            POItem.is_deleted == False,
+            POItem.item_status == "ACTIVE",
+            POItem.quantity_ordered > POItem.quantity_packed,
+        )
+        .exists()
+    )
+
+    query = (
+        db.query(PurchaseOrder)
+        .options(selectinload(PurchaseOrder.items), joinedload(PurchaseOrder.supplier_rel))
+        .filter(
+            PurchaseOrder.is_deleted == False,
+            PurchaseOrder.doc_type == "PO",
+            PurchaseOrder.lifecycle_stage.in_(PACKABLE_STAGES),
+            func.coalesce(PurchaseOrder.shipment_status, "") != "SHIPPED",
+            func.coalesce(PurchaseOrder.receipt_status, "") != "RECEIVED",
+            has_unpacked,
+        )
+    )
+    query = apply_org_filter(query, PurchaseOrder, org_context)
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                PurchaseOrder.po_number.ilike(term),
+                PurchaseOrder.po_nce.ilike(term),
+                PurchaseOrder.company.ilike(term),
+                PurchaseOrder.supplier_name_at_issue.ilike(term),
+            )
+        )
+
+    # Over-fetch: draft holds can empty an order out after the SQL filter, and a
+    # typeahead that returns four rows when twenty matched reads as broken.
+    candidates = query.order_by(desc(PurchaseOrder.id)).limit(limit * 3).all()
+
+    linked_ids = set()
+    if container_id:
+        container = db.query(ContainerDetails).filter(
+            ContainerDetails.Container_ID == container_id
+        ).first()
+        if container:
+            linked_ids = {po.id for po in (container.purchase_orders or [])}
+
+    held = draft_held_map(db, po_ids=[po.id for po in candidates])
+
+    results = []
+    for po in candidates:
+        items = open_items(po, held)
+        if not items:
+            continue  # every line already packed or held by a draft
+        results.append({
+            "id": po.id,
+            "po_number": po.po_number,
+            "po_nce": po.po_nce,
+            "company": po.supplier_name_at_issue or po.company,
+            "lifecycle_stage": po.lifecycle_stage,
+            "status_label": po.status_label,
+            "order_mail_date": po.order_mail_date.isoformat() if po.order_mail_date else None,
+            "item_count": len([i for i in (po.items or []) if is_packable_item(i)]),
+            "open_item_count": len(items),
+            "open_quantity": round(sum(remaining for _, remaining in items), 2),
+            "revision_open": _revision_is_open(po),
+            "already_linked": po.id in linked_ids,
+        })
+        if len(results) >= limit:
+            break
+
+    return {"items": results, "total": len(results)}
+
+
 @OrderRouter.get("/status-counts")
 def order_status_counts(
     search: Optional[str] = Query(None),

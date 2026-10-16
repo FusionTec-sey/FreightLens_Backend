@@ -190,6 +190,8 @@ async def startup_event():
     ensure_supplier_identity_schema()
     from Utils.migrate_20261015_supplier_contacts_addresses import ensure_supplier_contacts_and_addresses
     ensure_supplier_contacts_and_addresses()
+    from Utils.migrate_20261016_container_po_links import ensure_container_po_link_schema
+    ensure_container_po_link_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

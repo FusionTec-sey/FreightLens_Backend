@@ -62,6 +62,20 @@ class ContainerDetails(OrgMixin, AuditMixin, Base):
         back_populates="containers"
     )
     
+    # Which orders this container carries. order_shipments is already that
+    # link -- the app has linked and unlinked orders through it for a while --
+    # so this is a read accessor over it, not a second place the answer lives.
+    # Writes go through OrderShipment, which also carries the B/L and the
+    # shipment status a bare link row could not.
+    purchase_orders = relationship(
+        "PurchaseOrder",
+        secondary="containermgmt.order_shipments",
+        primaryjoin="ContainerDetails.Container_ID == OrderShipment.container_id",
+        secondaryjoin="OrderShipment.po_id == PurchaseOrder.id",
+        viewonly=True,
+        lazy="selectin"
+    )
+
     documents = relationship(
         "ContainerDocs",
         back_populates="container",

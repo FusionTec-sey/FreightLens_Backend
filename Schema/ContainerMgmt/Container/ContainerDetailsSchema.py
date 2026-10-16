@@ -119,6 +119,7 @@ class ContainerUpdateSchema(BaseModel):
     emptied_at: Optional[Union[int, str]] = None
     # Nested updates
     materials: Optional[List[Union[int, str]]] = None
+    po_ids: Optional[List[int]] = None
     bill_of_landing: Optional[BillOfLandingUpdateSchema] = None
 
     
@@ -159,7 +160,8 @@ class ContainerCreateSchema(BaseModel):
     status: Optional[Union[int, str]] = None
     type: Optional[Union[int, str]] = None
     emptied_at: Optional[Union[int, str]] = None
-    materials: Optional[List[Union[int, str]]] = []   
+    materials: Optional[List[Union[int, str]]] = []
+    po_ids: Optional[List[int]] = []
 
 
 class ContainerListResponse(BaseModel):

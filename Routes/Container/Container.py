@@ -26,6 +26,10 @@ from auth.security_guards import (
     has_permission,
 )
 from Model.Credentials.users import User
+from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
+from Model.containermgmt.Orders.OrderPackingList import OrderPackingList, PackingListItem
+from Model.containermgmt.Orders.OrderShipment import OrderShipment
+from Routes.Orders.PackingQuantityService import draft_held_map, open_items
 from Utils.org_filter import OrgContext, apply_org_filter, apply_shared_or_org_filter
 from fastapi import  Depends, HTTPException,  Form, UploadFile, File, Request
 
@@ -181,6 +185,117 @@ def resolve_status(db: Session, entry: Any) -> Any:
         return status.status_id
     return None
 
+def _parse_po_ids(raw_values) -> List[int]:
+    """Form values to purchase order ids.
+
+    Unlike materials, a purchase order is never created on the fly, so anything
+    that is not an id is a client bug rather than a new record.
+    """
+    parsed = []
+    for value in raw_values:
+        value = (value or "").strip()
+        if not value:
+            continue
+        if not value.isdigit():
+            raise HTTPException(status_code=422, detail=f"Invalid purchase order id: {value}")
+        parsed.append(int(value))
+    return parsed
+
+
+def resolve_purchase_orders(db: Session, po_ids: List[int], org_context: OrgContext) -> List[PurchaseOrder]:
+    """The orders behind the ids, refusing any the caller may not see."""
+    if not po_ids:
+        return []
+    wanted = list(dict.fromkeys(po_ids))
+    query = db.query(PurchaseOrder).filter(
+        PurchaseOrder.id.in_(wanted),
+        PurchaseOrder.is_deleted == False,
+    )
+    found = apply_org_filter(query, PurchaseOrder, org_context).all()
+    missing = set(wanted) - {po.id for po in found}
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown purchase order(s): {', '.join(str(m) for m in sorted(missing))}"
+        )
+    return found
+
+
+def set_container_orders(db: Session, container, po_ids, org_context: OrgContext, user_id: int) -> None:
+    """Make order_shipments say this container carries exactly these orders.
+
+    Reconciled rather than cleared and rebuilt: an existing shipment row holds
+    its own status and B/L, and dropping it to re-add it would throw those away
+    along with whatever a packing list or the tracking screens hang off it.
+    """
+    wanted = {po.id for po in resolve_purchase_orders(db, po_ids, org_context)}
+
+    existing = (
+        db.query(OrderShipment)
+        .filter(OrderShipment.container_id == container.Container_ID)
+        .all()
+    )
+    current = {row.po_id: row for row in existing}
+
+    for po_id, row in current.items():
+        if po_id in wanted:
+            continue
+        po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+        if po:
+            assert_po_unlinkable(db, container, po)
+        db.delete(row)
+
+    for po_id in wanted - set(current):
+        po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+        db.add(OrderShipment(
+            org_id=getattr(po, "org_id", None) or container.org_id,
+            po_id=po_id,
+            container_id=container.Container_ID,
+            bill_of_lading_no=container.BillOfLanding or "",
+            shipment_status="IN_TRANSIT" if not container.in_bound else "ARRIVED",
+            created_by=user_id,
+        ))
+
+
+def assert_po_unlinkable(db: Session, container, po) -> None:
+    """Refuse to unlink an order a confirmed packing list was built against.
+
+    A confirmed list has already moved quantity onto POItem.quantity_packed, so
+    dropping the link would leave those lines pointing at an order this
+    container no longer admits to carrying. Correcting that means voiding the
+    packing list, which is a deliberate act and not a side effect of editing a
+    container. Draft lists carry no such weight: their lines are simply dropped.
+    """
+    lists = (
+        db.query(OrderPackingList)
+        .join(PackingListItem, PackingListItem.packing_list_id == OrderPackingList.id)
+        .filter(
+            OrderPackingList.container_id == container.Container_ID,
+            OrderPackingList.is_deleted == False,
+            PackingListItem.po_id == po.id,
+            PackingListItem.is_deleted == False,
+        )
+        .distinct()
+        .all()
+    )
+
+    blocking = [pl for pl in lists if (pl.status or "").upper() != "DRAFT"]
+    if blocking:
+        numbers = ", ".join(pl.packing_list_number for pl in blocking)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{numbers} is confirmed against {po.po_number}. "
+                "Void that packing list before unlinking the order."
+            ),
+        )
+
+    for pl in lists:
+        for line in (pl.items or []):
+            if line.po_id == po.id and not line.is_deleted:
+                line.is_deleted = True
+
+
 def resolve_materials(db: Session, materials_list: List[Union[int, str]], current_user_id: int) -> List[Material]:
     resolved = []
     for entry in materials_list:
@@ -211,7 +326,7 @@ async def parse_update_form(request: Request) -> ContainerUpdateSchema:
     ref_fields = {"status", "type", "emptied_at"}
 
     for key, value in form.items():
-        if "." in key or key in {"materials", "remove_doc_ids"}:
+        if "." in key or key in {"materials", "po_ids", "remove_doc_ids"}:
             continue  # skip nested or list fields
 
         if value == "":
@@ -260,6 +375,11 @@ async def parse_update_form(request: Request) -> ContainerUpdateSchema:
     if material_ids:
         data["materials"] = [int(mid) if mid.isdigit() else mid for mid in material_ids if mid]
 
+    # po_ids=PurchaseOrderId[] -- always read, even when empty, so clearing the
+    # last chip reaches the server as "no links" rather than "field untouched".
+    if "po_ids" in form:
+        data["po_ids"] = _parse_po_ids(form.getlist("po_ids"))
+
     # remove_doc_ids[]=int → List[int] (optional if field enabled)
     remove_doc_ids = form.getlist("remove_doc_ids")
     if remove_doc_ids:
@@ -287,7 +407,7 @@ async def parse_create_form(request: Request) -> ContainerCreateSchema:
     ref_fields = {"status", "type", "emptied_at"}
 
     for key, value in form.items():
-        if "." in key or key in {"materials", "remove_doc_ids"}:
+        if "." in key or key in {"materials", "po_ids", "remove_doc_ids"}:
             continue  # skip nested or list fields
 
         if value == "":
@@ -335,6 +455,10 @@ async def parse_create_form(request: Request) -> ContainerCreateSchema:
     materials = form.getlist("materials")
     if materials:
         data["materials"] = [int(mid) if mid.isdigit() else mid for mid in materials if mid]
+
+    # Parse linked purchase orders
+    if "po_ids" in form:
+        data["po_ids"] = _parse_po_ids(form.getlist("po_ids"))
 
     # Validate and return the schema
     try:
@@ -399,7 +523,7 @@ class ContainerAPI:
             db.add(new_bl)
 
         # 📦 Create Container and link to Bill of Landing
-        container_data = create_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"})
+        container_data = create_data.dict(exclude_unset=True, exclude={"materials", "po_ids", "bill_of_landing"})
         container_data["org_id"] = org_context.org_id
         
         # Resolve container reference fields dynamically
@@ -439,6 +563,11 @@ class ContainerAPI:
         if create_data.materials:
             resolved_materials = resolve_materials(db, create_data.materials, current_user.id)
             container.materials.extend(resolved_materials)
+
+        # 🔁 Link purchase orders (recorded as order_shipments)
+        if create_data.po_ids:
+            db.flush()
+            set_container_orders(db, container, create_data.po_ids, org_context, current_user.id)
 
         # 📁 Upload and save document paths
         shipping_paths = save_uploaded_files(new_docs, "Shipping")
@@ -506,7 +635,8 @@ class ContainerAPI:
                     joinedload(ContainerDetails.updated_by_user),
                     # Many-to-many collection: MUST use selectinload to avoid
                     # MySQL's rejection of LIMIT inside a subquery (sqlalche.me/e/20/f405)
-                    selectinload(ContainerDetails.materials)
+                    selectinload(ContainerDetails.materials),
+                    selectinload(ContainerDetails.purchase_orders)
                 )
             )
 
@@ -633,6 +763,21 @@ class ContainerAPI:
                         {"Id": m.Id, "name": m.Name} 
                         for m in container.materials
                     ]
+
+                # Always present, even when empty: the chip field has to be able
+                # to tell "no orders linked" from "the server did not say".
+                container_dict["purchase_orders"] = [
+                    {
+                        "id": po.id,
+                        "po_number": po.po_number,
+                        "po_nce": po.po_nce,
+                        "company": po.supplier_name_at_issue or po.company,
+                        "lifecycle_stage": po.lifecycle_stage,
+                        "status_label": po.status_label,
+                    }
+                    for po in (container.purchase_orders or [])
+                    if not po.is_deleted
+                ]
                 
                 serialized_data.append(container_dict)
 
@@ -838,6 +983,91 @@ class ContainerAPI:
         db.commit()
         return {"message": "Container updated successfully"}    
 
+    @ContainerRouter.get("/containers/{container_id}/purchase-orders")
+    async def get_container_purchase_orders(self,
+        container_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
+        ):
+        """The orders linked to this container, with what is left to pack on each.
+
+        The remaining quantity, not the ordered one: a container is one leg of
+        an order that may be split across several, and the only useful question
+        here is what this leg can still carry.
+        """
+        container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        linked = [po for po in (container.purchase_orders or []) if not po.is_deleted]
+        held = draft_held_map(db, po_ids=[po.id for po in linked])
+
+        payload = []
+        for po in linked:
+            items = open_items(po, held)
+            payload.append({
+                "id": po.id,
+                "po_number": po.po_number,
+                "po_nce": po.po_nce,
+                "company": po.supplier_name_at_issue or po.company,
+                "lifecycle_stage": po.lifecycle_stage,
+                "status_label": po.status_label,
+                "open_item_count": len(items),
+                "open_quantity": round(sum(remaining for _, remaining in items), 2),
+                "fully_packed": len(items) == 0,
+                "items": [
+                    {
+                        "po_item_id": item.id,
+                        "item_code": item.item_code,
+                        "description": item.description,
+                        "unit": item.unit or "PCS",
+                        "quantity_ordered": float(item.quantity_ordered or 0),
+                        "quantity_already_packed": float(item.quantity_packed or 0),
+                        "draft_held": held.get(item.id, 0.0),
+                        "remaining": remaining,
+                    }
+                    for item, remaining in items
+                ],
+            })
+
+        return {"container_id": container.Container_ID,
+                "container_no": container.container_no,
+                "purchase_orders": payload}
+
+    @ContainerRouter.put("/containers/{container_id}/purchase-orders")
+    async def set_container_purchase_orders(self,
+        container_id: int,
+        payload: dict = Body(...),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        org_context: OrgContext = Depends(get_org_context)
+        ):
+        """Replace the whole link set, the same clear-and-extend materials use.
+
+        Linking from the packing list builder goes through here, so a container
+        with no orders on it never becomes a dead end.
+        """
+        container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        po_ids = _parse_po_ids([str(v) for v in (payload.get("po_ids") or [])])
+
+        set_container_orders(db, container, po_ids, org_context, current_user.id)
+        container.updated_by = current_user.id
+        db.commit()
+        db.refresh(container)
+
+        return {
+            "container_id": container.Container_ID,
+            "purchase_orders": [
+                {"id": po.id, "po_number": po.po_number,
+                 "company": po.supplier_name_at_issue or po.company}
+                for po in container.purchase_orders
+            ],
+        }
+
     @ContainerRouter.patch("/containers/{container_id}/status")
     async def update_container(self, 
         container_id: int,
@@ -872,7 +1102,7 @@ class ContainerAPI:
         original_status = container.status
 
         # 🛠️ Update basic container fields (excluding materials and BL)
-        for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "bill_of_landing"}).items():
+        for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "po_ids", "bill_of_landing"}).items():
             if key == "type" and value is not None:
                 value = resolve_container_type(db, value, current_user.id)
             elif key == "emptied_at" and value is not None:
@@ -894,6 +1124,10 @@ class ContainerAPI:
             container.materials.clear()
             resolved_materials = resolve_materials(db, update_data.materials, current_user.id)
             container.materials.extend(resolved_materials)
+
+        # 🔁 Update linked purchase orders (recorded as order_shipments)
+        if update_data.po_ids is not None:
+            set_container_orders(db, container, update_data.po_ids, org_context, current_user.id)
 
         # 🔄 Update Bill of Landing
         if update_data.bill_of_landing:
