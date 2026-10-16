@@ -251,7 +251,7 @@ def set_container_orders(db: Session, container, po_ids, org_context: OrgContext
             org_id=getattr(po, "org_id", None) or container.org_id,
             po_id=po_id,
             container_id=container.Container_ID,
-            bill_of_lading_no=container.BillOfLanding or "",
+            bill_of_lading_no=container.BillOfLanding or None,
             shipment_status="IN_TRANSIT" if not container.in_bound else "ARRIVED",
             created_by=user_id,
         ))
@@ -1933,7 +1933,7 @@ class ContainerAPI:
             org_id=container.org_id,
             po_id=po_id,
             container_id=container_id,
-            bill_of_lading_no=container.BillOfLanding or "",
+            bill_of_lading_no=container.BillOfLanding or None,
             shipment_status="IN_TRANSIT" if not container.in_bound else "ARRIVED",
             created_by=current_user.id
         )

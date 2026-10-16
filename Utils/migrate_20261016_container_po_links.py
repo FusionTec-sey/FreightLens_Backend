@@ -44,6 +44,14 @@ def ensure_container_po_link_schema():
                     ALTER COLUMN po_id DROP NOT NULL;
                 """,
                 """
+                ALTER TABLE containermgmt.order_shipments
+                    ALTER COLUMN bill_of_lading_no DROP NOT NULL;
+                """,
+                """
+                UPDATE containermgmt.order_shipments
+                    SET bill_of_lading_no = NULL WHERE bill_of_lading_no = '';
+                """,
+                """
                 ALTER TABLE containermgmt.order_packing_list_items
                     ADD COLUMN IF NOT EXISTS po_id INTEGER
                         REFERENCES containermgmt.purchase_orders(id);
@@ -91,7 +99,7 @@ def ensure_container_po_link_schema():
                 INSERT INTO containermgmt.order_shipments
                     (org_id, po_id, container_id, bill_of_lading_no, shipment_status, is_deleted)
                 SELECT p.org_id, p.id, c."Container_ID",
-                       COALESCE(c."BillOfLanding", ''),
+                       c."BillOfLanding",
                        CASE WHEN c.in_bound IS NULL THEN 'IN_TRANSIT' ELSE 'ARRIVED' END,
                        false
                 FROM containermgmt.container_details AS c

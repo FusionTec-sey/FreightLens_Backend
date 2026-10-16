@@ -10,7 +10,10 @@ class OrderShipment(OrgMixin, AuditMixin, Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     po_id = Column(Integer, ForeignKey("containermgmt.purchase_orders.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    bill_of_lading_no = Column(String(100), ForeignKey("containermgmt.bill_of_landing.BillOfLanding"), nullable=False, index=True)
+    # Nullable: an order is linked to a container before the container has a
+    # manifest. The empty string that stood in for "no B/L yet" is not a
+    # bill_of_landing row, so it violated the foreign key outright.
+    bill_of_lading_no = Column(String(100), ForeignKey("containermgmt.bill_of_landing.BillOfLanding"), nullable=True, index=True)
     container_id = Column(Integer, ForeignKey("containermgmt.container_details.Container_ID"), nullable=True, index=True)
     
     # Partial / full shipment tracking

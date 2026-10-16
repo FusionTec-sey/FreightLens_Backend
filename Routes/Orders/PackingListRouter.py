@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_, and_, desc
 
 from Model.db import get_db
@@ -10,20 +10,54 @@ from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
 from Model.containermgmt.Orders.OrderPackingList import OrderPackingList, PackingListItem
 from Model.containermgmt.Orders.POItem import POItem
 from Model.containermgmt.Orders.OrderStatus import OrderStatus
+from Model.containermgmt.Orders.OrderShipment import OrderShipment
+from Model.containermgmt.Container.ContainerDetails import ContainerDetails
 from Model.Credentials.users import User
 from auth.dependencies import get_current_user, get_org_context
+from auth.security_guards import has_permission
 from Utils.org_filter import OrgContext, apply_org_filter
 from Services.document_number_service import next_document_number
+from Routes.Orders.PackingQuantityService import (
+    draft_held_map, open_items, remaining_for_item, is_packable_item,
+)
 
 logger = logging.getLogger("containerMgmt.orders.packing")
 
 PackingListRouter = APIRouter(prefix="/packing-lists", tags=["Packing Lists"])
 
+DRAFT = "DRAFT"
+CONFIRMED = "CONFIRMED"
+
+
+def _covered_orders(pl: OrderPackingList) -> list:
+    """The orders a packing list covers, derived from its lines.
+
+    Not stored on the header: removing the last line of an order should drop
+    that order from the list's coverage by itself.
+    """
+    seen = {}
+    for line in (pl.items or []):
+        if line.is_deleted or not line.po_id or line.po_id in seen:
+            continue
+        po = line.purchase_order
+        seen[line.po_id] = {
+            "id": line.po_id,
+            "po_number": po.po_number if po else None,
+            "company": (po.supplier_name_at_issue or po.company) if po else None,
+        }
+    return list(seen.values())
+
+
 def format_packing_list(pl: OrderPackingList) -> dict:
+    lines = [it for it in (pl.items or []) if not it.is_deleted]
     return {
         "id": pl.id,
         "po_id": pl.po_id,
         "po_number": pl.purchase_order.po_number if pl.purchase_order else None,
+        "container_id": pl.container_id,
+        "container_no": pl.container.container_no if pl.container else None,
+        "purchase_orders": _covered_orders(pl),
+        "source": pl.source or "PO",
         "packing_list_number": pl.packing_list_number,
         "supplier_invoice_ref": pl.supplier_invoice_ref,
         "package_count": pl.package_count,
@@ -32,9 +66,14 @@ def format_packing_list(pl: OrderPackingList) -> dict:
         "date_issued": pl.date_issued.isoformat() if pl.date_issued else None,
         "status": pl.status,
         "notes": pl.notes,
+        "line_count": len(lines),
+        "off_po_line_count": len([it for it in lines if not it.po_id]),
+        "created_at": pl.created_at.isoformat() if pl.created_at else None,
         "items": [
             {
                 "id": it.id,
+                "po_id": it.po_id,
+                "po_number": it.purchase_order.po_number if it.purchase_order else None,
                 "po_item_id": it.po_item_id,
                 "item_code": it.item_code,
                 "description": it.description,
@@ -43,29 +82,76 @@ def format_packing_list(pl: OrderPackingList) -> dict:
                 "carton_numbers": it.carton_numbers,
                 "notes": it.notes,
             }
-            for it in (pl.items or []) if not it.is_deleted
+            for it in lines
         ]
     }
+
+
+def _base_query(db: Session, org_context: OrgContext):
+    query = (
+        db.query(OrderPackingList)
+        .outerjoin(PurchaseOrder, OrderPackingList.po_id == PurchaseOrder.id)
+        .options(
+            joinedload(OrderPackingList.purchase_order),
+            joinedload(OrderPackingList.container),
+            selectinload(OrderPackingList.items).joinedload(PackingListItem.purchase_order),
+        )
+        .filter(OrderPackingList.is_deleted == False)
+    )
+    return apply_org_filter(query, OrderPackingList, org_context)
+
+
+def _load_container(db: Session, container_id: int, org_context: OrgContext) -> ContainerDetails:
+    container = (
+        db.query(ContainerDetails)
+        .filter(ContainerDetails.Container_ID == container_id,
+                ContainerDetails.is_deleted == False)
+        .first()
+    )
+    if not container:
+        raise HTTPException(status_code=404, detail="Container not found")
+    return container
+
+
+def _assert_packable(po: PurchaseOrder) -> None:
+    """A purchase order under revision is not a thing to pack against.
+
+    Quantities are exactly what a revision changes, so packing one mid-revision
+    is the same class of conflict as awarding one, and that is already blocked
+    on the bidding desk.
+    """
+    from Routes.Orders.OrderRouter import assert_no_open_revision
+    assert_no_open_revision(po, "packing it")
+
 
 @PackingListRouter.get("")
 @PackingListRouter.get("/")
 async def list_packing_lists(
     po_id: Optional[int] = Query(None),
+    container_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    query = (
-        db.query(OrderPackingList)
-        .join(PurchaseOrder, OrderPackingList.po_id == PurchaseOrder.id)
-        .options(joinedload(OrderPackingList.purchase_order), joinedload(OrderPackingList.items))
-        .filter(OrderPackingList.is_deleted == False, PurchaseOrder.is_deleted == False)
-    )
-    query = apply_org_filter(query, PurchaseOrder, org_context)
+    query = _base_query(db, org_context)
 
     if po_id:
-        query = query.filter(OrderPackingList.po_id == po_id)
+        # Either the legacy header order, or any line that names it: a
+        # container-first list has no header order at all.
+        query = query.filter(
+            or_(
+                OrderPackingList.po_id == po_id,
+                OrderPackingList.items.any(
+                    and_(PackingListItem.po_id == po_id, PackingListItem.is_deleted == False)
+                ),
+            )
+        )
+    if container_id:
+        query = query.filter(OrderPackingList.container_id == container_id)
+    if status and status.upper() != "ALL":
+        query = query.filter(OrderPackingList.status == status.upper())
 
     if search:
         s = f"%{search.strip()}%"
@@ -73,12 +159,251 @@ async def list_packing_lists(
             or_(
                 OrderPackingList.packing_list_number.ilike(s),
                 OrderPackingList.supplier_invoice_ref.ilike(s),
-                PurchaseOrder.po_number.ilike(s)
+                PurchaseOrder.po_number.ilike(s),
+                OrderPackingList.container.has(ContainerDetails.container_no.ilike(s)),
+                OrderPackingList.items.any(
+                    and_(
+                        PackingListItem.is_deleted == False,
+                        PackingListItem.purchase_order.has(PurchaseOrder.po_number.ilike(s)),
+                    )
+                ),
             )
         )
 
     lists = query.order_by(desc(OrderPackingList.id)).all()
     return [format_packing_list(pl) for pl in lists]
+
+
+@PackingListRouter.post("/draft-from-container")
+async def draft_from_container(
+    payload: dict,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """Seed a packing list from whatever the container's orders still owe.
+
+    Writes nothing. The caller edits what comes back and posts it, so someone
+    who opens the builder and walks away has reserved nothing and left no
+    half-made record behind.
+    """
+    if not has_permission(current_user, "Add_PackingList"):
+        raise HTTPException(status_code=403, detail="Access forbidden: 'Add_PackingList' is required.")
+
+    container_id = payload.get("container_id")
+    if not container_id:
+        raise HTTPException(status_code=422, detail="Container is required")
+
+    container = _load_container(db, int(container_id), org_context)
+    exclude_id = payload.get("packing_list_id")
+
+    linked = [po for po in (container.purchase_orders or []) if not po.is_deleted]
+    wanted = {int(v) for v in (payload.get("po_ids") or [])}
+    if wanted:
+        linked = [po for po in linked if po.id in wanted]
+
+    if not linked:
+        return {
+            "container_id": container.Container_ID,
+            "container_no": container.container_no,
+            "packing_list_number": next_document_number(db, container.org_id, "PL"),
+            "purchase_orders": [],
+            "items": [],
+            "warnings": ["No purchase orders are linked to this container yet."],
+        }
+
+    held = draft_held_map(
+        db,
+        po_ids=[po.id for po in linked],
+        exclude_packing_list_id=int(exclude_id) if exclude_id else None,
+    )
+
+    items, warnings, covered = [], [], []
+    for po in linked:
+        try:
+            _assert_packable(po)
+        except HTTPException as exc:
+            warnings.append(f"{po.po_number}: {exc.detail}")
+            continue
+
+        open_lines = open_items(po, held)
+        covered.append({
+            "id": po.id,
+            "po_number": po.po_number,
+            "company": po.supplier_name_at_issue or po.company,
+            "open_item_count": len(open_lines),
+            "fully_packed": len(open_lines) == 0,
+        })
+        if not open_lines:
+            warnings.append(f"{po.po_number} is fully packed; nothing of it was added.")
+            continue
+
+        for item, remaining in open_lines:
+            items.append({
+                "po_id": po.id,
+                "po_number": po.po_number,
+                "po_item_id": item.id,
+                "item_code": item.item_code,
+                "description": item.description,
+                "unit": item.unit or "PCS",
+                "quantity_ordered": float(item.quantity_ordered or 0),
+                "quantity_already_packed": float(item.quantity_packed or 0),
+                "draft_held": held.get(item.id, 0.0),
+                "remaining": remaining,
+                # The remaining, never the ordered quantity: the second
+                # container for an order must not start over-packed.
+                "quantity_packed": remaining,
+                "carton_numbers": "",
+                "notes": None,
+            })
+
+    return {
+        "container_id": container.Container_ID,
+        "container_no": container.container_no,
+        "bill_of_lading": container.BillOfLanding,
+        "packing_list_number": next_document_number(db, container.org_id, "PL"),
+        "purchase_orders": covered,
+        "items": items,
+        "warnings": warnings,
+    }
+
+
+def _apply_lines(
+    db: Session,
+    pl: OrderPackingList,
+    raw_items: list,
+    current_user: User,
+    commit_quantities: bool,
+) -> None:
+    """Replace the list's lines, checking each against what is still owed.
+
+    The ceiling is re-read here rather than trusted from the browser: the
+    numbers the builder seeded with may be minutes old, and another container's
+    list may have taken the rest in between.
+    """
+    may_override = has_permission(current_user, "Override_PackingQty")
+
+    po_ids = {int(i["po_id"]) for i in raw_items if i.get("po_id")}
+    held = draft_held_map(db, po_ids=po_ids, exclude_packing_list_id=pl.id)
+
+    # Which orders this list may draw from. Enforced whenever the list belongs
+    # to a container or an order -- including when the set is empty, which is
+    # itself an answer: a container carrying nothing can pack nothing.
+    allowed_po_ids = set()
+    enforce_allowed = bool(pl.container_id or pl.po_id)
+    if pl.container_id:
+        container = db.query(ContainerDetails).filter(
+            ContainerDetails.Container_ID == pl.container_id
+        ).first()
+        allowed_po_ids = {po.id for po in (container.purchase_orders or [])} if container else set()
+    if pl.po_id:
+        allowed_po_ids.add(pl.po_id)
+
+    for line in (pl.items or []):
+        line.is_deleted = True
+
+    errors = []
+    for raw in raw_items:
+        description = (raw.get("description") or "").strip()
+        if not description:
+            continue
+
+        quantity = float(raw.get("quantity_packed") or 0)
+        if quantity <= 0:
+            continue
+
+        po_id = raw.get("po_id")
+        po_item_id = raw.get("po_item_id")
+        po_item = None
+
+        if po_item_id:
+            po_item = db.query(POItem).filter(POItem.id == int(po_item_id)).first()
+            if not po_item:
+                errors.append(f"{description}: the order line it came from no longer exists.")
+                continue
+            po_id = po_item.po_id
+
+            # A tampered payload must not be able to pack an order this
+            # container never carried.
+            if enforce_allowed and po_id not in allowed_po_ids:
+                label = po_item.purchase_order.po_number if po_item.purchase_order else po_id
+                errors.append(f"{description}: {label} is not linked to this container.")
+                continue
+
+            ceiling = remaining_for_item(po_item, held.get(po_item.id, 0.0))
+            if quantity > ceiling and not may_override:
+                unit = po_item.unit or "PCS"
+                errors.append(
+                    f"{po_item.item_code or description}: {quantity:g} exceeds the "
+                    f"{ceiling:g} {unit} still outstanding."
+                )
+                continue
+
+        line = PackingListItem(
+            packing_list_id=pl.id,
+            po_id=int(po_id) if po_id else None,
+            po_item_id=int(po_item_id) if po_item_id else None,
+            item_code=(raw.get("item_code") or "").strip() or None,
+            description=description,
+            quantity_packed=quantity,
+            unit=raw.get("unit") or "PCS",
+            carton_numbers=(raw.get("carton_numbers") or "").strip() or None,
+            notes=(raw.get("notes") or "").strip() or None,
+            created_by=current_user.id,
+        )
+
+        if po_item is not None:
+            ceiling = remaining_for_item(po_item, held.get(po_item.id, 0.0))
+            if quantity > ceiling:
+                over = quantity - ceiling
+                who = getattr(current_user, "username", None) or current_user.id
+                note = f"Over-packed by {over:g} (approved by {who})"
+                line.notes = f"{line.notes}. {note}" if line.notes else note
+
+        db.add(line)
+
+        # Only a confirmed list moves the order's packed total. A draft holds
+        # softly: draft_held already keeps other lists from planning against
+        # the same quantity, and nothing has to be released if it is abandoned.
+        if commit_quantities and po_item is not None:
+            po_item.quantity_packed = float(po_item.quantity_packed or 0) + quantity
+
+    if errors:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=" ".join(errors))
+
+
+def _advance_orders(db: Session, pl: OrderPackingList) -> None:
+    """Mark the covered orders packed, and record the shipment leg."""
+    for covered in _covered_orders(pl):
+        po = db.query(PurchaseOrder).filter(PurchaseOrder.id == covered["id"]).first()
+        if not po:
+            continue
+
+        if po.status in ["ORDERED", "IN_PRODUCTION", "READY"]:
+            packed_st = db.query(OrderStatus).filter(OrderStatus.code == "PACKED").first()
+            if packed_st:
+                po.status_id = packed_st.id
+                po.status = "PACKED"
+                po.status_label = "Packed"
+
+        if pl.container_id:
+            existing = db.query(OrderShipment).filter(
+                OrderShipment.po_id == po.id,
+                OrderShipment.container_id == pl.container_id,
+            ).first()
+            if not existing:
+                container = db.query(ContainerDetails).filter(
+                    ContainerDetails.Container_ID == pl.container_id
+                ).first()
+                db.add(OrderShipment(
+                    org_id=po.org_id,
+                    po_id=po.id,
+                    container_id=pl.container_id,
+                    bill_of_lading_no=(container.BillOfLanding if container else None) or None,
+                    shipment_status="IN_TRANSIT",
+                ))
+
 
 @PackingListRouter.get("/{packing_id}")
 async def get_packing_list(
@@ -87,17 +412,11 @@ async def get_packing_list(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
-    query = (
-        db.query(OrderPackingList)
-        .join(PurchaseOrder, OrderPackingList.po_id == PurchaseOrder.id)
-        .options(joinedload(OrderPackingList.purchase_order), joinedload(OrderPackingList.items))
-        .filter(OrderPackingList.id == packing_id, OrderPackingList.is_deleted == False)
-    )
-    query = apply_org_filter(query, PurchaseOrder, org_context)
-    pl = query.first()
+    pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
     if not pl:
         raise HTTPException(status_code=404, detail="Packing list not found")
     return format_packing_list(pl)
+
 
 @PackingListRouter.post("")
 @PackingListRouter.post("/")
@@ -107,68 +426,136 @@ async def create_packing_list(
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
+    if not has_permission(current_user, "Add_PackingList"):
+        raise HTTPException(status_code=403, detail="Access forbidden: 'Add_PackingList' is required.")
+
+    container_id = payload.get("container_id")
     po_id = payload.get("po_id")
-    if not po_id:
-        raise HTTPException(status_code=422, detail="PO ID is required")
+    if not container_id and not po_id:
+        raise HTTPException(status_code=422, detail="A container or a purchase order is required")
 
-    po_query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False)
-    po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
-    if not po:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    org_id = None
+    container = None
+    if container_id:
+        container = _load_container(db, int(container_id), org_context)
+        org_id = container.org_id
 
-    pl_number = (payload.get("packing_list_number", "").strip()
-                 or next_document_number(db, getattr(po, "org_id", None), "PL")
-                 or f"PL-{po.po_number}")
+    po = None
+    if po_id:
+        po_query = db.query(PurchaseOrder).filter(
+            PurchaseOrder.id == po_id, PurchaseOrder.is_deleted == False
+        )
+        po = apply_org_filter(po_query, PurchaseOrder, org_context).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        _assert_packable(po)
+        org_id = org_id or po.org_id
+
+    status = (payload.get("status") or CONFIRMED).upper()
+    if status not in (DRAFT, CONFIRMED):
+        raise HTTPException(status_code=422, detail="A new packing list is either a draft or confirmed")
+
+    pl_number = (
+        (payload.get("packing_list_number") or "").strip()
+        or next_document_number(db, org_id, "PL")
+    )
 
     new_pl = OrderPackingList(
-        org_id=po.org_id,
-        po_id=po.id,
+        org_id=org_id,
+        po_id=po.id if po else None,
+        container_id=container.Container_ID if container else None,
+        source="CONTAINER" if container else "PO",
         packing_list_number=pl_number,
-        supplier_invoice_ref=payload.get("supplier_invoice_ref", "").strip() or None,
+        supplier_invoice_ref=(payload.get("supplier_invoice_ref") or "").strip() or None,
         package_count=payload.get("package_count"),
         total_gross_weight=payload.get("total_gross_weight"),
         total_cbm=payload.get("total_cbm"),
         date_issued=datetime.strptime(payload["date_issued"][:10], "%Y-%m-%d").date() if payload.get("date_issued") else None,
-        status="CONFIRMED",
-        notes=payload.get("notes", "").strip() or None,
+        status=status,
+        notes=(payload.get("notes") or "").strip() or None,
         created_by=current_user.id
     )
     db.add(new_pl)
     db.flush()
 
-    for item in payload.get("items", []):
-        desc_text = item.get("description", "").strip()
-        if not desc_text: continue
-        qty_packed = float(item.get("quantity_packed") or 1.0)
-        po_it_id = item.get("po_item_id")
-        
-        pl_it = PackingListItem(
-            packing_list_id=new_pl.id,
-            po_item_id=po_it_id,
-            item_code=item.get("item_code", "").strip() or None,
-            description=desc_text,
-            quantity_packed=qty_packed,
-            unit=item.get("unit", "PCS"),
-            carton_numbers=item.get("carton_numbers", "").strip() or None,
-            notes=item.get("notes", "").strip() or None,
-            created_by=current_user.id
-        )
-        db.add(pl_it)
+    _apply_lines(db, new_pl, payload.get("items", []), current_user,
+                 commit_quantities=(status == CONFIRMED))
 
-        # Update PO Item packed quantity
-        if po_it_id:
-            po_item = db.query(POItem).filter(POItem.id == po_it_id).first()
-            if po_item:
-                po_item.quantity_packed = float(po_item.quantity_packed or 0) + qty_packed
-
-    # Update PO status to PACKED if not yet shipped
-    if po.status in ["ORDERED", "IN_PRODUCTION", "READY"]:
-        packed_st = db.query(OrderStatus).filter(OrderStatus.code == "PACKED").first()
-        if packed_st:
-            po.status_id = packed_st.id
-            po.status = "PACKED"
-            po.status_label = "Packed"
+    if status == CONFIRMED:
+        db.flush()
+        db.refresh(new_pl)
+        _advance_orders(db, new_pl)
 
     db.commit()
     db.refresh(new_pl)
     return format_packing_list(new_pl)
+
+
+@PackingListRouter.put("/{packing_id}")
+async def update_packing_list(
+    packing_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """Edit a draft, or confirm it.
+
+    Drafts only: once a list is confirmed its quantities are on the orders and
+    on other screens, and quietly rewriting it would move numbers nobody asked
+    to have moved.
+    """
+    if not has_permission(current_user, "Edit_PackingList"):
+        raise HTTPException(status_code=403, detail="Access forbidden: 'Edit_PackingList' is required.")
+
+    pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail="Packing list not found")
+    if (pl.status or "").upper() != DRAFT:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{pl.packing_list_number} is {(pl.status or '').lower()} and can no longer be edited.",
+        )
+
+    status = (payload.get("status") or DRAFT).upper()
+    if status not in (DRAFT, CONFIRMED):
+        raise HTTPException(status_code=422, detail="A packing list is either a draft or confirmed")
+
+    for field in ("supplier_invoice_ref", "notes"):
+        if field in payload:
+            setattr(pl, field, (payload.get(field) or "").strip() or None)
+    for field in ("package_count", "total_gross_weight", "total_cbm"):
+        if field in payload:
+            setattr(pl, field, payload.get(field))
+    if payload.get("packing_list_number"):
+        pl.packing_list_number = payload["packing_list_number"].strip()
+    if payload.get("date_issued"):
+        pl.date_issued = datetime.strptime(payload["date_issued"][:10], "%Y-%m-%d").date()
+
+    pl.status = status
+    pl.updated_by = current_user.id
+
+    lines = payload.get("items")
+    if lines is None:
+        # Confirming without re-sending the lines: re-run what is already
+        # there, so the same ceilings are checked before anything is committed.
+        lines = [
+            {
+                "po_id": it.po_id, "po_item_id": it.po_item_id,
+                "item_code": it.item_code, "description": it.description,
+                "quantity_packed": float(it.quantity_packed or 0),
+                "unit": it.unit, "carton_numbers": it.carton_numbers, "notes": it.notes,
+            }
+            for it in (pl.items or []) if not it.is_deleted
+        ]
+
+    _apply_lines(db, pl, lines, current_user, commit_quantities=(status == CONFIRMED))
+
+    if status == CONFIRMED:
+        db.flush()
+        db.refresh(pl)
+        _advance_orders(db, pl)
+
+    db.commit()
+    db.refresh(pl)
+    return format_packing_list(pl)

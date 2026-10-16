@@ -83,6 +83,7 @@ PERMISSION_CATALOG = [
         ("Withdraw_StoreRequest", "Withdraw store requests"), ("Delete_StoreRequest", "Delete store requests"),
         ("View_PackingList", "View packing lists"), ("Add_PackingList", "Create packing lists"),
         ("Edit_PackingList", "Edit packing lists"), ("Delete_PackingList", "Delete packing lists"),
+        ("Override_PackingQty", "Pack more than a purchase order line still has outstanding"),
         ("View_GoodsReceipt", "View goods receipts"), ("Verify_Receipt", "Verify goods receipts"),
         ("Edit_Receipt", "Edit goods receipts"), ("Submit_Receipt", "Submit goods receipts"),
         ("View_Defect", "View defects"), ("Add_Defect", "Report defects"),
