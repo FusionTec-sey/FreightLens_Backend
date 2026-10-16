@@ -13,6 +13,10 @@ class OrderPackingList(OrgMixin, AuditMixin, Base):
     # lines, which keeps one source of truth as lines are added and removed.
     po_id = Column(Integer, ForeignKey("containermgmt.purchase_orders.id", ondelete="CASCADE"), nullable=True, index=True)
     container_id = Column(Integer, ForeignKey("containermgmt.container_details.Container_ID"), nullable=True, index=True)
+    # The container as typed, for a tenant without the LOGISTICS module: there
+    # is no container record to point at, but the shipment is still real. A
+    # list must carry one or the other.
+    container_no_text = Column(String(50), nullable=True)
     source = Column(String(20), default="PO")  # PO | CONTAINER -- which flow built it
 
     packing_list_number = Column(String(100), nullable=False, index=True)
@@ -49,6 +53,9 @@ class PackingListItem(AuditMixin, Base):
     # Denormalised from the PO item: a line still has to name its order when it
     # was added by hand (no po_item_id) or when the item is later removed.
     po_id = Column(Integer, ForeignKey("containermgmt.purchase_orders.id"), nullable=True, index=True)
+    # The order as typed, for a tenant without the ORDERS module. It seeds
+    # nothing and is never written back to: there is no order to read from.
+    po_number_text = Column(String(100), nullable=True)
     
     item_code = Column(String(100), nullable=True)
     description = Column(Text, nullable=False)

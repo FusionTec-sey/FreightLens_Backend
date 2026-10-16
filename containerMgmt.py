@@ -192,6 +192,8 @@ async def startup_event():
     ensure_supplier_contacts_and_addresses()
     from Utils.migrate_20261016_container_po_links import ensure_container_po_link_schema
     ensure_container_po_link_schema()
+    from Utils.migrate_20261016_packing_text_fallbacks import ensure_packing_text_fallbacks
+    ensure_packing_text_fallbacks()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")

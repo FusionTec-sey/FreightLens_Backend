@@ -40,13 +40,27 @@ def _covered_orders(pl: OrderPackingList) -> list:
     """
     seen = {}
     for line in (pl.items or []):
-        if line.is_deleted or not line.po_id or line.po_id in seen:
+        if line.is_deleted:
+            continue
+        if not line.po_id:
+            # A typed order number still names an order, it just is not one we
+            # hold. Keyed by its text so two lines of the same number group.
+            if line.po_number_text and line.po_number_text not in seen:
+                seen[line.po_number_text] = {
+                    "id": None,
+                    "po_number": line.po_number_text,
+                    "company": None,
+                    "linked": False,
+                }
+            continue
+        if line.po_id in seen:
             continue
         po = line.purchase_order
         seen[line.po_id] = {
             "id": line.po_id,
             "po_number": po.po_number if po else None,
             "company": (po.supplier_name_at_issue or po.company) if po else None,
+            "linked": True,
         }
     return list(seen.values())
 
@@ -58,7 +72,8 @@ def format_packing_list(pl: OrderPackingList) -> dict:
         "po_id": pl.po_id,
         "po_number": pl.purchase_order.po_number if pl.purchase_order else None,
         "container_id": pl.container_id,
-        "container_no": pl.container.container_no if pl.container else None,
+        "container_no": pl.container.container_no if pl.container else pl.container_no_text,
+        "container_is_linked": bool(pl.container_id),
         "purchase_orders": _covered_orders(pl),
         "source": pl.source or "PO",
         "packing_list_number": pl.packing_list_number,
@@ -78,7 +93,10 @@ def format_packing_list(pl: OrderPackingList) -> dict:
             {
                 "id": it.id,
                 "po_id": it.po_id,
-                "po_number": it.purchase_order.po_number if it.purchase_order else None,
+                "po_number": (
+                    it.purchase_order.po_number if it.purchase_order else it.po_number_text
+                ),
+                "po_is_linked": bool(it.po_id),
                 "po_item_id": it.po_item_id,
                 "item_code": it.item_code,
                 "description": it.description,
@@ -319,6 +337,7 @@ def _apply_lines(
 
         po_id = raw.get("po_id")
         po_item_id = raw.get("po_item_id")
+        po_number_text = (raw.get("po_number_text") or "").strip() or None
         po_item = None
 
         if po_item_id:
@@ -347,6 +366,7 @@ def _apply_lines(
         line = PackingListItem(
             packing_list_id=pl.id,
             po_id=int(po_id) if po_id else None,
+            po_number_text=None if po_id else po_number_text,
             po_item_id=int(po_item_id) if po_item_id else None,
             item_code=(raw.get("item_code") or "").strip() or None,
             description=description,
@@ -410,7 +430,7 @@ def _advance_orders(db: Session, pl: OrderPackingList) -> None:
                 ))
 
 
-def _suggest_number(db: Session, org_id, container, po=None) -> str:
+def _suggest_number(db: Session, org_id, container, po=None, container_no_text=None) -> str:
     """A packing list number, from the company's series or a readable fallback.
 
     next_document_number returns None for a company with no series configured
@@ -432,6 +452,16 @@ def _suggest_number(db: Session, org_id, container, po=None) -> str:
             .count()
         ) + 1
         return f"PL-{container.container_no}-{seq}"
+    if container_no_text:
+        seq = (
+            db.query(OrderPackingList)
+            .filter(
+                OrderPackingList.container_no_text == container_no_text,
+                OrderPackingList.is_deleted == False,
+            )
+            .count()
+        ) + 1
+        return f"PL-{container_no_text}-{seq}"
     if po is not None:
         return f"PL-{po.po_number}"
     return f"PL-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
@@ -536,9 +566,13 @@ async def create_packing_list(
         raise HTTPException(status_code=403, detail="Access forbidden: 'Add_PackingList' is required.")
 
     container_id = payload.get("container_id")
+    container_no_text = (payload.get("container_no_text") or "").strip() or None
     po_id = payload.get("po_id")
-    if not container_id and not po_id:
-        raise HTTPException(status_code=422, detail="A container or a purchase order is required")
+    if not container_id and not po_id and not container_no_text:
+        raise HTTPException(
+            status_code=422,
+            detail="A packing list needs a container or a purchase order to belong to.",
+        )
 
     org_id = None
     container = None
@@ -557,20 +591,26 @@ async def create_packing_list(
         _assert_packable(po)
         org_id = org_id or po.org_id
 
+    if org_id is None:
+        # A typed container has no organisation of its own, so the list belongs
+        # to the one the user is acting in.
+        org_id = org_context.org_id
+
     status = (payload.get("status") or CONFIRMED).upper()
     if status not in (DRAFT, CONFIRMED):
         raise HTTPException(status_code=422, detail="A new packing list is either a draft or confirmed")
 
     pl_number = (
         (payload.get("packing_list_number") or "").strip()
-        or _suggest_number(db, org_id, container, po)
+        or _suggest_number(db, org_id, container, po, container_no_text)
     )
 
     new_pl = OrderPackingList(
         org_id=org_id,
         po_id=po.id if po else None,
         container_id=container.Container_ID if container else None,
-        source="CONTAINER" if container else "PO",
+        container_no_text=None if container else container_no_text,
+        source="CONTAINER" if (container or container_no_text) else "PO",
         packing_list_number=pl_number,
         supplier_invoice_ref=(payload.get("supplier_invoice_ref") or "").strip() or None,
         package_count=payload.get("package_count"),
