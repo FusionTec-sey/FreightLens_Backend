@@ -214,25 +214,45 @@ async def draft_from_container(
         raise HTTPException(status_code=403, detail="Access forbidden: 'Add_PackingList' is required.")
 
     container_id = payload.get("container_id")
-    if not container_id:
+    container_no_text = (payload.get("container_no_text") or "").strip() or None
+    if not container_id and not container_no_text:
         raise HTTPException(status_code=422, detail="Container is required")
 
-    container = _load_container(db, int(container_id), org_context)
     exclude_id = payload.get("packing_list_id")
-
-    linked = [po for po in (container.purchase_orders or []) if not po.is_deleted]
     wanted = {int(v) for v in (payload.get("po_ids") or [])}
-    if wanted:
-        linked = [po for po in linked if po.id in wanted]
+
+    container = _load_container(db, int(container_id), org_context) if container_id else None
+    org_id = container.org_id if container else org_context.org_id
+
+    if container is not None:
+        # The orders the container carries, narrowed to the asked-for subset.
+        linked = [po for po in (container.purchase_orders or []) if not po.is_deleted]
+        if wanted:
+            linked = [po for po in linked if po.id in wanted]
+        no_orders_message = "No purchase orders are linked to this container yet."
+    elif wanted:
+        # A typed container has nothing to link through, so the orders are
+        # named outright. Still real orders: they seed, they have ceilings,
+        # and confirming still moves their quantities.
+        query = db.query(PurchaseOrder).options(selectinload(PurchaseOrder.items)).filter(
+            PurchaseOrder.id.in_(wanted), PurchaseOrder.is_deleted == False
+        )
+        linked = apply_org_filter(query, PurchaseOrder, org_context).all()
+        no_orders_message = "Those purchase orders could not be read."
+    else:
+        linked = []
+        no_orders_message = "Pick the purchase orders this container carries."
 
     if not linked:
         return {
-            "container_id": container.Container_ID,
-            "container_no": container.container_no,
-            "packing_list_number": _suggest_number(db, container.org_id, container),
+            "container_id": container.Container_ID if container else None,
+            "container_no": container.container_no if container else container_no_text,
+            "packing_list_number": _suggest_number(
+                db, org_id, container, container_no_text=container_no_text
+            ),
             "purchase_orders": [],
             "items": [],
-            "warnings": ["No purchase orders are linked to this container yet."],
+            "warnings": [no_orders_message],
         }
 
     held = draft_held_map(
@@ -281,10 +301,12 @@ async def draft_from_container(
             })
 
     return {
-        "container_id": container.Container_ID,
-        "container_no": container.container_no,
-        "bill_of_lading": container.BillOfLanding,
-        "packing_list_number": _suggest_number(db, container.org_id, container),
+        "container_id": container.Container_ID if container else None,
+        "container_no": container.container_no if container else container_no_text,
+        "bill_of_lading": container.BillOfLanding if container else None,
+        "packing_list_number": _suggest_number(
+            db, org_id, container, container_no_text=container_no_text
+        ),
         "purchase_orders": covered,
         "items": items,
         "warnings": warnings,
