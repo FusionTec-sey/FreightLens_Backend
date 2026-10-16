@@ -1969,6 +1969,77 @@ async def update_order_status_patch(
     return order_to_dict(order, is_accounts, can_view_supp)
 
 # ── Link Shipments (PO ↔ BL / Container) ──────────────────────────────────────
+@OrderRouter.get("/{order_id}/packing")
+def order_packing_summary(
+    order_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    """How much of this order is packed, and into which containers.
+
+    The mirror of the container's packing panel. A buyer chasing a part
+    shipment asks this question from the order, not from the container.
+    """
+    query = db.query(PurchaseOrder).options(
+        selectinload(PurchaseOrder.items)
+    ).filter(PurchaseOrder.id == order_id, PurchaseOrder.is_deleted == False)
+    po = apply_org_filter(query, PurchaseOrder, org_context).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    held = draft_held_map(db, po_ids=[po.id])
+
+    items = []
+    for item in (po.items or []):
+        if not is_packable_item(item):
+            continue
+        ordered = float(item.quantity_ordered or 0)
+        packed = float(item.quantity_packed or 0)
+        items.append({
+            "po_item_id": item.id,
+            "item_code": item.item_code,
+            "description": item.description,
+            "unit": item.unit or "PCS",
+            "quantity_ordered": ordered,
+            "quantity_packed": packed,
+            "draft_held": held.get(item.id, 0.0),
+            "remaining": max(0.0, ordered - packed - held.get(item.id, 0.0)),
+        })
+
+    from Model.containermgmt.Orders.OrderPackingList import OrderPackingList, PackingListItem
+    lists = (
+        db.query(OrderPackingList)
+        .join(PackingListItem, PackingListItem.packing_list_id == OrderPackingList.id)
+        .options(joinedload(OrderPackingList.container))
+        .filter(
+            PackingListItem.po_id == po.id,
+            PackingListItem.is_deleted == False,
+            OrderPackingList.is_deleted == False,
+        )
+        .distinct()
+        .all()
+    )
+
+    return {
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "items": items,
+        "fully_packed": all(i["remaining"] <= 0 for i in items) if items else False,
+        "packing_lists": [
+            {
+                "id": pl.id,
+                "packing_list_number": pl.packing_list_number,
+                "status": pl.status,
+                "container_id": pl.container_id,
+                "container_no": pl.container.container_no if pl.container else None,
+                "date_issued": pl.date_issued.isoformat() if pl.date_issued else None,
+            }
+            for pl in lists
+        ],
+    }
+
+
 @OrderRouter.post("/{order_id}/shipments")
 async def link_shipment(
     order_id: int,

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Packing List {{ packing_list_number }}</title>
+    <style>
+        @page { size: A4; margin: 18mm 14mm; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; }
+
+        /* A draft is not a document anyone should act on. Say so on every page,
+           across the page, so a printed draft cannot be mistaken for the real
+           thing once it has left the building. */
+        .watermark {
+            position: fixed; top: 40%; left: 0; width: 100%;
+            text-align: center; font-size: 72pt; font-weight: bold;
+            color: rgba(200, 30, 30, 0.14); transform: rotate(-28deg);
+            letter-spacing: 12px; z-index: -1;
+        }
+
+        .masthead { border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 14px; }
+        .masthead h1 { margin: 0; font-size: 18pt; letter-spacing: 1px; }
+        .masthead .number { float: right; font-family: monospace; font-size: 13pt; font-weight: bold; }
+
+        .blocks { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        .blocks td { vertical-align: top; width: 50%; padding: 0 10px 0 0; }
+        .block { border: 1px solid #bbb; padding: 8px; }
+        .block h3 { margin: 0 0 4px 0; font-size: 8pt; text-transform: uppercase;
+                    letter-spacing: 1px; color: #666; }
+        .block p { margin: 1px 0; }
+
+        .facts { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9pt; }
+        .facts th { background: #f1f1f1; text-align: left; padding: 5px 7px; border: 1px solid #ccc;
+                    text-transform: uppercase; font-size: 7.5pt; letter-spacing: .5px; color: #555; }
+        .facts td { padding: 5px 7px; border: 1px solid #ccc; }
+
+        table.lines { width: 100%; border-collapse: collapse; }
+        table.lines th { background: #1a1a1a; color: #fff; padding: 6px; font-size: 8pt;
+                         text-transform: uppercase; letter-spacing: .5px; text-align: left; }
+        table.lines td { border-bottom: 1px solid #ddd; padding: 6px; }
+        table.lines tr.group td { background: #eef2f7; font-weight: bold; font-size: 9pt; }
+        .right { text-align: right; }
+        .mono { font-family: monospace; }
+        .muted { color: #777; font-size: 8pt; }
+
+        tfoot td { border-top: 2px solid #1a1a1a; font-weight: bold; padding-top: 7px; }
+
+        .signatures { margin-top: 36px; width: 100%; border-collapse: collapse; }
+        .signatures td { width: 33%; padding-top: 28px; border-top: 1px solid #888;
+                         font-size: 8pt; color: #555; text-align: center; }
+        .foot { margin-top: 18px; font-size: 7.5pt; color: #888; }
+    </style>
+</head>
+<body>
+    {% if is_draft %}<div class="watermark">DRAFT</div>{% endif %}
+
+    <div class="masthead">
+        <span class="number">{{ packing_list_number }}</span>
+        <h1>PACKING LIST</h1>
+    </div>
+
+    <table class="blocks">
+        <tr>
+            <td>
+                <div class="block">
+                    <h3>Consignee</h3>
+                    <p>{{ consignee or "—" }}</p>
+                </div>
+            </td>
+            <td>
+                <div class="block">
+                    <h3>Supplier</h3>
+                    <p>{{ supplier or "—" }}</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="facts">
+        <tr>
+            <th>Container</th>
+            <th>Seal</th>
+            <th>Bill of Lading</th>
+            <th>Date Issued</th>
+            <th>Invoice Ref</th>
+        </tr>
+        <tr>
+            <td class="mono">{{ container_no or "—" }}</td>
+            <td class="mono">{{ seal_number or "—" }}</td>
+            <td class="mono">{{ bill_of_lading or "—" }}</td>
+            <td>{{ date_issued or "—" }}</td>
+            <td>{{ supplier_invoice_ref or "—" }}</td>
+        </tr>
+    </table>
+
+    <table class="lines">
+        <thead>
+            <tr>
+                <th style="width:5%">#</th>
+                <th style="width:16%">Item Code</th>
+                <th style="width:47%">Description</th>
+                <th style="width:12%" class="right">Qty</th>
+                <th style="width:8%">Unit</th>
+                <th style="width:12%">Cartons</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr class="group">
+                <td colspan="6">{{ group.label }}</td>
+            </tr>
+            {% for line in group.lines %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td class="mono">{{ line.item_code or "—" }}</td>
+                <td>
+                    {{ line.description }}
+                    {% if line.notes %}<div class="muted">{{ line.notes }}</div>{% endif %}
+                </td>
+                <td class="right">{{ line.quantity_packed }}</td>
+                <td>{{ line.unit }}</td>
+                <td>{{ line.carton_numbers or "—" }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3">
+                    Total {{ line_count }} line{{ "" if line_count == 1 else "s" }}
+                    across {{ order_count }} purchase order{{ "" if order_count == 1 else "s" }}
+                </td>
+                <td class="right">{{ total_quantity }}</td>
+                <td colspan="2"></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <table class="facts" style="margin-top:14px">
+        <tr>
+            <th>Packages</th>
+            <th>Gross Weight</th>
+            <th>Volume</th>
+            <th>Status</th>
+        </tr>
+        <tr>
+            <td>{{ package_count or "—" }}</td>
+            <td>{{ total_gross_weight or "—" }} {% if total_gross_weight %}kg{% endif %}</td>
+            <td>{{ total_cbm or "—" }} {% if total_cbm %}CBM{% endif %}</td>
+            <td>{{ status }}</td>
+        </tr>
+    </table>
+
+    {% if notes %}
+    <div class="block" style="margin-top:12px">
+        <h3>Notes</h3>
+        <p>{{ notes }}</p>
+    </div>
+    {% endif %}
+
+    <table class="signatures">
+        <tr>
+            <td>Packed by</td>
+            <td>Checked by</td>
+            <td>Received by</td>
+        </tr>
+    </table>
+
+    <div class="foot">
+        Generated {{ generated_at }}{% if created_by %} · prepared by {{ created_by }}{% endif %}
+    </div>
+</body>
+</html>

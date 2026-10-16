@@ -133,3 +133,16 @@ def generate_defect_report_pdf(d) -> bytes:
 </body>
 </html>"""
     return compile_pdf_from_html(html)
+
+
+def generate_packing_list_pdf(data: dict) -> bytes:
+    """The packing list as a supplier or a customs agent reads it.
+
+    A draft prints with a watermark across every page. An unmarked draft
+    leaving the building as a real document is the failure worth designing
+    against, and the status line alone is too easy to miss.
+    """
+    template_dir = os.path.join("templates", "report")
+    env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
+    template = env.get_template("packing_list.html")
+    return compile_pdf_from_html(template.render(data))

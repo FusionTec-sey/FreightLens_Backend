@@ -1,7 +1,9 @@
+import io
 import logging
 from datetime import datetime, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_, and_, desc
 
@@ -17,6 +19,7 @@ from auth.dependencies import get_current_user, get_org_context
 from auth.security_guards import has_permission
 from Utils.org_filter import OrgContext, apply_org_filter
 from Services.document_number_service import next_document_number
+from Utils.reportGenerator import generate_packing_list_pdf
 from Routes.Orders.PackingQuantityService import (
     draft_held_map, open_items, remaining_for_item, is_packable_item,
 )
@@ -403,6 +406,80 @@ def _advance_orders(db: Session, pl: OrderPackingList) -> None:
                     bill_of_lading_no=(container.BillOfLanding if container else None) or None,
                     shipment_status="IN_TRANSIT",
                 ))
+
+
+def _consignee_name(db: Session, bl) -> Optional[str]:
+    """The consignee of a bill of lading is an organisation, by id."""
+    if not bl or not getattr(bl, "Consignee", None):
+        return None
+    from Model.Credentials.Organisation import Organisation
+    org = db.query(Organisation).filter(Organisation.id == bl.Consignee).first()
+    return getattr(org, "display_name", None) if org else None
+
+
+@PackingListRouter.get("/{packing_id}/pdf")
+async def get_packing_list_pdf(
+    packing_id: int,
+    db: Session = Depends(get_db),
+    org_context: OrgContext = Depends(get_org_context),
+    current_user: User = Depends(get_current_user)
+):
+    pl = _base_query(db, org_context).filter(OrderPackingList.id == packing_id).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail="Packing list not found")
+
+    container = pl.container
+    bl = getattr(container, "bill_of_landing", None) if container else None
+    lines = [it for it in (pl.items or []) if not it.is_deleted]
+
+    groups = []
+    for covered in _covered_orders(pl):
+        group_lines = [it for it in lines if it.po_id == covered["id"]]
+        if group_lines:
+            label = covered["po_number"] or f"Order #{covered['id']}"
+            if covered["company"]:
+                label = f"{label} — {covered['company']}"
+            groups.append({"label": label, "lines": group_lines})
+
+    # Hand-added goods last, and named so nobody reads them as ordered.
+    off_po = [it for it in lines if not it.po_id]
+    if off_po:
+        groups.append({"label": "Not on any purchase order", "lines": off_po})
+
+    supplier = next(
+        (c["company"] for c in _covered_orders(pl) if c["company"]), None
+    )
+
+    pdf_bytes = generate_packing_list_pdf({
+        "packing_list_number": pl.packing_list_number,
+        "is_draft": (pl.status or "").upper() == DRAFT,
+        "status": pl.status,
+        "container_no": container.container_no if container else None,
+        "seal_number": getattr(container, "seal_number", None) if container else None,
+        "bill_of_lading": getattr(bl, "BillOfLanding", None) if bl else (
+            container.BillOfLanding if container else None
+        ),
+        "consignee": _consignee_name(db, bl),
+        "supplier": supplier,
+        "date_issued": pl.date_issued.strftime("%d %b %Y") if pl.date_issued else None,
+        "supplier_invoice_ref": pl.supplier_invoice_ref,
+        "package_count": pl.package_count,
+        "total_gross_weight": float(pl.total_gross_weight) if pl.total_gross_weight else None,
+        "total_cbm": float(pl.total_cbm) if pl.total_cbm else None,
+        "notes": pl.notes,
+        "groups": groups,
+        "line_count": len(lines),
+        "order_count": len(_covered_orders(pl)),
+        "total_quantity": sum(float(it.quantity_packed or 0) for it in lines),
+        "created_by": getattr(pl.created_by_user, "username", None),
+        "generated_at": datetime.now().strftime("%d %b %Y %H:%M"),
+    })
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{pl.packing_list_number}.pdf"'}
+    )
 
 
 @PackingListRouter.get("/{packing_id}")
