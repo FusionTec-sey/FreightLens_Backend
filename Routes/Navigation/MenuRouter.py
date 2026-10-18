@@ -590,13 +590,41 @@ class NavigationAPI:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Those roles are not available to this organisation.",
                     )
-            # A role belongs to one menu, so clear this menu's assignment and
-            # release each wanted role from whichever menu held it before.
-            db.execute(menu_roles.delete().where(menu_roles.c.menu_id == menu.id))
+            # A role belongs to exactly one menu. Taking one that another menu
+            # already serves used to succeed silently, which left the other menu
+            # with no audience and reported the same success as a clean save -- so
+            # the only sign anything had happened was the other menu turning "Not
+            # in use". Refuse instead, and name what holds the role.
             if wanted:
-                db.execute(
-                    menu_roles.delete().where(menu_roles.c.role_id.in_(wanted))
+                clashes = (
+                    db.query(Role.name, Menu.name)
+                    .select_from(menu_roles)
+                    .join(Role, Role.id == menu_roles.c.role_id)
+                    .join(Menu, Menu.id == menu_roles.c.menu_id)
+                    .filter(
+                        menu_roles.c.role_id.in_(wanted),
+                        menu_roles.c.menu_id != menu.id,
+                        Menu.is_deleted.is_(False),
+                    )
+                    .order_by(Role.name)
+                    .all()
                 )
+                if clashes:
+                    held = "; ".join(
+                        f'"{role_name}" is already served by the menu "{menu_name}"'
+                        for role_name, menu_name in clashes
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"{held}. A role can only receive one menu. Remove the "
+                            "role from that menu first, then assign it here."
+                        ),
+                    )
+
+            # No other menu claims these now, so only this menu's own rows need
+            # clearing before the replacement set goes in.
+            db.execute(menu_roles.delete().where(menu_roles.c.menu_id == menu.id))
             for role_id in sorted(wanted):
                 db.execute(menu_roles.insert().values(role_id=role_id, menu_id=menu.id))
 

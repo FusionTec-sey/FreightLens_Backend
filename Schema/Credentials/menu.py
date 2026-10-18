@@ -102,8 +102,9 @@ class MenuCreateIn(BaseModel):
 class MenuUpdateIn(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=255)
-    # Replaces the whole assignment. A role listed here is moved off whatever
-    # menu previously claimed it, so a role is never served two menus.
+    # Replaces the whole assignment. A role already served by another menu is
+    # rejected with 409 rather than taken from it, so a role is never served two
+    # menus and no menu silently loses its audience.
     role_ids: Optional[List[int]] = None
     # Platform administrators only: share this menu with every company.
     is_shared: Optional[bool] = None
