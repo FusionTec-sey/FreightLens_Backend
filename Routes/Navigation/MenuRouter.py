@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from fastapi import Depends, HTTPException, status
 from fastapi_utils.cbv import cbv
 from fastapi_utils.inferring_router import InferringRouter
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from Model.Credentials.Organisation import Organisation
@@ -590,12 +590,23 @@ class NavigationAPI:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Those roles are not available to this organisation.",
                     )
-            # A role belongs to exactly one menu. Taking one that another menu
-            # already serves used to succeed silently, which left the other menu
-            # with no audience and reported the same success as a clean save -- so
-            # the only sign anything had happened was the other menu turning "Not
-            # in use". Refuse instead, and name what holds the role.
+            # Taking a role another menu already served used to succeed silently:
+            # it deleted the other menu's claim and reported the same success as a
+            # clean save, so the only sign was that menu turning "Not in use".
+            #
+            # Two menus may both serve a role as long as _resolve_menu_for_user can
+            # still pick one without guessing: a company's own menu beats a shared
+            # one, and menus in different companies never meet. The clash is only
+            # with a menu in the same resolution scope -- same company, or both
+            # shared -- where nothing would decide between them.
             if wanted:
+                same_scope = (
+                    Menu.is_shared.is_(True)
+                    if menu.is_shared
+                    else and_(
+                        Menu.is_shared.is_(False), Menu.org_id == menu.org_id
+                    )
+                )
                 clashes = (
                     db.query(Role.name, Menu.name)
                     .select_from(menu_roles)
@@ -605,6 +616,7 @@ class NavigationAPI:
                         menu_roles.c.role_id.in_(wanted),
                         menu_roles.c.menu_id != menu.id,
                         Menu.is_deleted.is_(False),
+                        same_scope,
                     )
                     .order_by(Role.name)
                     .all()
@@ -614,16 +626,20 @@ class NavigationAPI:
                         f'"{role_name}" is already served by the menu "{menu_name}"'
                         for role_name, menu_name in clashes
                     )
+                    where = (
+                        "across all companies" if menu.is_shared else "in this company"
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=(
-                            f"{held}. A role can only receive one menu. Remove the "
-                            "role from that menu first, then assign it here."
+                            f"{held} {where}. A role can only receive one menu "
+                            f"{where}. Remove the role from that menu first, then "
+                            "assign it here."
                         ),
                     )
 
-            # No other menu claims these now, so only this menu's own rows need
-            # clearing before the replacement set goes in.
+            # Only this menu's own rows need clearing: a role served by a menu in
+            # another scope keeps that claim, because both can resolve cleanly.
             db.execute(menu_roles.delete().where(menu_roles.c.menu_id == menu.id))
             for role_id in sorted(wanted):
                 db.execute(menu_roles.insert().values(role_id=role_id, menu_id=menu.id))
