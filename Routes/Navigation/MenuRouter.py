@@ -25,6 +25,10 @@ from Model.Credentials.roles import Role
 from Model.Credentials.user_org_roles import user_org_roles
 from Model.Credentials.users import User
 from Model.db import get_db
+from Services.menu_transfer import (
+    MenuTransferError, build_menu, inspect_document, refusal_message,
+    registry_fingerprint, serialize_menu, unique_name,
+)
 from Schema.Credentials.menu import (
     AppPageOut,
     MenuCreateIn,
@@ -167,9 +171,10 @@ def _resolve_menu_for_user(db: Session, org_id: int, user_id: int) -> Optional[M
 
     Only a menu assigned to one of the user's roles in this organisation, from
     the menus this company may use: its own, plus any shared across companies. A
-    role belongs to at most one menu, but a user may hold several roles, so ties
-    break on the lowest menu id: deterministic, so the same user always gets the
-    same navigation.
+    role belongs to at most one menu, but a user may hold several roles. The
+    company's own menu wins over one shared with it, and the lowest menu id
+    breaks what is left: deterministic, so the same user always gets the same
+    navigation.
 
     Returns None when no role of theirs has a menu. There is no organisation-wide
     default, so that means no sidebar.
@@ -193,7 +198,12 @@ def _resolve_menu_for_user(db: Session, org_id: int, user_id: int) -> Optional[M
                 _menu_scope(org_id),
                 Menu.is_deleted.is_(False),
             )
-            .order_by(Menu.id)
+            # A company's own menu beats one shared with it. On id alone a
+            # shared menu made earlier would quietly take over the sidebar of
+            # every company that has designed its own, which is the opposite of
+            # what sharing one is for. Lowest id still breaks the remaining tie,
+            # so the same user always gets the same navigation.
+            .order_by((Menu.org_id != org_id), Menu.id)
             .first()
         )
         if assigned is not None:
@@ -253,6 +263,26 @@ def _with_escape_hatches(menu: List[MenuNodeOut], policy: AccessPolicy) -> List[
             continue
         menu = [*menu, _node_from_page(page_key, page.title, page.default_icon, locked=False)]
     return menu
+
+
+def _menu_detail(db: Session, menu: Menu) -> MenuDetailOut:
+    """One menu with its items, the shape every write here answers in."""
+    items = (
+        db.query(MenuItem)
+        .filter(MenuItem.menu_id == menu.id, MenuItem.is_deleted.is_(False))
+        .order_by(MenuItem.sort_order, MenuItem.id)
+        .all()
+    )
+    return MenuDetailOut(
+        id=menu.id,
+        org_id=menu.org_id,
+        org_name=None if menu.is_shared else _org_label(db, menu.org_id),
+        is_shared=bool(menu.is_shared),
+        name=menu.name,
+        description=menu.description,
+        role_ids=_assigned_role_ids(db, menu.id),
+        items=[MenuItemOut.model_validate(item) for item in items],
+    )
 
 
 @cbv(MenuRouter)
@@ -628,6 +658,150 @@ class NavigationAPI:
             menu.id, menu.org_id, current_user.id,
         )
         return {"ok": True}
+
+    # ── Moving a menu between companies and installations ────────────────────
+
+    @MenuRouter.get("/navigation/menus/{menu_id}/export")
+    async def export_menu(
+        self,
+        menu_id: int,
+        db: Session = Depends(get_db),
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy),
+    ):
+        """The menu as a portable document.
+
+        A read of something the caller can already see, so viewing is enough.
+        What comes back holds the design and nothing that identifies where it
+        came from: no ids, no organisation, no roles.
+        """
+        policy.require_any("View_Menu", "Manage_Menu")
+        menu = _load_menu(db, menu_id, org_context)
+        return serialize_menu(db, menu, org_label=_org_label(db, menu.org_id))
+
+    @MenuRouter.post("/navigation/menus/import/preview")
+    async def preview_menu_import(
+        self,
+        payload: dict,
+        db: Session = Depends(get_db),
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy),
+    ):
+        """What importing this file would do, without doing it."""
+        policy.require_any("Manage_Menu")
+        try:
+            report = inspect_document(db, payload.get("document"))
+        except MenuTransferError as exc:
+            raise HTTPException(status_code=422, detail=exc.message)
+
+        return {
+            "can_import": report["can_import"],
+            "name": report["name"],
+            "final_name": unique_name(db, org_context.org_id, report["name"]),
+            "description": report["description"],
+            "item_count": report["item_count"],
+            "page_count": report["page_count"],
+            "separator_count": report["separator_count"],
+            "missing_pages": report["missing_pages"],
+            "exported_from": report["exported_from"],
+            "exported_at": report["exported_at"],
+            "message": None if report["can_import"] else refusal_message(report, db),
+            "registry_here": registry_fingerprint(db),
+        }
+
+    @MenuRouter.post("/navigation/menus/import", response_model=MenuDetailOut)
+    async def import_menu(
+        self,
+        payload: dict,
+        db: Session = Depends(get_db),
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy),
+        current_user=Depends(get_current_user),
+    ):
+        """Create the menu here, from a file.
+
+        Manage_Menu is checked in the organisation the caller is acting in,
+        which is where the write lands. It reaches nobody until a role is
+        assigned to it.
+        """
+        policy.require_any("Manage_Menu")
+        try:
+            report = inspect_document(db, payload.get("document"))
+            menu = build_menu(
+                db,
+                report,
+                org_id=org_context.org_id,
+                user_id=current_user.id,
+                name_override=(payload.get("name") or "").strip() or None,
+            )
+        except MenuTransferError as exc:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=exc.message)
+
+        db.commit()
+        db.refresh(menu)
+        logger.info(
+            "Menu imported id=%s org_id=%s by user_id=%s items=%s",
+            menu.id, menu.org_id, current_user.id, report["item_count"],
+        )
+        return _menu_detail(db, menu)
+
+    @MenuRouter.post("/navigation/menus/{menu_id}/copy-to")
+    async def copy_menu_to_organisations(
+        self,
+        menu_id: int,
+        payload: dict,
+        db: Session = Depends(get_db),
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy),
+        current_user=Depends(get_current_user),
+    ):
+        """Copy this menu into other companies, within this installation.
+
+        The same serialise-and-build as the file, with the file left out. Each
+        copy is independent: editing one never disturbs another, which is the
+        whole reason this is a copy rather than a menu shared between them.
+        """
+        policy.require_any("Manage_Menu")
+        menu = _load_menu(db, menu_id, org_context)
+
+        wanted = [int(v) for v in (payload.get("org_ids") or [])]
+        if not wanted:
+            raise HTTPException(status_code=422, detail="Name at least one company to copy into.")
+
+        allowed = set(org_context.allowed_org_ids)
+        refused = [org_id for org_id in wanted if org_id not in allowed]
+        if refused:
+            raise HTTPException(
+                status_code=403,
+                detail="You are not assigned to every company you asked to copy into.",
+            )
+
+        document = serialize_menu(db, menu, org_label=_org_label(db, menu.org_id))
+        created = []
+        try:
+            for org_id in dict.fromkeys(wanted):
+                report = inspect_document(db, document)
+                copy = build_menu(db, report, org_id=org_id, user_id=current_user.id)
+                created.append({
+                    "org_id": org_id,
+                    "org_name": _org_label(db, org_id),
+                    "menu_id": copy.id,
+                    "name": copy.name,
+                })
+        except MenuTransferError as exc:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=exc.message)
+
+        db.commit()
+        logger.info(
+            "Menu %s copied into %s organisation(s) by user_id=%s",
+            menu.id, len(created), current_user.id,
+        )
+        return {
+            "copied": created,
+            "note": "Each copy reaches nobody until a role in that company is assigned to it.",
+        }
 
     @MenuRouter.put("/navigation/menus/{menu_id}/items")
     async def save_menu(
