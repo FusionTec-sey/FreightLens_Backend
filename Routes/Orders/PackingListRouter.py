@@ -1,4 +1,5 @@
 import io
+import math
 import logging
 from datetime import datetime, date
 from typing import Optional, List
@@ -150,6 +151,8 @@ def _assert_packable(po: PurchaseOrder) -> None:
 @PackingListRouter.get("")
 @PackingListRouter.get("/")
 async def list_packing_lists(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=200),
     po_id: Optional[int] = Query(None),
     container_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -182,19 +185,30 @@ async def list_packing_lists(
             or_(
                 OrderPackingList.packing_list_number.ilike(s),
                 OrderPackingList.supplier_invoice_ref.ilike(s),
+                OrderPackingList.container_no_text.ilike(s),
                 PurchaseOrder.po_number.ilike(s),
                 OrderPackingList.container.has(ContainerDetails.container_no.ilike(s)),
                 OrderPackingList.items.any(
                     and_(
                         PackingListItem.is_deleted == False,
-                        PackingListItem.purchase_order.has(PurchaseOrder.po_number.ilike(s)),
+                        or_(
+                            PackingListItem.po_number_text.ilike(s),
+                            PackingListItem.purchase_order.has(PurchaseOrder.po_number.ilike(s)),
+                        ),
                     )
                 ),
             )
         )
 
-    lists = query.order_by(desc(OrderPackingList.id)).all()
-    return [format_packing_list(pl) for pl in lists]
+    total = query.order_by(None).count()
+    lists = query.order_by(desc(OrderPackingList.id)).offset((page - 1) * limit).limit(limit).all()
+    return {
+        "items": [format_packing_list(pl) for pl in lists],
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit) if total else 1,
+        "limit": limit,
+    }
 
 
 @PackingListRouter.post("/draft-from-container")
