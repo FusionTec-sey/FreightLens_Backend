@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, status
 from Model.Credentials.users import User
 from Utils.org_filter import OrgContext
 from auth.policy import AccessPolicy, get_request_policy
+from auth.policy.catalog import derived_view_names
 from auth.dependencies import get_current_user, get_org_context
 
 # Explicit permissions that grant financial visibility / mutation
@@ -95,11 +96,11 @@ def has_permission(user: User, permission_name: str) -> bool:
             p_name = getattr(p, "name", "")
             if p_name == permission_name:
                 return True
-            # Implicit viewing permission: If user has Edit/Add/Delete for a resource, they can View it
-            if permission_name.startswith("View_"):
-                suffix = permission_name[5:]
-                if p_name in [f"Edit_{suffix}", f"Add_{suffix}", f"Delete_{suffix}", suffix]:
-                    return True
+            # Edit/Add/Delete of a resource implies viewing it. The rule itself
+            # lives in the catalog, so this legacy path and AccessPolicy.has
+            # cannot drift apart.
+            if p_name in derived_view_names(permission_name):
+                return True
     return False
 
 def can_access_sourcing(user: User, specific_permission: Optional[str] = None) -> bool:

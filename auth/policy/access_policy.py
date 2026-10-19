@@ -13,7 +13,7 @@ from Model.containermgmt.Report.ReportFieldClass import ReportFieldClass
 from Model.db import get_db
 from Utils.org_filter import OrgContext
 from auth.dependencies import get_current_user, get_org_context
-from .catalog import PERMISSION_BY_NAME
+from .catalog import PERMISSION_BY_NAME, derived_view_names
 
 FieldMode = Literal["hidden", "read", "edit"]
 
@@ -31,7 +31,20 @@ class AccessPolicy:
     field_edit_permissions: Mapping[str, str] = field(default_factory=dict)
 
     def has(self, permission_name: str) -> bool:
-        return self.is_platform_admin or permission_name in self.permission_names
+        """Whether this policy grants a permission, directly or by implication.
+
+        Edit_X, Add_X and Delete_X each imply View_X: nothing is editable but
+        invisible. The legacy role walk in security_guards and the page registry
+        have always applied this, but it was lost the moment a request had an
+        AccessPolicy attached, because this method only matched exact names --
+        so the same user could pass a check on one route and fail it on another.
+        """
+        if self.is_platform_admin or permission_name in self.permission_names:
+            return True
+        return any(
+            name in self.permission_names
+            for name in derived_view_names(permission_name)
+        )
 
     def has_any(self, *permission_names: str) -> bool:
         return any(self.has(name) for name in permission_names)

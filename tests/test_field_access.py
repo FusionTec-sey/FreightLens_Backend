@@ -13,7 +13,7 @@ from auth.policy.field_registry import (
     field_class_for,
     partition_by_mode,
 )
-from auth.policy.catalog import PERMISSION_BY_NAME
+from auth.policy.catalog import PERMISSION_BY_NAME, derived_view_names
 
 VIEW_PERMISSIONS = {code: spec["view"] for code, spec in FIELD_CLASS_BY_CODE.items()}
 EDIT_PERMISSIONS = {code: spec["edit"] for code, spec in FIELD_CLASS_BY_CODE.items()}
@@ -157,6 +157,55 @@ def test_nested_bill_of_lading_keys_are_gated():
         policy, "container", ["bill_of_landing.FreeDays"]
     )
     assert refused == ["bill_of_landing.FreeDays"]
+
+
+def test_edit_implies_view_on_the_policy_itself():
+    """The rule has to hold on AccessPolicy.has, not only in the legacy role
+    walk. Container routes now depend on get_request_policy, and before this
+    the implication silently vanished the moment a policy was attached -- the
+    same user passing a check on one route and failing it on another."""
+    policy = _policy("Edit_Container")
+
+    assert policy.has("Edit_Container")
+    assert policy.has("View_Container")
+    assert policy.has_any("View_Container")
+
+
+def test_add_and_delete_also_imply_view():
+    assert _policy("Add_Order").has("View_Order")
+    assert _policy("Delete_Order").has("View_Order")
+
+
+def test_implication_only_runs_one_way():
+    """View_X must never grant Edit_X, or read-only access would not exist."""
+    policy = _policy("View_Container")
+
+    assert policy.has("View_Container")
+    assert not policy.has("Edit_Container")
+    assert not policy.has("Delete_Container")
+
+
+def test_implication_is_limited_to_catalogued_names():
+    policy = _policy("Edit_Container")
+
+    assert derived_view_names("View_NotARealResource") == ()
+    assert not policy.has("View_NotARealResource")
+
+
+def test_manage_does_not_imply_view():
+    """The frontend offers Manage_ as a convenience when granting, but making
+    it imply viewing server-side would widen access to priced data."""
+    assert "Manage_Financials" not in derived_view_names("View_Financials")
+    assert not _policy("Manage_Financials").has("View_Financials")
+
+
+def test_every_field_class_edit_permission_implies_its_view_permission():
+    """A role granted only the edit half must still resolve to edit mode, and
+    must satisfy any plain View_ check elsewhere in the codebase."""
+    for code, view, edit, _description in FIELD_CLASS_SPECS:
+        policy = _policy(edit)
+        assert policy.field_mode(code) == "edit", code
+        assert policy.has(view), f"{edit} should imply {view}"
 
 
 def test_every_declared_field_permission_is_catalogued():

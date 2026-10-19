@@ -37,6 +37,66 @@ Always check permissions server-side before returning sensitive data.
 
 ---
 
+## Introducing a Permission
+
+Every permission must be declared in `auth/policy/catalog.py`. A name that is
+not in the catalog is filtered out of the policy by `AccessPolicy.from_role_sets`
+and is therefore **permanently denied** — it will not error, it will simply
+never grant anything. (`View_Personal_Data` sat in that state for months.)
+
+### Name it `<Action>_<Resource>`
+
+`View_`, `Add_`, `Edit_`, `Delete_`, `Manage_`. The prefix is load-bearing, not
+decoration — the implication rule below reads it.
+
+### Edit implies View. Always.
+
+Holding `Edit_X`, `Add_X` or `Delete_X` counts as holding `View_X`. Nothing is
+editable but invisible, so a role never needs `View_X` spelled out beside
+`Edit_X`, and an admin cannot create that broken state by forgetting one.
+
+The rule has exactly one definition, `derived_view_names()` in
+`auth/policy/catalog.py`. `AccessPolicy.has`, `page_registry` and the legacy
+role walk in `security_guards` all resolve through it. **Do not reimplement
+it** — it previously existed in three places, and the copy inside
+`AccessPolicy.has` was missing, so the implication silently vanished whenever a
+request had a policy attached and the same user passed a check on one route and
+failed it on another.
+
+It runs one way only: `View_X` never grants `Edit_X`, or read-only access could
+not exist. `Manage_X` does not imply `View_X` either; the role editor offers
+that as a convenience when granting, but inferring it server-side would widen
+access to priced data.
+
+### Field classes need both halves
+
+A field class in `auth/policy/field_registry.py` is gated by a pair:
+
+| Holds | Mode |
+|---|---|
+| `Edit_<Class>` | editable |
+| `View_<Class>` | visible, locked |
+| neither | hidden |
+
+So a new class declares both names, both catalogued. `AccessPolicy.field_mode`
+resolves the three states; `allows_field_class` stays a plain boolean for the
+reporting classes, which only ever redact and have no edit half.
+
+Reuse an existing `View_` name only after checking nothing else relies on it
+being inert — the role editor hides a list of legacy column permissions in
+`REDUNDANT_VIEW_PERMISSIONS`, and a name left there would be unselectable and
+silently stripped when a role is saved.
+
+### Checklist
+
+1. Declared in `PERMISSION_CATALOG`, with the module it belongs to.
+2. Both halves present if it gates a field class.
+3. Not in the frontend's `REDUNDANT_VIEW_PERMISSIONS`.
+4. Enforced server-side — a permission nothing checks is worse than none, because it reads as protection.
+5. Covered by a test in `tests/test_field_access.py` or `tests/test_permission_catalog.py`.
+
+---
+
 ## Vendor / Supplier Data Protection
 
 Vendor and supplier information is permission-controlled.

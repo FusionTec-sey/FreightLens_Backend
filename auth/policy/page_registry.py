@@ -17,7 +17,7 @@ from typing import Optional, Sequence
 
 from sqlalchemy.orm import Session
 
-from .catalog import PERMISSION_BY_NAME
+from .catalog import PERMISSION_BY_NAME, derived_view_names
 
 # Modules a tenant can subscribe to. Mirrors Organisation.modules.
 KNOWN_MODULES = frozenset({"LOGISTICS", "ORDERS", "INVENTORY"})
@@ -174,16 +174,9 @@ for _page in PAGE_REGISTRY:
 
 
 def _derived_view_names(permission_name: str) -> tuple[str, ...]:
-    """Names that imply a ``View_X`` permission, matching the frontend PrivateRoute.
-
-    Only names declared in the permission catalog are returned, so the registry can
-    never authorize an undeclared permission string.
-    """
-    if not permission_name.startswith("View_"):
-        return ()
-    suffix = permission_name[len("View_"):]
-    candidates = (f"Edit_{suffix}", f"Add_{suffix}", f"Delete_{suffix}", suffix)
-    return tuple(name for name in candidates if name in PERMISSION_BY_NAME)
+    """Deprecated alias. The rule lives in catalog.derived_view_names, so that
+    page visibility and the policy's own checks cannot drift apart."""
+    return derived_view_names(permission_name)
 
 
 def policy_allows_page(policy, page: PageSpec) -> bool:

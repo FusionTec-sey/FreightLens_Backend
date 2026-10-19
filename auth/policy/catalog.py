@@ -146,6 +146,34 @@ if len(PERMISSION_BY_NAME) != len(PERMISSION_CATALOG):
     raise RuntimeError("Permission catalog contains duplicate names")
 
 
+# Holding any of these for a resource implies being able to view it. Nothing is
+# editable but invisible, so a role never needs View_X spelled out beside
+# Edit_X -- and an admin cannot create that broken state by forgetting one.
+#
+# This is the single definition. AccessPolicy.has, the page registry and the
+# legacy role walk in security_guards all resolve through it, so the rule cannot
+# hold in one code path and not another.
+#
+# Manage_X is deliberately absent. The frontend offers it as a convenience when
+# granting, but Manage_Financials implying View_Financials server-side would
+# widen access to priced data, so that stays an explicit grant.
+VIEW_IMPLYING_PREFIXES = ("Edit_", "Add_", "Delete_")
+
+
+def derived_view_names(permission_name: str) -> tuple[str, ...]:
+    """Catalogued names whose holder also counts as holding ``permission_name``.
+
+    Returns () for anything that is not a ``View_`` name. Only names declared in
+    the catalog are returned, so this can never authorize an undeclared string.
+    """
+    if not permission_name.startswith("View_"):
+        return ()
+    suffix = permission_name[len("View_"):]
+    candidates = tuple(f"{prefix}{suffix}" for prefix in VIEW_IMPLYING_PREFIXES)
+    candidates += (suffix,)
+    return tuple(name for name in candidates if name in PERMISSION_BY_NAME)
+
+
 def sync_permission_catalog(db: Session) -> dict[str, Permission]:
     existing = {permission.name: permission for permission in db.query(Permission).all()}
     for spec in PERMISSION_CATALOG:
