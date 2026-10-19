@@ -65,12 +65,16 @@ def test_edit_permission_implies_viewing():
 
 
 def test_unclassified_fields_stay_open():
+    """Every field on the container tab is classified now, so this uses B/L
+    fields, which carry their own guards rather than a field class."""
     policy = _policy("View_Container")
 
-    assert field_class_for("container", "type") is None
+    assert field_class_for("container", "bill_of_landing.Vessel") is None
     assert policy.field_mode(None) == "edit"
-    writable, refused = partition_by_mode(policy, "container", ["type"])
-    assert writable == ["type"]
+    writable, refused = partition_by_mode(
+        policy, "container", ["bill_of_landing.Vessel", "not_a_registered_field"]
+    )
+    assert writable == ["bill_of_landing.Vessel", "not_a_registered_field"]
     assert refused == []
 
 
@@ -138,15 +142,18 @@ def test_partition_splits_a_container_payload_by_mode():
         "Edit_ContainerMilestone",
         "Edit_Material",
         "Edit_ContainerNote",
+        "Edit_Status",
+        "Edit_ContainerType",
     )
 
     writable, refused = partition_by_mode(
         policy,
         "container",
-        ["container_no", "tax", "FreeDays", "in_bound", "materials", "note", "type"],
+        ["container_no", "tax", "FreeDays", "in_bound", "materials", "note",
+         "type", "status"],
     )
 
-    assert writable == ["in_bound", "materials", "note", "type"]
+    assert writable == ["in_bound", "materials", "note", "type", "status"]
     assert refused == ["container_no", "tax", "FreeDays"]
 
 

@@ -70,6 +70,12 @@ FIELD_CLASS_SPECS: tuple[tuple[str, str, str | None, str], ...] = (
         "Edit_Status",
         "Operational status of a container and its bill of lading",
     ),
+    (
+        "CONTAINER_TYPE",
+        "View_ContainerType",
+        "Edit_ContainerType",
+        "Container type, such as 20ft or 40ft",
+    ),
 )
 
 # -- entity -> field key -> field class --------------------------------------
@@ -93,12 +99,15 @@ _CONTAINER_FIELDS: Mapping[str, str] = {
     # field alone would leave the cascade as a way round it.
     "status": "CONTAINER_STATUS",
     "bill_of_landing.status": "CONTAINER_STATUS",
+    "type": "CONTAINER_TYPE",
     # Read-only companions the detail response exposes under their own names.
     # Listing them here keeps redaction and write gating on one source of truth;
     # they never appear in a write payload, so gating them costs nothing.
     "emptied_at_rel": "CONTAINER_MILESTONE",
     "purchase_orders": "CONTAINER_CARGO",
     "status_rel": "CONTAINER_STATUS",
+    "type_rel": "CONTAINER_TYPE",
+    "containerType": "CONTAINER_TYPE",
 }
 
 FIELD_REGISTRY: Mapping[str, Mapping[str, str]] = MappingProxyType({
