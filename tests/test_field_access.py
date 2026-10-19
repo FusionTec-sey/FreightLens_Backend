@@ -67,11 +67,40 @@ def test_edit_permission_implies_viewing():
 def test_unclassified_fields_stay_open():
     policy = _policy("View_Container")
 
-    assert field_class_for("container", "status") is None
+    assert field_class_for("container", "type") is None
     assert policy.field_mode(None) == "edit"
-    writable, refused = partition_by_mode(policy, "container", ["status", "type"])
-    assert writable == ["status", "type"]
+    writable, refused = partition_by_mode(policy, "container", ["type"])
+    assert writable == ["type"]
     assert refused == []
+
+
+def test_status_is_gated_on_both_the_container_and_the_bill_of_lading():
+    """Setting status on a B/L cascades to every container on it, so gating the
+    container field alone would leave the cascade as a way round it."""
+    assert field_class_for("container", "status") == "CONTAINER_STATUS"
+    assert field_class_for("container", "bill_of_landing.status") == "CONTAINER_STATUS"
+
+    locked = _policy("View_Status")
+    assert locked.field_mode("CONTAINER_STATUS") == "read"
+    _, refused = partition_by_mode(
+        locked, "container", ["status", "bill_of_landing.status"]
+    )
+    assert refused == ["status", "bill_of_landing.status"]
+
+    allowed = _policy("Edit_Status")
+    writable, refused = partition_by_mode(
+        allowed, "container", ["status", "bill_of_landing.status"]
+    )
+    assert writable == ["status", "bill_of_landing.status"]
+    assert refused == []
+
+
+def test_every_date_field_is_covered_by_the_milestone_class():
+    for key in (
+        "in_bound", "out_bound", "unloaded_at_port", "empty_date",
+        "emptied_at", "bill_of_landing.ArrivalDate",
+    ):
+        assert field_class_for("container", key) == "CONTAINER_MILESTONE", key
 
 
 def test_platform_admin_bypasses_every_class():
@@ -114,10 +143,10 @@ def test_partition_splits_a_container_payload_by_mode():
     writable, refused = partition_by_mode(
         policy,
         "container",
-        ["container_no", "tax", "FreeDays", "in_bound", "materials", "note", "status"],
+        ["container_no", "tax", "FreeDays", "in_bound", "materials", "note", "type"],
     )
 
-    assert writable == ["in_bound", "materials", "note", "status"]
+    assert writable == ["in_bound", "materials", "note", "type"]
     assert refused == ["container_no", "tax", "FreeDays"]
 
 

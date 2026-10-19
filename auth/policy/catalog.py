@@ -118,6 +118,7 @@ PERMISSION_CATALOG = [
         # neither hides the group. View_Demurrage, View_ContainerNo and
         # View_Material above are reused as the view half of their class.
         ("Edit_Demurrage", "Edit free-day allowances and demurrage overrides"),
+        ("Edit_Status", "Edit container and bill of lading operational status"),
         ("Edit_ContainerNo", "Edit the container number"),
         ("Edit_Material", "Edit container cargo materials and categories"),
         ("View_ContainerTax", "View customs tax and duty flags"),

@@ -64,6 +64,12 @@ FIELD_CLASS_SPECS: tuple[tuple[str, str, str | None, str], ...] = (
         "Edit_ContainerNote",
         "Internal operations notes",
     ),
+    (
+        "CONTAINER_STATUS",
+        "View_Status",
+        "Edit_Status",
+        "Operational status of a container and its bill of lading",
+    ),
 )
 
 # -- entity -> field key -> field class --------------------------------------
@@ -82,11 +88,17 @@ _CONTAINER_FIELDS: Mapping[str, str] = {
     "po_ids": "CONTAINER_CARGO",
     "PONo": "CONTAINER_CARGO",
     "note": "CONTAINER_NOTE",
+    # Both halves of status belong to one class. Setting it on the bill of
+    # lading cascades to every container on that B/L, so gating the container
+    # field alone would leave the cascade as a way round it.
+    "status": "CONTAINER_STATUS",
+    "bill_of_landing.status": "CONTAINER_STATUS",
     # Read-only companions the detail response exposes under their own names.
     # Listing them here keeps redaction and write gating on one source of truth;
     # they never appear in a write payload, so gating them costs nothing.
     "emptied_at_rel": "CONTAINER_MILESTONE",
     "purchase_orders": "CONTAINER_CARGO",
+    "status_rel": "CONTAINER_STATUS",
 }
 
 FIELD_REGISTRY: Mapping[str, Mapping[str, str]] = MappingProxyType({
