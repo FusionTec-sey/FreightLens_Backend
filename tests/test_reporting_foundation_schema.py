@@ -13,6 +13,7 @@ from Model.containermgmt.Report.ReportTemplateAssignment import ReportTemplateAs
 from Model.containermgmt.Report.ReportTemplateVersion import ReportTemplateVersion
 from Utils import migrate_reporting_foundation
 from Utils.migrate_reporting_foundation import FIELD_CLASSES
+from auth.policy.field_registry import FIELD_CLASS_SPECS
 from Utils import migrate_report_templates, migrate_sourcing_and_quote_templates
 
 
@@ -46,12 +47,20 @@ def test_reporting_foundation_tables_expose_required_contract():
     assert assignment_columns.default_options.nullable is False
 
     assert ReportFieldClass.__table__.c.permission_name.nullable is False
-    assert {row[0] for row in FIELD_CLASSES} == {
-        "FINANCIAL",
-        "SUPPLIER_IDENTITY",
-        "BUDGET",
-        "PERSONAL",
-    }
+    # Editing is a second permission on the class; nullable so the reporting
+    # classes below stay read-only, which is all they have ever meant.
+    assert ReportFieldClass.__table__.c.edit_permission_name.nullable is True
+
+    seeded = {row[0]: row for row in FIELD_CLASSES}
+    reporting_classes = {"FINANCIAL", "SUPPLIER_IDENTITY", "BUDGET", "PERSONAL"}
+    assert reporting_classes <= set(seeded)
+    for code in reporting_classes:
+        assert seeded[code][2] is None, f"{code} must stay read-only"
+
+    # Screen field classes are declared in the field registry and seeded here too.
+    assert {code for code, _, _, _ in FIELD_CLASS_SPECS} <= set(seeded)
+    for code, _view, edit, _description in FIELD_CLASS_SPECS:
+        assert edit, f"{code} is a screen class and needs an edit permission"
 
 
 def test_foundation_migration_enforces_one_default_per_org_entity():

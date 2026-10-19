@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Literal, Mapping, Sequence
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -15,6 +15,8 @@ from Utils.org_filter import OrgContext
 from auth.dependencies import get_current_user, get_org_context
 from .catalog import PERMISSION_BY_NAME
 
+FieldMode = Literal["hidden", "read", "edit"]
+
 
 @dataclass(frozen=True)
 class AccessPolicy:
@@ -25,6 +27,8 @@ class AccessPolicy:
     field_permissions: Mapping[str, str]
     is_platform_admin: bool = False
     location_ids: tuple[int, ...] = ()
+    # field class code -> permission that grants editing, where the class has one.
+    field_edit_permissions: Mapping[str, str] = field(default_factory=dict)
 
     def has(self, permission_name: str) -> bool:
         return self.is_platform_admin or permission_name in self.permission_names
@@ -33,10 +37,35 @@ class AccessPolicy:
         return any(self.has(name) for name in permission_names)
 
     def allows_field_class(self, field_class: str | None) -> bool:
+        return self.field_mode(field_class) != "hidden"
+
+    def field_mode(self, field_class: str | None) -> FieldMode:
+        """How much of a field class this policy may see: hidden, read or edit.
+
+        Editing is a second permission on the same class rather than a separate
+        mode flag, so granting it is the ordinary role-permission screen. Holding
+        the edit permission implies reading -- nothing is editable but invisible
+        -- which this resolves explicitly rather than relying on the implicit-view
+        rule in security_guards, since AccessPolicy.has does not apply it.
+
+        An unclassified field is open, matching how unclassified report columns
+        have always behaved. A class that is known but unmapped stays hidden.
+        """
         if not field_class:
-            return True
-        permission = self.field_permissions.get(field_class.upper())
-        return bool(permission and self.has(permission))
+            return "edit"
+        code = field_class.upper()
+        edit_permission = self.field_edit_permissions.get(code)
+        if edit_permission and self.has(edit_permission):
+            return "edit"
+        view_permission = self.field_permissions.get(code)
+        if view_permission and self.has(view_permission):
+            # A class with no edit permission is read-only by definition: that is
+            # every reporting class, which only ever redacts.
+            return "read" if edit_permission else "edit"
+        return "hidden"
+
+    def allows_field_write(self, field_class: str | None) -> bool:
+        return self.field_mode(field_class) == "edit"
 
     def require_any(self, *permission_names: str) -> None:
         if not self.has_any(*permission_names):
@@ -72,6 +101,7 @@ class AccessPolicy:
         modules_by_org: Mapping[int, Iterable[str]],
         field_permissions: Mapping[str, str],
         is_platform_admin: bool = False,
+        field_edit_permissions: Mapping[str, str] | None = None,
     ) -> "AccessPolicy":
         permission_sets = []
         module_sets = []
@@ -99,6 +129,11 @@ class AccessPolicy:
             module_names=frozenset(modules),
             field_permissions={key.upper(): value for key, value in field_permissions.items()},
             is_platform_admin=is_platform_admin,
+            field_edit_permissions={
+                key.upper(): value
+                for key, value in (field_edit_permissions or {}).items()
+                if value
+            },
         )
 
 
@@ -118,8 +153,12 @@ def _build_policy(db: Session, user: User, org_ids: Sequence[int]) -> AccessPoli
         roles_by_org[org_id].append(role)
     organisations = db.query(Organisation).filter(Organisation.id.in_(org_ids)).all()
     modules_by_org = {org.id: (org.modules or []) for org in organisations}
-    field_permissions = {
-        row.code: row.permission_name for row in db.query(ReportFieldClass).all()
+    field_class_rows = db.query(ReportFieldClass).all()
+    field_permissions = {row.code: row.permission_name for row in field_class_rows}
+    field_edit_permissions = {
+        row.code: row.edit_permission_name
+        for row in field_class_rows
+        if row.edit_permission_name
     }
     policy = AccessPolicy.from_role_sets(
         user=user,
@@ -127,6 +166,7 @@ def _build_policy(db: Session, user: User, org_ids: Sequence[int]) -> AccessPoli
         roles_by_org=roles_by_org,
         modules_by_org=modules_by_org,
         field_permissions=field_permissions,
+        field_edit_permissions=field_edit_permissions,
         is_platform_admin=any(
             bool(getattr(role, "is_platform_admin", False))
             for role in getattr(user, "roles", ())

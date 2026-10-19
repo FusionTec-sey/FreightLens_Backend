@@ -19,7 +19,12 @@ from auth.security import verify_password
 from auth.tokens import create_access_token, create_refresh_token, SECRET_KEY, ALGORITHM
 from auth.dependencies import get_current_user
 from auth.security_guards import is_platform_admin_user
-from auth.policy import AccessPolicy, get_request_policy
+from auth.policy import (
+    FIELD_CLASS_BY_CODE,
+    FIELD_REGISTRY,
+    AccessPolicy,
+    get_request_policy,
+)
 
 logger = logging.getLogger("auth")
 
@@ -41,8 +46,42 @@ def get_my_access(policy: AccessPolicy = Depends(get_request_policy)):
             for code in policy.field_permissions
             if policy.allows_field_class(code)
         ),
+        # Three states per class, for screens that lock a field rather than hide
+        # it. field_classes above stays as it was: the codes granted at all.
+        "field_access": {
+            code: mode
+            for code in policy.field_permissions
+            if (mode := policy.field_mode(code)) != "hidden"
+        },
+        "field_registry": {
+            entity: dict(fields) for entity, fields in FIELD_REGISTRY.items()
+        },
         "is_platform_admin": policy.is_platform_admin,
         "location_ids": list(policy.location_ids),
+    }
+
+
+@router.get("/auth/field-access/registry")
+def get_field_access_registry(policy: AccessPolicy = Depends(get_request_policy)):
+    """Which permissions gate which screen fields, for whoever grants them.
+
+    The field map itself rides along with /auth/me/access because every screen
+    needs it to render. This adds the half an administrator needs: the permission
+    names to put on a role, and what the caller currently holds.
+    """
+    policy.require_any("Manage_Field_Access", "View_Role")
+    return {
+        "classes": [
+            {
+                "code": code,
+                "view_permission": spec["view"],
+                "edit_permission": spec["edit"],
+                "description": spec["description"],
+                "your_mode": policy.field_mode(code),
+            }
+            for code, spec in sorted(FIELD_CLASS_BY_CODE.items())
+        ],
+        "fields": {entity: dict(fields) for entity, fields in FIELD_REGISTRY.items()},
     }
 
 

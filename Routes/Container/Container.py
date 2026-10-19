@@ -13,6 +13,13 @@ from Model import ContainerDetails, Supplier, UnloadVenue, Status, Vessal, Conta
 from Schema import ContainerDetailsSchema, ContainerUpdateSchema, ContainerCreateSchema, ContainerListResponse, ReportSchema
 from Utils import *
 from auth.dependencies import get_current_user, get_org_context
+from auth.policy import (
+    AccessPolicy,
+    field_class_for,
+    get_request_policy,
+    partition_by_mode,
+)
+from auth.policy.field_registry import WRITE_GATED_ONLY
 from auth.security_guards import (
     can_view_supplier_user,
     can_view_bl_user,
@@ -48,6 +55,51 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 
 ContainerRouter = InferringRouter()
+
+
+def _enforce_field_writes(policy: AccessPolicy, payload_keys, *, prefix: str = "") -> None:
+    """Refuse a write that touches container fields this policy may not edit.
+
+    Refusing is deliberate where dropping the keys would be quieter: a save that
+    silently discards half of what was typed looks identical to one that worked.
+    Unclassified keys pass through untouched.
+    """
+    keys = [f"{prefix}{key}" for key in payload_keys]
+    _, refused = partition_by_mode(policy, "container", keys)
+    if refused:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "You do not have permission to change: "
+                + ", ".join(sorted(key.split(".")[-1] for key in refused))
+            ),
+        )
+
+
+def _redact_hidden_fields(policy: AccessPolicy, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Blank out container fields this policy may not see, by API key.
+
+    Hiding a field in React is not enough -- the value still crossed the wire --
+    so a class the caller cannot view is nulled here, in the response, the same
+    way supplier_name already is.
+    """
+    def _hidden(key: str) -> bool:
+        if key in WRITE_GATED_ONLY:
+            return False
+        field_class = field_class_for("container", key)
+        return bool(field_class) and policy.field_mode(field_class) == "hidden"
+
+    for key in list(payload.keys()):
+        if _hidden(key):
+            payload[key] = [] if isinstance(payload[key], list) else None
+
+    nested = payload.get("bill_of_landing")
+    if isinstance(nested, dict):
+        for key in list(nested.keys()):
+            if _hidden(f"bill_of_landing.{key}"):
+                nested[key] = None
+    return payload
+
 
 def parse_optional_json(field: Optional[str], field_name: str):
     if field is None or field == "":
@@ -611,7 +663,8 @@ class ContainerAPI:
         limit: int = Query(50, le=1000),
         db: Session = Depends(get_db),
         current_user: dict = Depends(get_current_user),
-        org_context: OrgContext = Depends(get_org_context)
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy)
         ):
 
             base_query = (
@@ -785,8 +838,8 @@ class ContainerAPI:
                     for po in (container.purchase_orders or [])
                     if not po.is_deleted
                 ]
-                
-                serialized_data.append(container_dict)
+
+                serialized_data.append(_redact_hidden_fields(policy, container_dict))
 
             return {
                 "total_count": total_count,
@@ -903,9 +956,19 @@ class ContainerAPI:
         remove_doc_ids: List[int] = Form([]),
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user),
-        org_context: OrgContext = Depends(get_org_context)
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy)
         ):
-        
+        """Deprecated. Prefer PATCH /containers/{id}/status.
+
+        This accepted the raw form and assigned any key matching a model column,
+        with no edit permission of its own -- so it could write org_id or audit
+        columns, and it bypassed every field-level gate on the PATCH. It is kept
+        for callers outside this repo, but narrowed to the same fields and the
+        same permissions as the PATCH.
+        """
+        policy.require_any("Edit_Container")
+
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
@@ -942,13 +1005,17 @@ class ContainerAPI:
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=f"Invalid date format for {field}: {e}")
 
-        model_columns = list(ContainerDetails.__table__.columns.keys())
-        model_columns[-2] = "arrival_on_port"
-            
+        # Only the fields the update schema declares, never "any column on the
+        # model": that previously exposed org_id, audit columns and the primary
+        # key to anyone who could reach this route.
+        writable_fields = set(ContainerUpdateSchema.model_fields) - {
+            "materials", "po_ids", "bill_of_landing",
+        }
         cleaned_fields = {
             k: v for k, v in updated_fields.items()
-            if k in model_columns and k not in {"documents", "remove_doc_ids"}  # exclude ArrivalOn here since it's for Vessal
+            if k in writable_fields and k not in {"documents", "remove_doc_ids"}
         }
+        _enforce_field_writes(policy, cleaned_fields.keys())
         # if "arrival_on_port" in cleaned_fields:
         #     cleaned_fields['Arrival_Date'] = cleaned_fields.pop('arrival_on_port') 
         
@@ -1085,7 +1152,8 @@ class ContainerAPI:
         remove_doc_ids: Optional[List[int]] = Form([]),
         db: Session = Depends(get_db),
         current_user = Depends(get_current_user),
-        org_context: OrgContext = Depends(get_org_context)
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy)
         ):
         # 🔍 Get the container
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
@@ -1108,8 +1176,25 @@ class ContainerAPI:
 
         original_status = container.status
 
+        # 🔒 Field-level write gate. Every key the caller actually sent is checked,
+        # including the ones applied further down (materials, po_ids, and the
+        # nested bill of lading), so nothing slips past by being handled later.
+        base_updates = update_data.dict(
+            exclude_unset=True, exclude={"materials", "po_ids", "bill_of_landing"}
+        )
+        touched = set(base_updates)
+        sent = update_data.dict(exclude_unset=True)
+        touched.update(key for key in ("materials", "po_ids") if key in sent)
+        _enforce_field_writes(policy, touched)
+        if update_data.bill_of_landing:
+            _enforce_field_writes(
+                policy,
+                update_data.bill_of_landing.dict(exclude_unset=True).keys(),
+                prefix="bill_of_landing.",
+            )
+
         # 🛠️ Update basic container fields (excluding materials and BL)
-        for key, value in update_data.dict(exclude_unset=True, exclude={"materials", "po_ids", "bill_of_landing"}).items():
+        for key, value in base_updates.items():
             if key == "type" and value is not None:
                 value = resolve_container_type(db, value, current_user.id)
             elif key == "emptied_at" and value is not None:

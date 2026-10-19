@@ -4,15 +4,22 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from Model.db import engine
+from auth.policy.field_registry import FIELD_CLASS_SPECS
 
 
 logger = logging.getLogger("containerMgmt.migrations.reporting_foundation")
 
+# (code, view permission, edit permission or None, description). A class with no
+# edit permission is read-only: it only ever redacts, which is what every
+# reporting class does.
 FIELD_CLASSES = (
-    ("FINANCIAL", "View_Financials", "Prices, costs, payments, margins, and currency values"),
-    ("SUPPLIER_IDENTITY", "View_Supplier", "Supplier names and identifying contact details"),
-    ("BUDGET", "View_Budget", "Budgets, allocations, and budget variance values"),
-    ("PERSONAL", "View_Personal_Data", "Personal contact and identity data"),
+    ("FINANCIAL", "View_Financials", None, "Prices, costs, payments, margins, and currency values"),
+    ("SUPPLIER_IDENTITY", "View_Supplier", None, "Supplier names and identifying contact details"),
+    ("BUDGET", "View_Budget", None, "Budgets, allocations, and budget variance values"),
+    ("PERSONAL", "View_Personal_Data", None, "Personal contact and identity data"),
+    # Screen field classes are declared in auth/policy/field_registry.py, beside
+    # the field keys they gate, and appended here so one seeder owns the table.
+    *FIELD_CLASS_SPECS,
 )
 
 
@@ -204,6 +211,12 @@ def ensure_reporting_foundation_schema() -> None:
                 description VARCHAR(255) NOT NULL
             );
 
+            -- Holding this grants editing as well as viewing. Nullable, so every
+            -- class seeded before it keeps today's read-only meaning.
+            ALTER TABLE containermgmt.report_field_classes
+                ADD COLUMN IF NOT EXISTS edit_permission_name VARCHAR(45)
+                    REFERENCES usercredentials.permissions(name) ON DELETE RESTRICT;
+
             ALTER TABLE containermgmt.report_template_versions
                 ADD COLUMN IF NOT EXISTS paper_settings JSONB,
                 ADD COLUMN IF NOT EXISTS options_schema JSONB;
@@ -263,22 +276,27 @@ def ensure_reporting_foundation_schema() -> None:
 
 def seed_reporting_foundation(db: Session) -> None:
     """Seed rows that depend on organisations and permissions created by seed_db."""
-    for code, permission_name, description in FIELD_CLASSES:
-        db.execute(text("""
-            INSERT INTO usercredentials.permissions (name, description)
-            VALUES (:name, :description)
-            ON CONFLICT (name) DO NOTHING
-        """), {"name": permission_name, "description": description})
+    for code, permission_name, edit_permission_name, description in FIELD_CLASSES:
+        for name in (permission_name, edit_permission_name):
+            if not name:
+                continue
+            db.execute(text("""
+                INSERT INTO usercredentials.permissions (name, description)
+                VALUES (:name, :description)
+                ON CONFLICT (name) DO NOTHING
+            """), {"name": name, "description": description})
         db.execute(text("""
             INSERT INTO containermgmt.report_field_classes
-                (code, permission_name, description)
-            VALUES (:code, :permission_name, :description)
+                (code, permission_name, edit_permission_name, description)
+            VALUES (:code, :permission_name, :edit_permission_name, :description)
             ON CONFLICT (code) DO UPDATE SET
                 permission_name = EXCLUDED.permission_name,
+                edit_permission_name = EXCLUDED.edit_permission_name,
                 description = EXCLUDED.description
         """), {
             "code": code,
             "permission_name": permission_name,
+            "edit_permission_name": edit_permission_name,
             "description": description,
         })
 

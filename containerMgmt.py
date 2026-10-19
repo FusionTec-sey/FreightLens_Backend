@@ -299,7 +299,13 @@ from Routes.Dashboard.DashboardRouter import DashboardRouter
 app.include_router(auth_router)
 app.include_router(ReportRouter)
 app.include_router(Cinfo)
-app.include_router(ContainerRouter, dependencies=[Depends(require_module("LOGISTICS"))])
+# get_request_policy caches the policy on the user, which the field-level gates in
+# the container routes read -- and which the can_view_* helpers need too, or they
+# silently fall back to walking roles.
+app.include_router(
+    ContainerRouter,
+    dependencies=[Depends(require_module("LOGISTICS")), Depends(get_request_policy)],
+)
 app.include_router(CreadentialsInfo, dependencies=[Depends(get_request_policy)])
 app.include_router(TrackingRouter, dependencies=[Depends(require_module("LOGISTICS"))])
 app.include_router(logistics_router, dependencies=[Depends(require_module("LOGISTICS"))])

@@ -58,6 +58,7 @@ PERMISSION_CATALOG = [
         ("Manage_DashboardTemplate", "Manage dashboard templates"),
     ]),
     PermissionSpec("Cross_Org_Report", "Run reports across assigned organisations"),
+    PermissionSpec("Manage_Field_Access", "Inspect which screen fields each permission gates"),
     PermissionSpec("View_TenantConsole", "Access the multi-tenant organisation console", platform_only=True),
     PermissionSpec("Manage_TenantConsole", "Configure organisations and tenant modules", platform_only=True),
     PermissionSpec("View_Financials", "View confidential prices, payments, and totals", "ORDERS", "FINANCIAL"),
@@ -112,6 +113,19 @@ PERMISSION_CATALOG = [
         ("View_weight", "View BL weights"), ("View_demurrage", "View BL demurrage"),
         ("View_BillOfLanding", "View bill of lading numbers"), ("View_vessel_name", "View vessel names"),
         ("View_consignee_name", "View consignee names"), ("View_arrivalDate", "View BL arrival dates"),
+        # Field classes on the container detail screen. The View_ name makes a
+        # group visible but locked; the Edit_ name makes it writable. Holding
+        # neither hides the group. View_Demurrage, View_ContainerNo and
+        # View_Material above are reused as the view half of their class.
+        ("Edit_Demurrage", "Edit free-day allowances and demurrage overrides"),
+        ("Edit_ContainerNo", "Edit the container number"),
+        ("Edit_Material", "Edit container cargo materials and categories"),
+        ("View_ContainerTax", "View customs tax and duty flags"),
+        ("Edit_ContainerTax", "Edit customs tax and duty flags"),
+        ("View_ContainerMilestone", "View port milestones and gate movements"),
+        ("Edit_ContainerMilestone", "Edit port milestones and gate movements"),
+        ("View_ContainerNote", "View internal operations notes"),
+        ("Edit_ContainerNote", "Edit internal operations notes"),
     ]),
     *_specs("INVENTORY", [
         ("View_Product", "View products and stock levels"), ("Add_Product", "Create products"),
