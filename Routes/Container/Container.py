@@ -1062,7 +1062,8 @@ class ContainerAPI:
         container_id: int,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user),
-        org_context: OrgContext = Depends(get_org_context)
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy)
         ):
         """The orders linked to this container, with what is left to pack on each.
 
@@ -1073,6 +1074,14 @@ class ContainerAPI:
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
+
+        # The list response redacts purchase_orders for a caller who cannot see
+        # the cargo class; this route would otherwise hand back the same data.
+        if policy.field_mode("CONTAINER_CARGO") == "hidden":
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to view linked purchase orders",
+            )
 
         linked = [po for po in (container.purchase_orders or []) if not po.is_deleted]
         held = draft_held_map(db, po_ids=[po.id for po in linked])
@@ -1115,16 +1124,22 @@ class ContainerAPI:
         payload: dict = Body(...),
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user),
-        org_context: OrgContext = Depends(get_org_context)
+        org_context: OrgContext = Depends(get_org_context),
+        policy: AccessPolicy = Depends(get_request_policy)
         ):
         """Replace the whole link set, the same clear-and-extend materials use.
 
         Linking from the packing list builder goes through here, so a container
         with no orders on it never becomes a dead end.
+
+        Gated on the same class as the drawer field: this route writes po_ids
+        directly, so without the check it would be a way round CONTAINER_CARGO.
         """
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
+
+        _enforce_field_writes(policy, ["po_ids"])
 
         po_ids = _parse_po_ids([str(v) for v in (payload.get("po_ids") or [])])
 

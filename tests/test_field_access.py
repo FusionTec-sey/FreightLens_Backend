@@ -222,3 +222,22 @@ def test_every_declared_field_permission_is_catalogued():
     for code, view, edit, _description in FIELD_CLASS_SPECS:
         assert view in PERMISSION_BY_NAME, f"{code} view permission not catalogued"
         assert edit in PERMISSION_BY_NAME, f"{code} edit permission not catalogued"
+
+
+def test_linked_purchase_orders_share_the_cargo_class():
+    """The drawer's Link Purchase Order control and the dedicated
+    PUT /containers/{id}/purchase-orders route both write po_ids, so they have
+    to resolve to the same class -- otherwise the second is a way round the
+    first."""
+    for key in ("po_ids", "PONo", "materials", "purchase_orders"):
+        assert field_class_for("container", key) == "CONTAINER_CARGO", key
+
+    locked = _policy("View_Material")
+    assert locked.field_mode("CONTAINER_CARGO") == "read"
+    _, refused = partition_by_mode(locked, "container", ["po_ids"])
+    assert refused == ["po_ids"]
+
+    allowed = _policy("Edit_Material")
+    writable, refused = partition_by_mode(allowed, "container", ["po_ids"])
+    assert writable == ["po_ids"]
+    assert refused == []
