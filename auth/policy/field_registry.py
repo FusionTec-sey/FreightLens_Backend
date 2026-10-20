@@ -130,7 +130,12 @@ FIELD_REGISTRY: Mapping[str, Mapping[str, str]] = MappingProxyType({
 # change it is reasonable; blanking it out would leave the user unable to tell
 # which container they are looking at. Keep this set very small -- anything
 # genuinely confidential belongs in a class that redacts.
-WRITE_GATED_ONLY: frozenset[str] = frozenset({"container_no"})
+#
+# The linked orders are here for a different reason: the packing panel exists to
+# show them, and the delivery roles that pack containers hold no order
+# permissions, so redacting them emptied the panel for its own audience.
+# Deciding which orders a container fulfils still needs Edit_ContainerPO.
+WRITE_GATED_ONLY: frozenset[str] = frozenset({"container_no", "purchase_orders"})
 
 FIELD_CLASS_BY_CODE = MappingProxyType({
     code: {"view": view, "edit": edit, "description": description}

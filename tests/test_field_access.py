@@ -10,6 +10,7 @@ from auth.policy import AccessPolicy
 from auth.policy.field_registry import (
     FIELD_CLASS_BY_CODE,
     FIELD_CLASS_SPECS,
+    WRITE_GATED_ONLY,
     field_class_for,
     partition_by_mode,
 )
@@ -249,3 +250,17 @@ def test_the_order_link_is_gated_apart_from_cargo_materials():
     writable, refused = partition_by_mode(allowed, "container", ["po_ids", "PONo"])
     assert writable == ["po_ids", "PONo"]
     assert refused == []
+
+
+def test_linked_orders_are_write_gated_but_never_hidden():
+    """A delivery role packs containers without holding a single order
+    permission, so redacting purchase_orders emptied the packing panel for the
+    people it exists for. The class gates writing the link, not reading it."""
+    assert "purchase_orders" in WRITE_GATED_ONLY
+
+    packer = _policy("Edit_ContainerMilestone")
+    assert packer.field_mode("CONTAINER_PURCHASE_ORDER") == "hidden"
+
+    # Hidden class, but the read-only companion still comes back.
+    _, refused = partition_by_mode(packer, "container", ["po_ids"])
+    assert refused == ["po_ids"]

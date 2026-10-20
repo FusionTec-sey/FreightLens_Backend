@@ -1062,26 +1062,23 @@ class ContainerAPI:
         container_id: int,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user),
-        org_context: OrgContext = Depends(get_org_context),
-        policy: AccessPolicy = Depends(get_request_policy)
+        org_context: OrgContext = Depends(get_org_context)
         ):
         """The orders linked to this container, with what is left to pack on each.
 
         The remaining quantity, not the ordered one: a container is one leg of
         an order that may be split across several, and the only useful question
         here is what this leg can still carry.
+
+        Deliberately not gated on CONTAINER_PURCHASE_ORDER. Seeing which orders
+        a container carries is what the packing panel is for, and the delivery
+        roles that need it hold no order permissions at all; gating the read
+        took the panel away from exactly the people who use it. The class gates
+        writing the link, which is where the hole actually was.
         """
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
-
-        # The list response redacts purchase_orders for a caller who cannot see
-        # the order-link class; this route would otherwise hand back the same data.
-        if policy.field_mode("CONTAINER_PURCHASE_ORDER") == "hidden":
-            raise HTTPException(
-                status_code=403,
-                detail="You do not have permission to view linked purchase orders",
-            )
 
         linked = [po for po in (container.purchase_orders or []) if not po.is_deleted]
         held = draft_held_map(db, po_ids=[po.id for po in linked])
