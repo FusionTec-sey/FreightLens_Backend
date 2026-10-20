@@ -224,20 +224,28 @@ def test_every_declared_field_permission_is_catalogued():
         assert edit in PERMISSION_BY_NAME, f"{code} edit permission not catalogued"
 
 
-def test_linked_purchase_orders_share_the_cargo_class():
-    """The drawer's Link Purchase Order control and the dedicated
-    PUT /containers/{id}/purchase-orders route both write po_ids, so they have
-    to resolve to the same class -- otherwise the second is a way round the
-    first."""
-    for key in ("po_ids", "PONo", "materials", "purchase_orders"):
-        assert field_class_for("container", key) == "CONTAINER_CARGO", key
+def test_the_order_link_is_gated_apart_from_cargo_materials():
+    """Who may say what is in a container and who may say which orders it
+    fulfils are separate grants, so the two classes must not collapse into
+    one. The drawer field and the dedicated
+    PUT /containers/{id}/purchase-orders route both write po_ids and have to
+    resolve the same way -- otherwise the route is a way round the field."""
+    for key in ("po_ids", "PONo", "purchase_orders"):
+        assert field_class_for("container", key) == "CONTAINER_PURCHASE_ORDER", key
+    assert field_class_for("container", "materials") == "CONTAINER_CARGO"
 
-    locked = _policy("View_Material")
-    assert locked.field_mode("CONTAINER_CARGO") == "read"
-    _, refused = partition_by_mode(locked, "container", ["po_ids"])
+    # Editing cargo must not carry the order link with it.
+    cargo_only = _policy("Edit_Material")
+    assert cargo_only.field_mode("CONTAINER_PURCHASE_ORDER") == "hidden"
+    _, refused = partition_by_mode(cargo_only, "container", ["materials", "po_ids"])
     assert refused == ["po_ids"]
 
-    allowed = _policy("Edit_Material")
-    writable, refused = partition_by_mode(allowed, "container", ["po_ids"])
-    assert writable == ["po_ids"]
+    locked = _policy("View_ContainerPO")
+    assert locked.field_mode("CONTAINER_PURCHASE_ORDER") == "read"
+    _, refused = partition_by_mode(locked, "container", ["po_ids", "PONo"])
+    assert refused == ["po_ids", "PONo"]
+
+    allowed = _policy("Edit_ContainerPO")
+    writable, refused = partition_by_mode(allowed, "container", ["po_ids", "PONo"])
+    assert writable == ["po_ids", "PONo"]
     assert refused == []

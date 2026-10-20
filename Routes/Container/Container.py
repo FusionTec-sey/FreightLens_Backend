@@ -1076,8 +1076,8 @@ class ContainerAPI:
             raise HTTPException(status_code=404, detail="Container not found")
 
         # The list response redacts purchase_orders for a caller who cannot see
-        # the cargo class; this route would otherwise hand back the same data.
-        if policy.field_mode("CONTAINER_CARGO") == "hidden":
+        # the order-link class; this route would otherwise hand back the same data.
+        if policy.field_mode("CONTAINER_PURCHASE_ORDER") == "hidden":
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to view linked purchase orders",
@@ -1133,7 +1133,7 @@ class ContainerAPI:
         with no orders on it never becomes a dead end.
 
         Gated on the same class as the drawer field: this route writes po_ids
-        directly, so without the check it would be a way round CONTAINER_CARGO.
+        directly, so without the check it would be a way round the class.
         """
         container = db.query(ContainerDetails).filter_by(Container_ID=container_id).first()
         if not container:

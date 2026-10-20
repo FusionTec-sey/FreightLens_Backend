@@ -56,7 +56,13 @@ FIELD_CLASS_SPECS: tuple[tuple[str, str, str | None, str], ...] = (
         "CONTAINER_CARGO",
         "View_Material",
         "Edit_Material",
-        "Cargo materials, categories and linked purchase orders",
+        "Cargo materials and categories",
+    ),
+    (
+        "CONTAINER_PURCHASE_ORDER",
+        "View_ContainerPO",
+        "Edit_ContainerPO",
+        "Purchase orders linked to a container",
     ),
     (
         "CONTAINER_NOTE",
@@ -91,8 +97,11 @@ _CONTAINER_FIELDS: Mapping[str, str] = {
     "emptied_at": "CONTAINER_MILESTONE",
     "bill_of_landing.ArrivalDate": "CONTAINER_MILESTONE",
     "materials": "CONTAINER_CARGO",
-    "po_ids": "CONTAINER_CARGO",
-    "PONo": "CONTAINER_CARGO",
+    # The order link is its own class: who may say what is in a container and
+    # who may say which orders it fulfils are different questions, and the
+    # latter reaches into the purchasing side of the system.
+    "po_ids": "CONTAINER_PURCHASE_ORDER",
+    "PONo": "CONTAINER_PURCHASE_ORDER",
     "note": "CONTAINER_NOTE",
     # Both halves of status belong to one class. Setting it on the bill of
     # lading cascades to every container on that B/L, so gating the container
@@ -104,7 +113,7 @@ _CONTAINER_FIELDS: Mapping[str, str] = {
     # Listing them here keeps redaction and write gating on one source of truth;
     # they never appear in a write payload, so gating them costs nothing.
     "emptied_at_rel": "CONTAINER_MILESTONE",
-    "purchase_orders": "CONTAINER_CARGO",
+    "purchase_orders": "CONTAINER_PURCHASE_ORDER",
     "status_rel": "CONTAINER_STATUS",
     "type_rel": "CONTAINER_TYPE",
     "containerType": "CONTAINER_TYPE",

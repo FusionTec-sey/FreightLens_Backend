@@ -129,6 +129,8 @@ PERMISSION_CATALOG = [
         ("Edit_ContainerMilestone", "Edit port milestones and gate movements"),
         ("View_ContainerNote", "View internal operations notes"),
         ("Edit_ContainerNote", "Edit internal operations notes"),
+        ("View_ContainerPO", "View the purchase orders linked to a container"),
+        ("Edit_ContainerPO", "Link and unlink purchase orders on a container"),
     ]),
     *_specs("INVENTORY", [
         ("View_Product", "View products and stock levels"), ("Add_Product", "Create products"),
