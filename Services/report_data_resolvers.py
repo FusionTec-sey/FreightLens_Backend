@@ -855,24 +855,33 @@ def resolve_container_details(
     mat_list = []
     if hasattr(container, "materials") and container.materials:
         for m in container.materials:
-            m_name = getattr(m, "Material", None) or getattr(m, "material_name", None) or str(m)
+            # Material.Name, not .Material -- without it every commodity row
+            # printed the repr of the ORM object.
+            m_name = (
+                getattr(m, "Name", None)
+                or getattr(m, "material_name", None)
+                or str(m)
+            )
             mat_list.append({"name": m_name})
 
     can_vendor = can_view_supplier_user(user, org_context)
     supplier = "[REDACTED]"
-    if can_vendor and bl and bl.supplier_rel:
-        supplier = bl.supplier_rel.Supplier
+    if can_vendor:
+        supplier = bl.supplier_rel.name if (bl and bl.supplier_rel) else None
 
-    consignee = None
-    if bl and bl.consignee_rel:
-        consignee = bl.consignee_rel.Consignee
+    # The same three attributes the bill of lading resolver was already
+    # corrected for, which this one was left holding: Supplier.name is not
+    # .Supplier, the consignee is derived from the owning organisation rather
+    # than a consignee_rel the model no longer has, and the vessel column is
+    # VessalNo.
+    consignee = _consignee_for_org(db, getattr(bl, "org_id", None)) if bl else None
 
     return {
         "container_no": container.container_no,
         "container_type": type_name,
         "status_name": status_name,
         "bl_number": container.BillOfLanding or (bl.BillOfLanding if bl else None),
-        "vessel_name": bl.vessel_rel.VessalName if (bl and bl.vessel_rel) else None,
+        "vessel_name": bl.vessel_rel.VessalNo if (bl and bl.vessel_rel) else None,
         "carrier_name": bl.carrier_name if bl else None,
         "arrival_date": _clean_val(bl.ArrivalDate) if bl else None,
         "in_bound_date": _clean_val(container.in_bound),
