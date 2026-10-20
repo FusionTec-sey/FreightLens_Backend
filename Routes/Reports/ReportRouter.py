@@ -254,8 +254,22 @@ def get_templates_catalog(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     org_context: OrgContext = Depends(get_org_context),
+    access_policy: AccessPolicy = Depends(get_access_policy),
 ):
-    """Lists accessible report templates (both system defaults and tenant-customized templates)."""
+    """Lists accessible report templates (both system defaults and tenant-customized templates).
+
+    The template library is a design surface: names, descriptions and the
+    HTML/CSS bodies behind every printed document. Writing one has always
+    required a Manage_ permission, but listing them required only a login, so
+    the frontend route was the only thing standing in the way -- and it let
+    View_Container through, which is everyone who can open the register.
+    """
+    access_policy.require_any(
+        "View_Report",
+        "Manage_Report_Template",
+        "Manage_Operational_Template",
+        "Toggle_Report_Template",
+    )
     skip = (page - 1) * limit
     items, total = list_templates(
         db=db,
@@ -289,13 +303,34 @@ def get_templates_by_entity(
     """
     Returns active templates for a given entity type in the current organization.
     Enforces user's rule: default system templates appear ONLY if activated in the Template Library.
+
+    Filtered to what this user could actually render, by each template's own
+    resolver print permissions -- the same rule _authorize_document_render
+    applies. Deliberately not gated on the report permissions: this is what the
+    Print dialog calls, and the delivery roles that print containers hold none
+    of them. Listing a template nobody may render only produces a 403 one click
+    later.
     """
-    return list_active_templates_for_entity(
+    templates = list_active_templates_for_entity(
         db=db,
         org_context=org_context,
         entity_type=entity_type,
         template_type=template_type,
     )
+
+    def _may_render(template) -> bool:
+        try:
+            resolver = get_resolver(template.resolver_key)
+        except HTTPException:
+            # A template pointing at a resolver this build does not have cannot
+            # be rendered by anyone; leave it out rather than offer it.
+            return False
+        return any(
+            has_permission(current_user, permission)
+            for permission in resolver.print_permissions
+        )
+
+    return [template for template in templates if _may_render(template)]
 
 
 @ReportRouter.post("/templates/{template_id}/toggle-active")
