@@ -4,6 +4,7 @@ from typing import Optional, Union, List, Dict, Any
 from ..DCSA import DCSA
 # from ...auth.config import settings
 from auth.config import settings
+from .diag import log_login_result
 class Maersk(DCSA):
     
     def __init__(self, client_id: str, client_secret: str, token_url: str):
@@ -38,8 +39,8 @@ class Maersk(DCSA):
             "client_secret": self.client_secret,
             
         }
-        print(self.token_url)
-        response = requests.post(self.token_url, headers=headers, data=data, proxies=self.proxies)
+        response = requests.post(self.token_url, headers=headers, data=data, proxies=self.proxies, timeout=20)
+        log_login_result(response, self.proxies)  # prints why the login worked / failed
         response.raise_for_status()
         json_data = response.json()
         # print(json_data)
