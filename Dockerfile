@@ -1,5 +1,5 @@
 # Use official Python image
-FROM python:3.11-slim   
+FROM python:3.11-slim-bookworm   
 # match your local version
 
 # Install system dependencies inside the container
