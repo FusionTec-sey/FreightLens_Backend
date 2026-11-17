@@ -4,6 +4,7 @@ from typing import Optional, Union, List, Dict, Any
 from ..DCSA import DCSA
 # from ...auth.config import settings
 from auth.config import settings
+from .diag import log_login_result
 class Maersk(DCSA):
     
     def __init__(self, client_id: str, client_secret: str, token_url: str):
@@ -39,10 +40,7 @@ class Maersk(DCSA):
             
         }
         response = requests.post(self.token_url, headers=headers, data=data, proxies=self.proxies, timeout=20)
-        if response.status_code != 200:
-            hint = (" - Maersk refused this server (check its outbound IP / TRACKING_PROXY)"
-                    if response.status_code == 403 else "")
-            print(f"[Maersk] login rejected with HTTP {response.status_code}{hint}")
+        log_login_result(response, self.proxies)  # prints why the login worked / failed
         response.raise_for_status()
         json_data = response.json()
         # print(json_data)
