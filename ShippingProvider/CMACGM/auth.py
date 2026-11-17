@@ -1,5 +1,7 @@
 import requests
 
+from auth.config import settings  # credentials come from the local .env (never commit them)
+
 url = "https://auth.cma-cgm.com/as/token.oauth2"
 
 headers = {
@@ -8,8 +10,8 @@ headers = {
 
 data = {
     "grant_type": "client_credentials",
-    "client_id": "beapp-fusiontech",
-    "client_secret": "T3FefGXrLjQBWCQT98D1VsbKXb1aKGgOWamRUSGWkDmvlNzR1ZsLv0El8XF7RDFS",
+    "client_id": settings.CMA_CGM_CLIENT_ID,
+    "client_secret": settings.CMA_CGM_SECRET,
     "scope": ""  # Ensure no space after 'scope' in "scope2"
 }
 

@@ -38,8 +38,11 @@ class Maersk(DCSA):
             "client_secret": self.client_secret,
             
         }
-        print(self.token_url)
-        response = requests.post(self.token_url, headers=headers, data=data, proxies=self.proxies)
+        response = requests.post(self.token_url, headers=headers, data=data, proxies=self.proxies, timeout=20)
+        if response.status_code != 200:
+            hint = (" - Maersk refused this server (check its outbound IP / TRACKING_PROXY)"
+                    if response.status_code == 403 else "")
+            print(f"[Maersk] login rejected with HTTP {response.status_code}{hint}")
         response.raise_for_status()
         json_data = response.json()
         # print(json_data)
@@ -61,7 +64,7 @@ class Maersk(DCSA):
         }
 
         # print(url)
-        response = requests.get(url,  headers=headers, params=params, proxies=self.proxies)
+        response = requests.get(url,  headers=headers, params=params, proxies=self.proxies, timeout=20)
         response.raise_for_status()
         return response.json()
 

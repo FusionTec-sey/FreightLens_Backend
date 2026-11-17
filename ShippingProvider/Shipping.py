@@ -113,7 +113,7 @@ def track_and_trace(transportDocumentReference):
                     c["provider"] = "Maersk"
                         
 
-            if len(content.get("events")) == 0:
+            if not content.get("events"):
                 continue
             else:
                 break
