@@ -13,6 +13,7 @@ from Services.search_service import (
 )
 from Routes.Orders.order_serialization import order_to_dict
 from Services.document_number_service import next_document_number
+from Services.proforma_service import sync_payment_state
 
 from Model.db import get_db
 from Model.containermgmt.Orders.PurchaseOrder import PurchaseOrder
@@ -347,11 +348,15 @@ def order_status_counts(
     lifecycle_stage: Optional[str] = Query(None),
     doc_type: Optional[str] = Query(None),
     urgent_only: Optional[bool] = Query(False),
+    group_by: Optional[str] = Query(None, description="'lifecycle' counts by lifecycle stage (RFQ chips) instead of by status"),
     db: Session = Depends(get_db),
     org_context: OrgContext = Depends(get_org_context),
     current_user: User = Depends(get_current_user)
 ):
     """How many orders sit at each status, across the whole filtered set.
+
+    With group_by=lifecycle the counts are keyed by lifecycle stage instead, which
+    is what the RFQ and vendor-quote chips filter on.
 
     The stage chips above the order list used to count the rows on screen, so a
     chip could never read higher than the page size and its number changed as
@@ -368,8 +373,14 @@ def order_status_counts(
     if not can_view_rfq and not can_view_po:
         raise HTTPException(status_code=403, detail="Access forbidden: Missing order and RFQ view permissions.")
 
+    by_lifecycle = (group_by or "").lower() == "lifecycle"
+    group_cols = (
+        (PurchaseOrder.lifecycle_stage,)
+        if by_lifecycle
+        else (PurchaseOrder.status, PurchaseOrder.status_label)
+    )
     query = (
-        db.query(PurchaseOrder.status, PurchaseOrder.status_label, func.count(PurchaseOrder.id))
+        db.query(*group_cols, func.count(PurchaseOrder.id))
         .filter(PurchaseOrder.is_deleted == False)
     )
     query = apply_org_filter(query, PurchaseOrder, org_context)
@@ -404,6 +415,13 @@ def order_status_counts(
 
     counts = {}
     total = 0
+    if by_lifecycle:
+        for stage, count in query.group_by(PurchaseOrder.lifecycle_stage).all():
+            key = (stage or "DRAFT").upper()
+            counts[key] = counts.get(key, 0) + count
+            total += count
+        return {"counts": counts, "total": total}
+
     for status_code, status_label, count in query.group_by(
         PurchaseOrder.status, PurchaseOrder.status_label
     ).all():
@@ -1135,6 +1153,19 @@ def create_order(
         supplier_name_at_issue = company or None
         supplier_address_at_issue = None
 
+    # The template an RFQ was made from, if any. Only a template this user's
+    # organisation can see is accepted, so the reference cannot be used to probe
+    # another tenant's templates.
+    source_template_id = None
+    if payload.get("source_template_id"):
+        from Model.containermgmt.Orders.OrderTemplate import OrderTemplate
+        tpl = db.query(OrderTemplate).filter(
+            OrderTemplate.id == payload["source_template_id"],
+            OrderTemplate.is_deleted != True,
+            OrderTemplate.org_id.in_(org_context.allowed_org_ids),
+        ).first()
+        source_template_id = tpl.id if tpl else None
+
     # Helpers
     def parse_d(val):
         if not val: return None
@@ -1154,6 +1185,7 @@ def create_order(
         origin_rfq_number=payload.get("origin_rfq_number"),
         split_index=payload.get("split_index"),
         request_id=payload.get("request_id"),
+        source_template_id=source_template_id,
         supplier_id=supplier_id or None,
         company=company or None,
         supplier_name_at_issue=supplier_name_at_issue,
@@ -2182,144 +2214,13 @@ async def record_payment(
             detail="Cannot record payments on an RFQ document. Payments are only permitted on awarded Purchase Orders (PO)."
         )
 
-    raw_amt = float(payload.get("amount") or 0)
-    p_type = (payload.get("payment_type") or "ADVANCE").strip().upper()
-
-    # Negative amount validation:
-    # Negative amount indicates a Return Payment (Refund) and is ONLY acceptable when payment type is RETURN
-    if p_type == "RETURN":
-        if raw_amt == 0:
-            raise HTTPException(status_code=400, detail="Return payment amount cannot be zero.")
-        amt = -abs(raw_amt)
-    else:
-        if raw_amt < 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Negative amounts are only acceptable when payment type is 'Return Payment'."
-            )
-        if raw_amt <= 0:
-            raise HTTPException(status_code=400, detail="Payment amount must be greater than zero.")
-        amt = raw_amt
-
-    # Check overpayment & refund limits
-    allow_overpayment = bool(payload.get("allow_overpayment", False))
-
-    current_active_payments = db.query(OrderPayment).filter(
-        OrderPayment.po_id == order.id,
-        OrderPayment.is_deleted == False
-    ).all()
-    current_paid = sum(float(p.amount or 0) for p in current_active_payments)
-
-    total_order = float(order.total_amount or 0)
-    if total_order <= 0:
-        items_total = sum(float(it.total_price or 0) for it in (order.items or []) if not getattr(it, 'is_deleted', False))
-        if items_total > 0:
-            total_order = items_total
-            order.total_amount = items_total
-
-    remaining_due = max(0.0, total_order - current_paid)
-
-    if p_type == "RETURN":
-        if abs(amt) > (current_paid + 0.01):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Return payment ({abs(amt):.2f}) cannot exceed the total amount already paid ({current_paid:.2f})."
-            )
-    else:
-        if total_order > 0 and amt > (remaining_due + 0.01):
-            if not allow_overpayment:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Payment amount ({amt:.2f}) exceeds the remaining order due ({remaining_due:.2f}). Overpayment is restricted without explicit authorization."
-                )
-
-    paid_d = None
-    if payload.get("paid_date"):
-        try:
-            paid_d = datetime.strptime(payload["paid_date"][:10], "%Y-%m-%d").date()
-        except Exception:
-            paid_d = date.today()
-
-    payment = OrderPayment(
-        org_id=order.org_id,
-        po_id=order.id,
-        payment_type=p_type,
-        amount=amt,
-        currency=payload.get("currency", order.currency or "USD"),
-        paid_date=paid_d,
-        status="RETURNED" if p_type == "RETURN" else "PAID",
-        payment_method=payload.get("payment_method"),
-        reference_number=payload.get("reference_number"),
-        notes=payload.get("notes"),
-        created_by=current_user.id
+    # The PO is the commitment and carries no money. Payments are recorded on
+    # the vendor's proforma invoice (POST /proformas/{id}/payments).
+    raise HTTPException(
+        status_code=409,
+        detail="Payments are recorded on the proforma invoice, not on the purchase order. "
+               "Record the vendor's proforma, approve it, then pay against it.",
     )
-    db.add(payment)
-    db.flush()
-
-    # Recalculate accumulated active payments
-    active_payments = db.query(OrderPayment).filter(
-        OrderPayment.po_id == order.id,
-        OrderPayment.is_deleted == False
-    ).order_by(OrderPayment.id.desc()).all()
-    total_paid = sum(float(p.amount or 0) for p in active_payments)
-    total_order = float(order.total_amount or 0)
-
-    order.advance_amount = total_paid
-    order.balance_amount = max(0.0, total_order - total_paid)
-
-    # Auto-fill payment milestone dates
-    if p_type == "ADVANCE" and not order.payment_date and payment.paid_date:
-        order.payment_date = payment.paid_date
-    elif p_type in ["BALANCE", "FINAL"] and not order.balance_payment_date and payment.paid_date:
-        order.balance_payment_date = payment.paid_date
-    elif order.payment_status == "FULLY_PAID" and not order.balance_payment_date and payment.paid_date:
-        order.balance_payment_date = payment.paid_date
-
-    # Automatic payment status update based on totals and payment type
-    if total_order > 0 and total_paid >= (total_order - 0.01):
-        order.payment_status = "FULLY_PAID"
-    elif total_paid > 0:
-        order.payment_status = "PART_PAID"
-    else:
-        order.payment_status = "NONE"
-
-    db.commit()
-    db.refresh(payment)
-
-    return {
-        "success": True,
-        "message": f"Payment entry of {amt} recorded for PO {order.po_number}",
-        "payment": {
-            "id": payment.id,
-            "payment_type": payment.payment_type,
-            "amount": float(payment.amount or 0),
-            "currency": payment.currency,
-            "paid_date": payment.paid_date.isoformat() if payment.paid_date else None,
-            "payment_method": payment.payment_method,
-            "reference_number": payment.reference_number,
-            "notes": payment.notes,
-            "status": payment.status,
-            "created_at": payment.created_at.isoformat() if hasattr(payment, 'created_at') and payment.created_at else None,
-        },
-        "advance_amount": float(order.advance_amount or 0),
-        "balance_amount": float(order.balance_amount or 0),
-        "payment_status": order.payment_status,
-        "payments": [
-            {
-                "id": pm.id,
-                "payment_type": pm.payment_type,
-                "amount": float(pm.amount or 0),
-                "currency": pm.currency,
-                "paid_date": pm.paid_date.isoformat() if pm.paid_date else None,
-                "payment_method": pm.payment_method,
-                "reference_number": pm.reference_number,
-                "notes": pm.notes,
-                "status": pm.status,
-                "created_at": pm.created_at.isoformat() if hasattr(pm, 'created_at') and pm.created_at else None,
-            }
-            for pm in active_payments
-        ]
-    }
 
 # ── Update Payment ────────────────────────────────────────────────────────────
 @OrderRouter.put("/{order_id}/payments/{payment_id}")
@@ -2454,6 +2355,7 @@ async def update_payment(
     else:
         order.payment_status = "NONE"
 
+    sync_payment_state(db, order)
     db.commit()
     db.refresh(payment)
 
@@ -2541,6 +2443,7 @@ async def delete_payment(
     else:
         order.payment_status = "NONE"
 
+    sync_payment_state(db, order)
     db.commit()
     sync_order_document(order)
 

@@ -1,6 +1,7 @@
 from sqlalchemy import Table, Column, ForeignKey, Integer
 from ...db import Base  # Adjust the import as needed
 
+# TABLE: Link table: which materials a container carries.
 container_products = Table(
     "container_products",
     Base.metadata,

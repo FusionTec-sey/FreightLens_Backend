@@ -10,6 +10,8 @@ from ..db import Base
 # to a menu therefore moves it, rather than adding a second claim.
 #
 # A menu with no roles assigned is the organisation-wide one when published.
+# TABLE: Link table: which menu each role is served. role_id is the primary key, so a role has at
+#        most one menu.
 menu_roles = Table(
     "menu_roles",
     Base.metadata,

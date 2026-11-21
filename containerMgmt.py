@@ -194,6 +194,10 @@ async def startup_event():
     ensure_container_po_link_schema()
     from Utils.migrate_20261016_packing_text_fallbacks import ensure_packing_text_fallbacks
     ensure_packing_text_fallbacks()
+    from Utils.migrate_20261031_proforma_invoices import ensure_proforma_invoice_schema
+    ensure_proforma_invoice_schema()
+    from Utils.migrate_20261031_direct_po import ensure_direct_po_schema
+    ensure_direct_po_schema()
     logger.info("Database tables are ready.")
 
     logger.info("Checking database seeding...")
@@ -216,6 +220,8 @@ async def startup_event():
         # app_pages and the key it is being moved to has just been created.
         from Utils.migrate_20261015_report_menu_split import ensure_report_menu_split
         ensure_report_menu_split()
+        from Utils.migrate_20261031_proforma_menu_pages import ensure_proforma_menu_pages
+        ensure_proforma_menu_pages()
         from Services.navigation_service import seed_root_organisation_menu
         seed_root_organisation_menu()
     except Exception as e:
@@ -323,6 +329,8 @@ app.include_router(OrderRouter, dependencies=[Depends(require_module("ORDERS"))]
 app.include_router(StoreRequestRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(PackingListRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(ReceivingRouter, dependencies=[Depends(require_module("ORDERS"))])
+app.include_router(ProformaRouter, dependencies=[Depends(require_module("ORDERS"))])
+app.include_router(RfqConversionRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(DefectRouter, dependencies=[Depends(require_module("ORDERS"))])
 app.include_router(DailyWorkRouter, dependencies=[Depends(require_module("ORDERS"))])
 # Inventory also feeds the product picker on order screens, so the floor is

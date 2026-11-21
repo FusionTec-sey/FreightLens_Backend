@@ -1025,8 +1025,11 @@ class QuoteComparisonService:
 
         # Reset parent RFQ lifecycle stage
         rfq.selected_quote_id = None
-        rfq.lifecycle_stage = "QUOTE_RECEIVED"
-        rfq.status_label = "Quotes Received"
+        # An RFQ converted straight to a PO never had quotes, so it returns to
+        # the stage it was converted from, not to one that expects a quote round.
+        converted_directly = any(getattr(c, "order_source", None) == "DIRECT" for c in child_pos)
+        rfq.lifecycle_stage = "CONFIRMED" if converted_directly else "QUOTE_RECEIVED"
+        rfq.status_label = "Confirmed" if converted_directly else "Quotes Received"
         rfq.lifecycle_locked = False
         rfq.lifecycle_version += 1
 

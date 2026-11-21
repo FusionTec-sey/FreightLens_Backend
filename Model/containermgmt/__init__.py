@@ -24,6 +24,7 @@ from .Orders.StoreRequest import StoreRequest, StoreRequestItem
 from .Orders.POItem import POItem
 from .Orders.OrderDocument import OrderDocument
 from .Orders.OrderPayment import OrderPayment
+from .Orders.ProformaInvoice import ProformaInvoice, ProformaInvoiceItem
 from .Orders.OrderShipment import OrderShipment
 from .Orders.OrderPackingList import OrderPackingList, PackingListItem
 from .Orders.GoodsReceipt import GoodsReceipt, ReceiptItem
@@ -56,7 +57,7 @@ __all__ = [
     "UnloadVenue", "Status", "Material", "container_products",
     "Vessal", "LogisticsProvider", "OrderStatus", "PurchaseOrder",
     "StoreRequest", "StoreRequestItem", "POItem", "OrderDocument",
-    "OrderPayment", "OrderShipment", "OrderPackingList", "PackingListItem",
+    "OrderPayment", "ProformaInvoice", "ProformaInvoiceItem", "OrderShipment", "OrderPackingList", "PackingListItem",
     "GoodsReceipt", "ReceiptItem", "DefectReport", "DefectItem", "DefectImage",
     "OrderStatusHistory", "Notification", "Product", "ProductCategory", "ProductLink",
     "OrderTemplate", "OrderTemplateItem",

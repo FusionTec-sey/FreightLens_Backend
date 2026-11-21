@@ -10,49 +10,97 @@ from ...db import Base  # Adjust path as needed
 
 from ...mixins import AuditMixin, OrgMixin
 
+# TABLE: One physical shipping container and its journey/tracking data.
 class ContainerDetails(OrgMixin, AuditMixin, Base):
 
     __tablename__ = "container_details"
     __table_args__ = {"schema": "containermgmt"}  # Optional: Remove if no schema used
 
+    # Container_ID - INTEGER, primary key.
+    # Unique container record number.
     Container_ID = Column(Integer, primary_key=True, autoincrement=True)
+    # container_no - VARCHAR(50), required.
+    # Container number printed on the box (e.g. MSKU1234567).
     container_no: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # typ5e: Mapped[Optional[int]] = mapped_column(ForeignKey("containermgmt.container_type.type_id"), nullable=True)
+    # in_bound - TIMESTAMP, optional.
+    # When the container came in (gate-in).
     in_bound: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # emptied_at: Mapped[Optional[int]] = mapped_column(ForeignKey("containermgmt.unload_venue.venue_id"), nullable=True)
+    # empty_date - DATE, optional.
+    # Date the container was emptied.
     empty_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # out_bound - TIMESTAMP, optional.
+    # When the container left (gate-out).
     out_bound: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # unloaded_at_port - DATE, optional.
+    # Date unloaded at the port.
     unloaded_at_port: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # note - TEXT, optional.
+    # Free-text remarks.
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # status: Mapped[Optional[int]] = mapped_column(ForeignKey("containermgmt.status.status_id"), nullable=True)
+    # tax - SMALLINT, optional.
+    # Tax flag/code for the container.
     tax: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    # PONo - VARCHAR(45), optional.
+    # Purchase order number(s) text for this container (legacy).
     PONo: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    # FreeDays - INTEGER, optional.
+    # Free days before demurrage/detention charges apply.
     FreeDays: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Rich Logistics Tracking Columns
+    # seal_number - VARCHAR(50), optional.
+    # Security seal number.
     seal_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # gross_weight_kg - NUMERIC(12,2), optional.
+    # Total loaded weight in kg.
     gross_weight_kg: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
+    # gross_volume_cbm - NUMERIC(10,3), optional.
+    # Total loaded volume in cubic metres.
     gross_volume_cbm: Mapped[Optional[float]] = mapped_column(Numeric(10, 3), nullable=True)
+    # port_of_loading - VARCHAR(100), optional.
+    # Port where the cargo was loaded.
     port_of_loading: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # port_of_discharge - VARCHAR(100), optional.
+    # Port where the cargo is unloaded.
     port_of_discharge: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # transshipment_hub - VARCHAR(100), optional.
+    # Intermediate port where the box changes ship.
     transshipment_hub: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # latest_milestone - VARCHAR(255), optional.
+    # Most recent tracking event, as text.
     latest_milestone: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # tracking_timeline - JSON, optional.
+    # Full list of tracking events (JSON).
     tracking_timeline: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # dnd_report - JSON, optional.
+    # Demurrage & detention calculation (JSON).
     dnd_report: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    # BillOfLanding - VARCHAR(100), foreign key -> containermgmt.bill_of_landing.BillOfLanding,
+    # optional.
+    # Bill of lading this container travels under.
     BillOfLanding = mapped_column(
         String(100), ForeignKey("containermgmt.bill_of_landing.BillOfLanding"), index=True, nullable=True
         )
     bill_of_landing = relationship("BillOfLanding", back_populates="containers", lazy="joined")
     
+    # status - INTEGER, foreign key -> containermgmt.status.status_id, optional.
+    # Container status (In Transit, On Port, Inbound, Empty, Complete...).
     status = mapped_column(Integer, ForeignKey("containermgmt.status.status_id"), index=True, nullable=True)
     status_rel = relationship("Status", lazy="joined")
 
+    # emptied_at - INTEGER, foreign key -> containermgmt.unload_venue.venue_id, optional.
+    # Venue where the container was emptied.
     emptied_at = mapped_column(Integer, ForeignKey("containermgmt.unload_venue.venue_id"), index=True, nullable=True)
     emptied_at_rel = relationship("UnloadVenue", lazy="joined")
 
+    # type - INTEGER, foreign key -> containermgmt.container_type.type_id, optional.
+    # Container type (20ft, 40HC...).
     type = mapped_column(Integer, ForeignKey("containermgmt.container_type.type_id"), index=True, nullable=True)
     type_rel = relationship("ContainerType", lazy="joined")
     

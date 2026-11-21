@@ -6,11 +6,16 @@ from ..Cinfo.ContainerMaterial import container_products
 
 from ...mixins import AuditMixin
 
+# TABLE: Lookup list of cargo materials.
 class Material(AuditMixin, Base):
     __tablename__ = "material"
     __table_args__ = {"schema": "containermgmt"}  # Remove if you're not using schema
 
+    # Id - INTEGER, primary key.
+    # Unique material number.
     Id = Column(Integer, primary_key=True, autoincrement=True)
+    # Name - VARCHAR(45), optional, unique.
+    # Material name (unique).
     Name = Column(String(45), unique=True)
 
     containers = relationship(

@@ -189,6 +189,8 @@ def order_to_dict(order: PurchaseOrder, is_accounts: bool = True, can_view_suppl
         "doc_type": doc_type,
         "parent_rfq_id": getattr(order, "parent_rfq_id", None),
         "origin_rfq_number": getattr(order, "origin_rfq_number", None),
+        "order_source": getattr(order, "order_source", None) or "RFQ",
+        "source_template_id": getattr(order, "source_template_id", None),
         "split_index": getattr(order, "split_index", None),
         "child_pos": [
             {

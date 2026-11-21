@@ -208,7 +208,7 @@ async def login(
 async def refresh_token_endpoint(
     refresh_token: str = Body(...),
     db: Session = Depends(get_db),
-):
+    ):
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
@@ -280,7 +280,7 @@ async def logout(
     refresh_token: str = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+    ):
     """Revoke the provided refresh token so it can no longer be used."""
     token_hash = _hash_token(refresh_token)
     db_token = db.query(RefreshToken).filter_by(token_hash=token_hash, revoked=0).first()

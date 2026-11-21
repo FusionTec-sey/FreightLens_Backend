@@ -14,7 +14,9 @@ from .Orders import (
     DefectRouter,
     DailyWorkRouter,
     NotificationRouter,
-    LifecycleRouter
+    LifecycleRouter,
+    ProformaRouter,
+    RfqConversionRouter,
 )
 from .Inventory import InventoryRouter, ProductDictionaryRouter
 from .Navigation import MenuRouter
@@ -37,6 +39,8 @@ __all__ = [
     "DefectRouter",
     "DailyWorkRouter",
     "NotificationRouter",
+    "ProformaRouter",
+    "RfqConversionRouter",
     "InventoryRouter",
     "ProductDictionaryRouter",
     "MenuRouter",

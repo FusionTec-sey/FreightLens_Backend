@@ -82,6 +82,8 @@ PAGE_REGISTRY = [
              ("Add_Order", "View_Order"), ("ORDERS",), 50),
     PageSpec("ORDER_QUOTES", "/orders/quotes", "Vendor Quotes & Bidding", "Gavel", "PROCUREMENT",
              ("Compare_Quote", "View_VendorQuote", "Send_RFQ", "View_Order"), ("ORDERS",), 60),
+    PageSpec("PROFORMAS", "/proformas", "Proforma Invoices", "ReceiptText", "PROCUREMENT",
+             ("Record_Proforma", "Approve_Proforma", "View_OrderPayment", "Add_Payment"), ("ORDERS",), 65),
     PageSpec("ORDER_TEMPLATES", "/templates", "Order Templates", "LayoutTemplate", "PROCUREMENT",
              ("View_OrderTemplate", "Edit_OrderTemplate", "Add_OrderTemplate",
               "Delete_OrderTemplate", "View_Order", "Add_RFQ", "View_RFQ"), ("ORDERS",), 70),

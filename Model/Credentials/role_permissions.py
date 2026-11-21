@@ -1,6 +1,7 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey
 from ..db import Base
 
+# TABLE: Link table: which permissions each role holds.
 role_permissions = Table(
     'role_permissions',
     Base.metadata,

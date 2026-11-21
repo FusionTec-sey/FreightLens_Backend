@@ -16,6 +16,7 @@ from .VendorQuoteItem import VendorQuoteItem
 from .POItemHistory import POItemHistory
 from .POStageTransition import POStageTransition
 from .POVersionSnapshot import POVersionSnapshot
+from .ProformaInvoice import ProformaInvoice, ProformaInvoiceItem
 
 __all__ = [
     "OrderStatus",
@@ -25,6 +26,8 @@ __all__ = [
     "POItem",
     "OrderDocument",
     "OrderPayment",
+    "ProformaInvoice",
+    "ProformaInvoiceItem",
     "OrderShipment",
     "OrderPackingList",
     "PackingListItem",

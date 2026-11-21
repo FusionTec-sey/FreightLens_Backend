@@ -1,5 +1,48 @@
 # FreightLens Architecture Log
 
+## 2026-10-31 - Proforma invoices carry the payments; a confirmed RFQ can convert straight to a PO
+
+- **Why:** a PO is a commitment and the vendor is paid against their proforma, but
+  payments sat on the PO and the "proforma" was only a late price check. Buying
+  from a known vendor also forced a full quote round when only the price and
+  quantity are open.
+- **Proforma:** `proforma_invoices` and `proforma_invoice_items` (tenant-scoped).
+  `order_payments.proforma_id` and `order_documents.proforma_id` point at it, and
+  `order_payments.po_id` stays set so PO-keyed readers keep working. Routes in
+  `ProformaRouter` (`/proformas`): record against an issued PO, compare with the PO
+  lines (`Services/proforma_service.evaluate_variance`, supplier tolerance), approve
+  (`Approve_Proforma`, plus `Approve_Variance` and a justification when it differs),
+  revise or cancel with a reason, and pay. `POST /orders/{id}/payments` now refuses.
+  `purchase_orders.advance_amount / balance_amount / payment_status` are a mirror
+  written only by `sync_payment_state`, so reports and registers are unchanged.
+  Frontend: `/proformas` (register), `/proformas/:id` and `/proformas/new` (own screens).
+- **Convert to PO:** from Vendor Quotes & Bidding a CONFIRMED RFQ can be sent to
+  vendors (as before) or converted: `GET/POST /orders/{rfq_id}/convert-to-po`
+  (`RfqConversionRouter`, needs `Approve_Quote` and `Issue_PO`). Each line gets a unit
+  price (often zero until now) and, if it must change, a quantity with a reason
+  (MOQ, pack multiple, other); an MOQ is written back to `product_suppliers`. The PO
+  is created as a child of the RFQ at PO_ISSUED with `order_source = 'DIRECT'`, and
+  the RFQ is left QUOTE_APPROVED / "Awarded" exactly as a split award leaves it, so
+  the existing guards apply; revoking the award returns it to CONFIRMED.
+- **Vendor and template:** an RFQ carries no vendor while it is a sourcing document, so
+  an RFQ made from a template now keeps `purchase_orders.source_template_id`, and
+  conversion reads the vendor from the template (fixed, not chosen). An RFQ with no
+  template, including every RFQ that exists today, needs the vendor chosen.
+  `po_items.qty_adjust_reason`, `qty_adjust_note`, `last_unit_price` hold the
+  quantity explanation and the reference price shown.
+- **Permissions:** `Record_Proforma`, `Approve_Proforma`, `Revise_Proforma`.
+- **Migration:** `migrate_20261031_proforma_invoices.py` (also makes one MIGRATED
+  proforma per PO that already had payments), `migrate_20261031_direct_po.py`,
+  `migrate_20261031_proforma_menu_pages.py`. All additive. Two columns from an
+  abandoned repeat-order design (`purchase_orders.repeat_of_po_id`,
+  `supplier.repeat_order_allowed`) exist in the local database and are unused.
+- **Verification:** `scratch/proforma_flow_check.py`, `scratch/convert_to_po_check.py`
+  and `scratch/template_reference_check.py` run the flows through the app in a
+  rolled-back transaction and pass. The pytest suite is not installed here and was
+  not run. The frontend production build compiles; no browser check yet.
+- **Undo:** check out `standalone-main`, restore `_backups/local-db-pre-proforma-20261031.dump`
+  only if the old DB shape is wanted; see `_backups/FALLBACK.md`.
+
 ## 2026-10-15 - Reporting hub split, template preview, designer gated
 
 - **Why:** the hub listed templates with no way to look at one. Only managers had

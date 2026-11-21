@@ -8,11 +8,16 @@ from ...db import Base
 
 from ...mixins import AuditMixin
 
+# TABLE: Lookup list of ships (vessels).
 class Vessal(AuditMixin, Base):
     __tablename__ = 'vessals'
     __table_args__ = {'schema': 'containermgmt'}
 
+    # id - INTEGER, primary key.
+    # Unique vessel number.
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # VessalNo - VARCHAR(45), required.
+    # Vessel name/number.
     VessalNo: Mapped[str] = mapped_column(String(45), nullable=False)
     
     bill_of_landings = relationship("BillOfLanding", back_populates="vessel_rel")

@@ -19,6 +19,9 @@ FINANCIAL_PERMISSIONS = {
     "Edit_Payment",
     "Delete_Payment",
     "Approve_Variance",
+    "Record_Proforma",
+    "Approve_Proforma",
+    "Revise_Proforma",
     "View_VendorQuote",
     "Compare_Quote",
 }

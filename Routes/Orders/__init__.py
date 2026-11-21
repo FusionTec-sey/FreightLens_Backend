@@ -7,6 +7,8 @@ from .DefectRouter import DefectRouter
 from .DailyWorkRouter import DailyWorkRouter
 from .NotificationRouter import NotificationRouter
 from .LifecycleRouter import LifecycleRouter
+from .ProformaRouter import ProformaRouter
+from .RfqConversionRouter import RfqConversionRouter
 
 __all__ = [
     "OrderRouter",
@@ -17,5 +19,7 @@ __all__ = [
     "DefectRouter",
     "DailyWorkRouter",
     "NotificationRouter",
-    "LifecycleRouter"
+    "LifecycleRouter",
+    "ProformaRouter",
+    "RfqConversionRouter",
 ]

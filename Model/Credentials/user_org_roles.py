@@ -3,6 +3,7 @@ from sqlalchemy import Column, ForeignKey, Integer, Table
 from ..db import Base
 
 
+# TABLE: Link table: the role a user holds inside each company they can access.
 user_org_roles = Table(
     "user_org_roles",
     Base.metadata,

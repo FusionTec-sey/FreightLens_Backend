@@ -6,14 +6,25 @@ from ...db import Base
 
 from ...mixins import AuditMixin
 
+# TABLE: LEGACY: damaged product lines in a container damage report.
 class DamageProduct(AuditMixin, Base):
     __tablename__ = 'damageproduct'
     __table_args__ = {'schema': 'containermgmt'}
 
+    # id - INTEGER, primary key.
+    # Unique row number.
     id = Column(Integer, primary_key=True, autoincrement=True)
+    # report_id - INTEGER, required.
+    # Report this line belongs to.
     report_id = Column(Integer, nullable=False)
+    # product_name - VARCHAR(45), optional.
+    # Damaged product.
     product_name = Column(String(45))
+    # qty - VARCHAR(45), optional.
+    # Quantity damaged (text).
     qty = Column(String(45))
+    # note - TEXT, optional.
+    # Free-text remark.
     note = Column(Text)
 
     images = relationship("ReportImage", back_populates="damage_product")

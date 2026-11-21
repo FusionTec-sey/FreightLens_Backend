@@ -1,6 +1,7 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey
 from ..db import Base
 
+# TABLE: Link table: which roles each user has.
 user_roles = Table(
     'user_roles',
     Base.metadata,
